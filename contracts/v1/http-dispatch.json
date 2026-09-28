@@ -1,0 +1,24 @@
+{
+  "module": "http.handlers.liapoldus_plugin",
+  "app": "liapoldus.dispatch",
+  "defaultTimeoutMillis": 5000,
+  "maxRequestBytes": 1048576,
+  "unavailableStatus": 503,
+  "invalidResponseStatus": 502,
+  "requestTooLargeStatus": 413,
+  "invalidRequestStatus": 400,
+  "requestIDHeader": "X-Request-ID",
+  "cookieHeader": "Cookie",
+  "setCookieHeader": "Set-Cookie",
+  "blockedHeaders": [
+    "Connection",
+    "Keep-Alive",
+    "Proxy-Authenticate",
+    "Proxy-Authorization",
+    "TE",
+    "Trailer",
+    "Transfer-Encoding",
+    "Upgrade",
+    "Authorization"
+  ]
+}

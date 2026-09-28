@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://liapoldus.github.io/plugins/caddy/settings/v1/schema.json",
+  "title": "Caddy plugin settings v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "config"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "config": { "type": "object" }
+  }
+}
