@@ -10,21 +10,24 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const schema = JSON.parse(readFileSync(path.join(root, "contracts/v1/settings.schema.json"), "utf8"));
 
 describe("Caddy plugin ConfigApply contract", () => {
-  it("accepts versioned native Caddy JSON and rejects malformed settings", () => {
+  it("accepts strict Liapoldus settings and rejects native Caddy JSON", () => {
     const validate = new Ajv2020({ allErrors: true }).compile(schema);
 
-    expect(validate({ schemaVersion: 1, config: { apps: {} } })).toBe(true);
-    expect(validate({ schemaVersion: 2, config: { apps: {} } })).toBe(false);
+    expect(validate({ schemaVersion: 1, config: { listeners: [], routes: [] } })).toBe(true);
+    expect(validate({ schemaVersion: 1, config: { apps: {} } })).toBe(false);
+    expect(validate({ schemaVersion: 2, config: { listeners: [], routes: [] } })).toBe(false);
     expect(validate({ schemaVersion: 1, config: "not-an-object" })).toBe(false);
+    expect(validate({ schemaVersion: 1, config: { listeners: [], routes: [], extra: true } })).toBe(false);
     expect(validate({ schemaVersion: 1, config: {}, extra: true })).toBe(false);
   });
 
   it("acknowledges a valid revision and retains active settings when a candidate is rejected", () => {
+    const activeSettings = { schemaVersion: 1, config: { listeners: [], routes: [] } };
     const input = JSON.stringify({
       calls: [
-        { revision: "revision-1", settings: { schemaVersion: 1, config: { apps: { marker: "active" } } } },
-        { revision: "revision-2", settings: { schemaVersion: 1, config: { reject: true } } },
-        { revision: "revision-1", settings: { schemaVersion: 1, config: { apps: { marker: "changed" } } } },
+        { revision: "revision-1", settings: activeSettings },
+        { revision: "revision-2", settings: { schemaVersion: 1, config: { listeners: [{ id: "reject", kind: "http", address: ":8080", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }], routes: [] } } },
+        { revision: "revision-1", settings: { schemaVersion: 1, config: { listeners: [{ id: "changed", kind: "http", address: ":8081", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }], routes: [] } } },
       ],
     });
     const output = execFileSync("go", ["run", "./tests/fixtures/config-apply"], {
@@ -39,10 +42,10 @@ describe("Caddy plugin ConfigApply contract", () => {
     expect(result.calls[1]).toMatchObject({ applied: false, revision: "", code: "InvalidArgument" });
     expect(result.calls[2]).toMatchObject({ applied: false, revision: "", code: "FailedPrecondition" });
     expect(result.activeRevision).toBe("revision-1");
-    expect(result.activeConfig).toContain('"marker":"active"');
+    expect(result.activeConfig).toContain('"listeners":[]');
   });
 
-  it("activates native Caddy JSON delivered through ConfigApply", async () => {
+  it("activates schema-shaped Caddy settings delivered through ConfigApply", async () => {
     const port = await freePort();
     const output = execFileSync("go", ["run", "./tests/fixtures/caddy-activation"], {
       cwd: root,

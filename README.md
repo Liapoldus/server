@@ -1,28 +1,19 @@
-# Плагин Caddy
+# Server plugin
 
-Это отдельный процесс и Go-модуль. Gateway Core не содержит runtime-кода или
-зависимостей Caddy: он управляет этим плагином как обычным instance и передаёт
-ему версионированные настройки через `ConfigApply` протокола v1.
+Отдельный HTTP/HTTPS plugin service на базе Caddy. Core не содержит Caddy
+runtime: оператор независимо устанавливает и запускает оба бинарника, а Core
+подключается к фиксированному endpoint Server plugin.
 
-Плагин проверяет версионированные JSON-настройки, валидирует и активирует
-нативную конфигурацию Caddy внутри своего процесса, собирает стандартные модули
-Caddy и Caddy-L4. Unary HTTP handler плагина может передать ограниченный запрос
-другому настроенному plugin instance и применить его типизированное HTTP-действие
-ответа. Это базовый этап отделения, а не законченный data plane Gateway v1:
-HTTP streaming, WebSocket, SSE и TCP/UDP dispatch ещё предстоит реализовать и
-проверить на соответствие контрактам.
+Общий lifecycle работает через Plugin SDK REST: Core вызывает `Reload`, plugin
+pull-ит точное поколение конфигурации из Core и подтверждает digest после
+успешной атомарной активации. `pluginprotocol` применяется только для
+настраиваемой generic plugin↔plugin связи.
 
-Входной процесс для локального supervised-режима использует унаследованный
-listener и launch-scoped mTLS bootstrap из pluginprotocol. Настройки приложения
-не читаются из environment variables, аргументов командной строки или локальных
-конфигурационных файлов.
+v1 включает HTTP/HTTPS, TLS/ACME, HTTP/2/3, статические сайты и reverse proxy.
+Публичный TCP/UDP relay и Caddy-L4 исключены из binary и settings schema и
+отложены до v2. Также в v2 отложены CAPTCHA, Identity/OIDC/OAuth, TUF/install
+через Core и управление процессами или контейнерами.
 
-В Core нет резервной реализации продуктового data plane. Функции traffic,
-которых нет в этом плагине, будут недоступны до их реализации в данном модуле.
-Не завершены credential/bootstrap для remote-профиля, восстановление постоянного
-хранилища Caddy и межрежимное conformance-тестирование.
-
-```sh
-go build ./...
-go vet ./...
-```
+Полные границы и acceptance см. в
+[целевой архитектуре Core](../../liapoldus.github.io/core/architecture/target)
+и [TODO](TODO.md).

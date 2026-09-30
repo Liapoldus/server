@@ -5,12 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"sync"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 //go:embed v1/*.json
 var files embed.FS
 
 var ErrInvalidAssets = errors.New("")
+
+var (
+	settingsSchemaOnce sync.Once
+	settingsSchema     *jsonschema.Schema
+	settingsSchemaErr  error
+)
 
 type Plugin struct {
 	Name          string `json:"name"`
@@ -52,4 +61,49 @@ func SettingsSchema() ([]byte, error) {
 		return nil, ErrInvalidAssets
 	}
 	return contents, nil
+}
+
+func ValidateSettings(contents []byte) error {
+	schema, err := compiledSettingsSchema()
+	if err != nil {
+		return ErrInvalidAssets
+	}
+	var candidate any
+	if err := json.Unmarshal(contents, &candidate); err != nil {
+		return ErrInvalidAssets
+	}
+	if err := schema.Validate(candidate); err != nil {
+		return ErrInvalidAssets
+	}
+	return nil
+}
+
+func compiledSettingsSchema() (*jsonschema.Schema, error) {
+	settingsSchemaOnce.Do(func() {
+		contents, err := SettingsSchema()
+		if err != nil {
+			settingsSchemaErr = err
+			return
+		}
+		var document any
+		if err := json.Unmarshal(contents, &document); err != nil {
+			settingsSchemaErr = ErrInvalidAssets
+			return
+		}
+		var metadata struct {
+			ID string `json:"$id"`
+		}
+		if err := json.Unmarshal(contents, &metadata); err != nil || metadata.ID == "" {
+			settingsSchemaErr = ErrInvalidAssets
+			return
+		}
+		compiler := jsonschema.NewCompiler()
+		compiler.DefaultDraft(jsonschema.Draft2020)
+		if err := compiler.AddResource(metadata.ID, document); err != nil {
+			settingsSchemaErr = ErrInvalidAssets
+			return
+		}
+		settingsSchema, settingsSchemaErr = compiler.Compile(metadata.ID)
+	})
+	return settingsSchema, settingsSchemaErr
 }

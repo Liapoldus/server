@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "semantics": "settings-semantics.json",
+  "scenarios": [
+    {
+      "id": "request-path-decodes-once-and-normalizes-dot-segments",
+      "input": { "requestTarget": "/a//b/%2e/c/../?page=1" },
+      "expected": { "accepted": true, "canonicalPath": "/a/b/", "query": "page=1" }
+    },
+    {
+      "id": "request-path-percent-decodes-only-once",
+      "input": { "requestTarget": "/a/%252e%252e/b" },
+      "expected": { "accepted": true, "canonicalPath": "/a/%2e%2e/b", "query": "" }
+    },
+    {
+      "id": "request-path-rejects-malformed-percent-encoding",
+      "input": { "requestTarget": "/bad%2" },
+      "expected": { "accepted": false }
+    },
+    {
+      "id": "request-path-preserves-query-separately",
+      "input": { "requestTarget": "/search?q=a%2Fb" },
+      "expected": { "accepted": true, "canonicalPath": "/search", "query": "q=a%2Fb" }
+    },
+    {
+      "id": "configured-exact-path-rejects-dot-segments",
+      "input": { "type": "exact", "value": "/a/../b" },
+      "expected": { "accepted": false }
+    },
+    {
+      "id": "configured-prefix-path-rejects-repeated-slashes",
+      "input": { "type": "prefix", "value": "/a//b" },
+      "expected": { "accepted": false }
+    },
+    {
+      "id": "glob-starstar-crosses-path-separators",
+      "input": { "pattern": "/assets/**", "path": "/assets/a/b" },
+      "expected": { "matches": true }
+    },
+    {
+      "id": "glob-star-does-not-cross-path-separators",
+      "input": { "pattern": "/assets/*", "path": "/assets/a/b" },
+      "expected": { "matches": false }
+    },
+    {
+      "id": "glob-triple-star-uses-longest-tokenization",
+      "input": { "pattern": "/x/***", "path": "/x/a/b" },
+      "expected": { "tokens": ["**", "*"], "matches": true }
+    },
+    {
+      "id": "ipv6-bind-valid-literal",
+      "input": { "address": "[2001:db8::1]:8443" },
+      "expected": { "accepted": true }
+    },
+    {
+      "id": "ipv6-bind-rejects-invalid-literal",
+      "input": { "address": "[::::]:8443" },
+      "expected": { "accepted": false }
+    },
+    {
+      "id": "automatic-https-redirect-preserves-method-and-query",
+      "input": {
+        "source": { "tls": "disabled", "protocols": ["http1"], "redirectToListenerId": "https", "routes": [] },
+        "target": { "id": "https", "tls": "automatic", "hostnames": ["example.test"] },
+        "request": { "method": "POST", "host": "example.test", "requestTarget": "/upload?q=1" }
+      },
+      "expected": { "status": 308, "location": "https://example.test/upload?q=1", "methodPreserved": true }
+    },
+    {
+      "id": "automatic-https-rejects-host-outside-target-coverage",
+      "input": {
+        "target": { "tls": "automatic", "hostnames": ["example.test"] },
+        "request": { "host": "attacker.test", "requestTarget": "/" }
+      },
+      "expected": { "status": 421, "location": null }
+    },
+    {
+      "id": "smooth-weighted-round-robin-honors-configured-weights",
+      "input": { "upstreams": [{ "id": "a", "weight": 5 }, { "id": "b", "weight": 1 }], "selections": 6 },
+      "expected": { "sequence": ["a", "a", "a", "b", "a", "a"] }
+    },
+    {
+      "id": "upstream-retry-is-limited-to-one-pre-bytes-connect-failure",
+      "input": { "failure": "tcp_connect_timeout", "requestBytesSent": 0, "attemptedOrigins": 1 },
+      "expected": { "retryAnotherOrigin": true, "maxAdditionalAttempts": 1, "failedOriginCooldownSeconds": 30 }
+    },
+    {
+      "id": "upstream-does-not-retry-after-request-bytes",
+      "input": { "failure": "connection_reset", "requestBytesSent": 1, "attemptedOrigins": 1 },
+      "expected": { "retryAnotherOrigin": false, "maxAdditionalAttempts": 0 }
+    },
+    {
+      "id": "upstream-tls-verification-failure-does-not-retry-or-exclude",
+      "input": { "failure": "tls_verification", "requestBytesSent": 0, "attemptedOrigins": 1 },
+      "expected": { "retryAnotherOrigin": false, "maxAdditionalAttempts": 0, "failedOriginCooldownSeconds": 0 }
+    }
+  ]
+}

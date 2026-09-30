@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://liapoldus.github.io/plugins/server/admin-ui/v1/actions.schema.json",
+  "title": "Server plugin Admin Surface action catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "plugin", "archive", "releaseLifecycle", "operationStatus", "operations"],
+  "properties": {
+    "version": { "const": 1 },
+    "plugin": { "const": "server" },
+    "archive": { "$ref": "#/$defs/archive" },
+    "releaseLifecycle": { "$ref": "#/$defs/releaseLifecycle" },
+    "operationStatus": { "$ref": "#/$defs/operationStatus" },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "server.sites.list",
+        "server.sites.releases.list",
+        "server.sites.rollback",
+        "server.sites.publish",
+        "server.operations.list",
+        "server.operations.get",
+        "server.certificates.list",
+        "server.certificates.get",
+        "server.certificates.renew",
+        "server.certificates.revoke"
+      ],
+      "properties": {
+        "server.sites.list": { "$ref": "#/$defs/queryOperation" },
+        "server.sites.releases.list": { "$ref": "#/$defs/queryOperation" },
+        "server.sites.rollback": { "$ref": "#/$defs/actionOperation" },
+        "server.sites.publish": { "$ref": "#/$defs/artifactOperation" },
+        "server.operations.list": { "$ref": "#/$defs/queryOperation" },
+        "server.operations.get": { "$ref": "#/$defs/actionOperation" },
+        "server.certificates.list": { "$ref": "#/$defs/queryOperation" },
+        "server.certificates.get": { "$ref": "#/$defs/actionOperation" },
+        "server.certificates.renew": { "$ref": "#/$defs/actionOperation" },
+        "server.certificates.revoke": { "$ref": "#/$defs/actionOperation" }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "jsonSchema": {
+      "type": "object",
+      "required": ["type", "properties", "required", "additionalProperties"],
+      "properties": {
+        "$schema": { "type": "string" },
+        "$id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "const": "object" },
+        "additionalProperties": { "const": false },
+        "required": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "properties": { "type": "object", "additionalProperties": { "type": "object" } },
+        "$defs": { "type": "object" }
+      }
+    },
+    "queryOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ownership", "requestSchema", "responseSchema", "httpStatus", "errors"],
+      "properties": {
+        "kind": { "const": "query" },
+        "ownership": { "const": "plugin-admin-surface-capability" },
+        "requestSchema": { "$ref": "#/$defs/jsonSchema" },
+        "responseSchema": { "$ref": "#/$defs/jsonSchema" },
+        "httpStatus": { "const": 200 },
+        "errors": { "$ref": "#/$defs/errors" }
+      }
+    },
+    "actionOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ownership", "surfaceBinding", "responseSchema", "httpStatus", "errors"],
+      "properties": {
+        "kind": { "const": "action" },
+        "ownership": { "const": "plugin-admin-surface-action" },
+        "surfaceBinding": { "$ref": "#/$defs/surfaceBinding" },
+        "responseSchema": { "$ref": "#/$defs/jsonSchema" },
+        "httpStatus": { "enum": [200, 202] },
+        "acceptedHttpStatus": { "const": 202 },
+        "preconditions": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "idempotency": { "type": "object", "additionalProperties": false, "required": ["required", "scope", "sameInput", "differentInput"], "properties": { "required": { "const": true }, "scope": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }, "sameInput": { "type": "string" }, "differentInput": { "type": "string" } } },
+        "errors": { "$ref": "#/$defs/errors" }
+      }
+    },
+    "artifactOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ownership", "surfaceBinding", "transport", "multipart", "acceptedHttpStatus", "receiptSchema", "archiveLimits", "revisionPrecondition", "idempotency", "errors"],
+      "properties": {
+        "kind": { "const": "artifact-action" },
+        "ownership": { "const": "plugin-admin-surface-action" },
+        "surfaceBinding": { "$ref": "#/$defs/surfaceBinding" },
+        "transport": { "const": "pluginprotocol.v1.artifact-stream" },
+        "multipart": { "type": "object", "additionalProperties": false, "required": ["parts", "order", "artifactFilenameForwarded"], "properties": { "parts": { "const": ["metadata", "artifact"] }, "order": { "const": ["metadata", "artifact"] }, "artifactFilenameForwarded": { "const": false } } },
+        "acceptedHttpStatus": { "const": 202 },
+        "receiptSchema": { "const": "pluginprotocol/contracts/protocol/v1/artifact-operation-result.schema.json" },
+        "archiveLimits": { "$ref": "#/$defs/archive" },
+        "revisionPrecondition": { "const": "if current exists, expectedCurrentRevision is required and must match; for a new site, expectedCurrentRevision must be omitted" },
+        "idempotency": { "type": "object", "additionalProperties": false, "required": ["required", "scope", "sameInput", "differentInput"], "properties": { "required": { "const": true }, "scope": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }, "sameInput": { "type": "string" }, "differentInput": { "type": "string" } } },
+        "errors": { "$ref": "#/$defs/errors" }
+      }
+    },
+    "surfaceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "section", "action"],
+      "properties": { "page": { "$ref": "#/$defs/nonEmptyString" }, "section": { "$ref": "#/$defs/nonEmptyString" }, "action": { "$ref": "#/$defs/nonEmptyString" } }
+    },
+    "errors": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "required": ["invalid_input", "not_found", "conflict", "unavailable"],
+      "properties": {
+        "invalid_input": { "$ref": "#/$defs/httpError" },
+        "not_found": { "$ref": "#/$defs/httpError" },
+        "conflict": { "$ref": "#/$defs/httpError" },
+        "unavailable": { "$ref": "#/$defs/httpError" },
+        "operation_failed": { "$ref": "#/$defs/httpError" }
+      }
+    },
+    "httpError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["http", "retryable"],
+      "properties": { "http": { "type": "integer", "minimum": 400, "maximum": 599 }, "retryable": { "type": "boolean" } }
+    },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mediaType", "minArtifactBytes", "artifactBytes", "metadataBytes", "multipartOverheadBytes", "requestEnvelopeBytes", "expandedBytes", "maxFiles", "entryCountSemantics", "maxCompressionRatio", "gzip", "tar", "validationChecks", "rejectedEntries"],
+      "properties": {
+        "mediaType": { "const": "application/gzip" },
+        "minArtifactBytes": { "const": 1 },
+        "artifactBytes": { "const": 134217728 },
+        "metadataBytes": { "const": 65536 },
+        "multipartOverheadBytes": { "const": 65536 },
+        "requestEnvelopeBytes": { "const": 134348800 },
+        "expandedBytes": { "const": 536870912 },
+        "maxFiles": { "const": 10000 },
+        "entryCountSemantics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["unit", "countedKinds", "implicitParentDirectories"],
+          "properties": {
+            "unit": { "const": "logical-tar-member-after-extension-processing" },
+            "countedKinds": { "const": ["regular-file", "directory"] },
+            "implicitParentDirectories": { "const": "not-counted" }
+          }
+        },
+        "maxCompressionRatio": { "const": 100 },
+        "gzip": { "$ref": "#/$defs/gzipSemantics" },
+        "tar": { "$ref": "#/$defs/tarSemantics" },
+        "validationChecks": { "const": ["gzip-integrity", "tar-integrity", "streamed-sha256", "metadata-artifact-descriptor-equality", "aggregate-expanded-byte-limit", "file-count-limit", "compression-ratio-limit"] },
+        "rejectedEntries": { "const": ["absolute-path", "path-traversal", "symbolic-link", "hard-link", "duplicate-path", "case-collision", "unicode-nfc-collision", "special-file"] }
+      }
+    },
+    "gzipSemantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["members", "integrity", "trailingCompressedBytes"],
+      "properties": {
+        "members": { "const": "concatenated-members-allowed" },
+        "integrity": { "const": "drain-all-members-through-eof" },
+        "trailingCompressedBytes": { "const": "reject-unless-part-of-valid-gzip-member" }
+      }
+    },
+    "tarSemantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archiveCount", "terminator", "postTerminatorBytes"],
+      "properties": {
+        "archiveCount": { "const": "one-tar-stream" },
+        "terminator": { "const": "two-consecutive-512-byte-zero-blocks" },
+        "postTerminatorBytes": { "const": "zero-padding-only" }
+      }
+    },
+    "releaseLifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["immutableRevisions", "storage", "currentPrevious", "staging", "activation", "failure", "publishStatus"],
+      "properties": {
+        "immutableRevisions": { "const": true },
+        "storage": { "const": "plugin-owned-persistent-filesystem" },
+        "currentPrevious": { "const": "successful-publish-or-rollback-atomically-swaps-current-and-previous" },
+        "staging": { "const": "validate-complete-staged-release-before-activation" },
+        "activation": { "const": "atomic-current-previous-pointer-swap-only-after-successful-terminal-operation" },
+        "failure": { "const": "keep-current-and-previous-unchanged" },
+        "publishStatus": { "const": 202 }
+      }
+    },
+    "operationStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coreResource", "pluginStatusCapability", "pluginStates", "coreStates", "stateMapping", "coreControlUsesPluginSdkRest"],
+      "properties": {
+        "coreResource": { "const": "GET /api/operations/{id}" },
+        "pluginStatusCapability": { "const": "server.operations.get" },
+        "pluginStates": { "const": ["accepted", "running", "completed", "failed"] },
+        "coreStates": { "const": ["pending", "running", "succeeded", "failed", "degraded"] },
+        "stateMapping": { "const": { "accepted": "pending", "running": "running", "completed": "succeeded", "failed": "failed" } },
+        "coreControlUsesPluginSdkRest": { "const": true }
+      }
+    }
+  }
+}

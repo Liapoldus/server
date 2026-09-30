@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/Liapoldus/caddy-plugin/contracts"
+	"liapoldus.local/server-plugin/contracts"
 	pluginsdk "github.com/Liapoldus/pluginprotocol/presentation/sdk"
 )
 

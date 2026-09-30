@@ -1,0 +1,43 @@
+{
+  "contract": "contracts/v1/http-dispatch.json",
+  "scenarios": [
+    {
+      "id": "http-stream-chunked-at-limit",
+      "mode": "http_stream",
+      "transferEncoding": "chunked",
+      "bodyLengthDeltaFromLimit": 0,
+      "responseStarted": false,
+      "expected": {
+        "forwardedBytes": "maxRequestBytes",
+        "requestEndSent": true,
+        "response": "plugin-response"
+      }
+    },
+    {
+      "id": "http-stream-chunked-over-limit-before-response-start",
+      "mode": "http_stream",
+      "transferEncoding": "chunked",
+      "bodyLengthDeltaFromLimit": 1,
+      "responseStarted": false,
+      "expected": {
+        "forwardedBytes": "maxRequestBytes",
+        "requestEndSent": false,
+        "response": "requestTooLargeStatus",
+        "cancelStream": true
+      }
+    },
+    {
+      "id": "http-stream-chunked-over-limit-after-response-start",
+      "mode": "http_stream",
+      "transferEncoding": "chunked",
+      "bodyLengthDeltaFromLimit": 1,
+      "responseStarted": true,
+      "expected": {
+        "forwardedBytes": "maxRequestBytes",
+        "response": "abort-stream",
+        "replaceResponse": false,
+        "cancelStream": true
+      }
+    }
+  ]
+}

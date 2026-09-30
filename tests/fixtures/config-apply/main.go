@@ -7,9 +7,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/Liapoldus/caddy-plugin/internal/application"
-	"github.com/Liapoldus/caddy-plugin/internal/domain/models"
-	pluginadapter "github.com/Liapoldus/caddy-plugin/internal/presentation/plugin"
+	"liapoldus.local/server-plugin/internal/application"
+	"liapoldus.local/server-plugin/internal/domain/models"
+	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
 	"github.com/Liapoldus/pluginprotocol/pluginv1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,12 +18,16 @@ import (
 type fakeRuntime struct{ active []byte }
 
 func (*fakeRuntime) Validate(contents []byte) error {
-	var config map[string]any
+	var config struct {
+		Listeners []struct {
+			ID string `json:"id"`
+		} `json:"listeners"`
+	}
 	if json.Unmarshal(contents, &config) != nil {
 		return models.ErrInvalidSettings
 	}
-	if _, rejected := config["reject"]; rejected {
-		return errors.New("candidate rejected")
+	if len(config.Listeners) > 0 && config.Listeners[0].ID == "reject" {
+		return errors.New("runtime rejected candidate")
 	}
 	return nil
 }

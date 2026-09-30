@@ -3,6 +3,13 @@
   "app": "liapoldus.dispatch",
   "defaultTimeoutMillis": 5000,
   "maxRequestBytes": 1048576,
+  "requestBodySemantics": {
+    "count": "body-octets-after-transfer-framing",
+    "chunkedIncluded": true,
+    "modes": ["call", "http_stream"],
+    "overflowBeforeResponseStart": "requestTooLargeStatus-and-cancel-stream",
+    "overflowAfterResponseStart": "abort-stream-without-replacing-response"
+  },
   "unavailableStatus": 503,
   "invalidResponseStatus": 502,
   "requestTooLargeStatus": 413,

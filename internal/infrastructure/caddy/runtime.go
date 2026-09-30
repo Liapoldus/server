@@ -3,21 +3,55 @@ package caddy
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
-	_ "github.com/mholt/caddy-l4"
 )
 
-type Runtime struct{}
+type Runtime struct {
+	mu      sync.RWMutex
+	targets []DispatchTarget
+}
 
 func New() *Runtime { return &Runtime{} }
 
+func (runtime *Runtime) SetDispatchTargets(targets []DispatchTarget) error {
+	if runtime == nil {
+		return errUnsupportedSettings
+	}
+	copyTargets := append([]DispatchTarget(nil), targets...)
+	seen := make(map[string]struct{}, len(copyTargets))
+	for _, target := range copyTargets {
+		if target.ID == "" || target.Endpoint == "" {
+			return errUnsupportedSettings
+		}
+		if _, exists := seen[target.ID]; exists {
+			return errUnsupportedSettings
+		}
+		seen[target.ID] = struct{}{}
+	}
+	runtime.mu.Lock()
+	runtime.targets = copyTargets
+	runtime.mu.Unlock()
+	return nil
+}
+
 func (runtime *Runtime) Validate(configuration []byte) error {
-	prepared, err := disableAutosave(configuration)
+	return runtime.ValidateWithSecrets(configuration, nil)
+}
+
+func (runtime *Runtime) ValidateWithSecrets(configuration []byte, secrets map[string][]byte) error {
+	compiled, err := runtime.compile(configuration, secrets)
 	if err != nil {
 		return err
 	}
+	defer clear(compiled)
+	prepared, err := disableAutosave(compiled)
+	if err != nil {
+		return err
+	}
+	defer clear(prepared)
 	var parsed caddycore.Config
 	if err := json.Unmarshal(prepared, &parsed); err != nil {
 		return err
@@ -26,11 +60,31 @@ func (runtime *Runtime) Validate(configuration []byte) error {
 }
 
 func (runtime *Runtime) Activate(configuration []byte) error {
-	prepared, err := disableAutosave(configuration)
+	return runtime.ActivateWithSecrets(configuration, nil)
+}
+
+func (runtime *Runtime) ActivateWithSecrets(configuration []byte, secrets map[string][]byte) error {
+	compiled, err := runtime.compile(configuration, secrets)
 	if err != nil {
 		return err
 	}
+	defer clear(compiled)
+	prepared, err := disableAutosave(compiled)
+	if err != nil {
+		return err
+	}
+	defer clear(prepared)
 	return caddycore.Load(prepared, true)
+}
+
+func (runtime *Runtime) compile(configuration []byte, secrets map[string][]byte) ([]byte, error) {
+	if runtime == nil {
+		return nil, errUnsupportedSettings
+	}
+	runtime.mu.RLock()
+	targets := append([]DispatchTarget(nil), runtime.targets...)
+	runtime.mu.RUnlock()
+	return compileSettings(configuration, targets, secrets)
 }
 
 func (runtime *Runtime) Stop() error { return caddycore.Stop() }

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "contract": "admin-surface.schema.json",
+  "scenarios": [
+    { "id": "admin-surface-valid", "input": { "source": "contracts/v1/admin-surface.json" }, "expected": { "surfaceValid": true } },
+    { "id": "admin-surface-unknown-field", "input": { "remove": "additionalProperties:false" }, "expected": { "surfaceValid": false } },
+    { "id": "admin-publish-rejects-extra-part", "input": { "multipartParts": ["metadata", "artifact", "extra"] }, "expected": { "core": "reject-before-stream-open" } },
+    { "id": "admin-publish-rejects-oversized-artifact", "input": { "artifactBytes": 134217729 }, "expected": { "core": "reject-with-resource-exhausted" } },
+    { "id": "admin-publish-rejects-digest-mismatch", "input": { "declaredDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "actualDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }, "expected": { "core": "reject-before-forwarding-success-receipt" } },
+    { "id": "admin-publish-rejects-empty-artifact", "input": { "artifactBytes": 0 }, "expected": { "plugin": "reject-before-durable-acceptance" } },
+    { "id": "admin-publish-rejects-expanded-size-over-limit", "input": { "expandedBytes": 536870913 }, "expected": { "plugin": "reject-before-current-pointer-change" } },
+    { "id": "admin-publish-rejects-file-count-over-limit", "input": { "fileCount": 10001 }, "expected": { "plugin": "reject-before-current-pointer-change" } },
+    { "id": "admin-publish-counts-explicit-directories-toward-entry-limit", "input": { "regularFileEntries": 2, "explicitDirectoryEntries": 9999, "implicitParentDirectories": 0 }, "expected": { "effectiveTarEntries": 10001, "plugin": "reject-before-durable-acceptance" } },
+    { "id": "admin-publish-rejects-compression-ratio-over-limit", "input": { "compressedBytes": 1024, "expandedBytes": 102401 }, "expected": { "plugin": "reject-before-current-pointer-change" } },
+    { "id": "admin-publish-allows-concatenated-gzip-members", "input": { "gzipMembers": 2, "expandedStream": "one-valid-tar" }, "expected": { "plugin": "accept" } },
+    { "id": "admin-publish-rejects-corrupt-gzip-member", "input": { "gzipMemberIntegrity": "invalid-crc-or-size" }, "expected": { "plugin": "reject-before-current-pointer-change" } },
+    { "id": "admin-publish-rejects-truncated-gzip-member", "input": { "gzipMember": "truncated-before-trailer" }, "expected": { "plugin": "reject-before-current-pointer-change" } },
+    { "id": "admin-publish-rejects-non-gzip-trailing-bytes", "input": { "gzipMembers": 1, "trailingCompressedData": "not-a-gzip-member" }, "expected": { "plugin": "reject-before-current-pointer-change" } },
+    { "id": "admin-publish-allows-zero-tar-padding", "input": { "tarArchives": 1, "postTerminatorBytes": "zero-only" }, "expected": { "plugin": "accept" } },
+    { "id": "admin-publish-rejects-nonzero-tar-trailing-data", "input": { "tarArchives": 1, "postTerminatorBytes": "contains-nonzero-data" }, "expected": { "plugin": "reject-before-current-pointer-change" } },
+    { "id": "admin-publish-rejects-unsafe-archive-entry", "input": { "entries": [{ "path": "../outside", "type": "regular" }] }, "expected": { "plugin": "reject-before-durable-acceptance" } },
+    { "id": "admin-publish-rejects-duplicate-path", "input": { "entries": [{ "path": "assets/app.js" }, { "path": "assets/app.js" }] }, "expected": { "plugin": "reject-before-durable-acceptance" } },
+    { "id": "admin-publish-rejects-case-collision", "input": { "entries": [{ "path": "assets/App.js" }, { "path": "assets/app.js" }] }, "expected": { "plugin": "reject-before-durable-acceptance" } },
+    { "id": "admin-publish-rejects-unicode-nfc-collision", "input": { "entries": [{ "path": "caf\u00e9/index.html" }, { "path": "cafe\u0301/index.html" }] }, "expected": { "plugin": "reject-before-durable-acceptance" } },
+    { "id": "admin-publish-rejects-link-entry", "input": { "entries": [{ "path": "current", "type": "symbolic-link" }] }, "expected": { "plugin": "reject-before-durable-acceptance" } },
+    { "id": "admin-publish-reuses-idempotent-operation", "input": { "sameKey": true, "sameMetadata": true, "sameArtifactDigest": true }, "expected": { "plugin": "return-existing-operation-without-duplicate-effect" } },
+    { "id": "admin-revoke-rejects-custom-certificate", "input": { "source": "custom" }, "expected": { "plugin": "reject-as-not-managed" } },
+    { "id": "admin-common-settings-live-in-core", "input": { "settingsPage": true }, "expected": { "surfaceValid": false } }
+  ]
+}

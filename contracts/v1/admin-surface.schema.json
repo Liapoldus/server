@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://liapoldus.github.io/plugins/server/admin-ui/v1/schema.json",
+  "title": "Server plugin Admin Surface v1",
+  "description": "Strict declarative Constructor surface. It contains no executable UI, URL, listener, or secret value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "plugin", "requiredCapabilities", "pages"],
+  "properties": {
+    "version": { "const": 1 },
+    "plugin": { "const": "server" },
+    "requiredCapabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/page" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$", "maxLength": 128 },
+    "pageId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+    "columnId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$" },
+    "controlSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["settingsSchemaRpc", "settingsApplyRpc"],
+      "properties": {
+        "settingsSchemaRpc": { "const": "ConfigSchema" },
+        "settingsApplyRpc": { "const": "ConfigApply" }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "type"],
+      "properties": {
+        "key": { "$ref": "#/$defs/nonEmptyString" },
+        "type": { "enum": ["string", "number", "boolean", "select", "multiselect", "secret", "file", "directory", "duration", "size", "code", "keyValue", "array", "object"] },
+        "required": { "type": "boolean" },
+        "title": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 1024 }
+      }
+    },
+    "inputField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["string", "number", "integer", "boolean", "null"] },
+        "minLength": { "type": "integer", "minimum": 0 },
+        "maxLength": { "type": "integer", "minimum": 0 },
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
+        "enum": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": ["string", "number", "boolean", "null"] } }
+      }
+    },
+    "actionInputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "properties", "required", "additionalProperties"],
+      "properties": {
+        "type": { "const": "object" },
+        "properties": { "type": "object", "additionalProperties": { "$ref": "#/$defs/inputField" } },
+        "required": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "additionalProperties": { "const": false }
+      }
+    },
+    "artifactInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mediaTypes", "maxBytes", "maxMetadataBytes", "maxMultipartOverheadBytes"],
+      "properties": {
+        "mediaTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "maxLength": 127, "pattern": "^[a-z0-9!#$%&'*+.^_`|~-]+/[a-z0-9!#$%&'*+.^_`|~-]+$" }
+        },
+        "maxBytes": { "type": "integer", "minimum": 1, "maximum": 134217728 },
+        "maxMetadataBytes": { "type": "integer", "minimum": 2, "maximum": 65536 },
+        "maxMultipartOverheadBytes": { "type": "integer", "minimum": 0, "maximum": 65536 }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "capability", "inputSchema"],
+      "properties": {
+        "id": { "$ref": "#/$defs/pageId" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "capability": { "$ref": "#/$defs/capability" },
+        "confirmation": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "dangerous": { "type": "boolean" },
+        "inputSchema": { "$ref": "#/$defs/actionInputSchema" },
+        "rowInput": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/nonEmptyString" } },
+        "artifactInput": { "$ref": "#/$defs/artifactInput" }
+      }
+    },
+    "formSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "fieldsFromControlRpc"],
+      "properties": {
+        "id": { "$ref": "#/$defs/pageId" },
+        "kind": { "const": "form" },
+        "title": { "type": "string", "maxLength": 120 },
+        "fieldsFromControlRpc": { "const": "ConfigSchema" }
+      }
+    },
+    "tableSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "dataCapability", "columns", "actions"],
+      "properties": {
+        "id": { "$ref": "#/$defs/pageId" },
+        "kind": { "const": "table" },
+        "title": { "type": "string", "maxLength": 120 },
+        "dataCapability": { "$ref": "#/$defs/capability" },
+        "columns": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/columnId" } },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } }
+      }
+    },
+    "detailSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "dataCapability", "fields"],
+      "properties": {
+        "id": { "$ref": "#/$defs/pageId" },
+        "kind": { "const": "detail" },
+        "title": { "type": "string", "maxLength": 120 },
+        "dataCapability": { "$ref": "#/$defs/capability" },
+        "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" } }
+      }
+    },
+    "section": {
+      "oneOf": [
+        { "$ref": "#/$defs/formSection" },
+        { "$ref": "#/$defs/tableSection" },
+        { "$ref": "#/$defs/detailSection" }
+      ]
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "sections"],
+      "properties": {
+        "id": { "$ref": "#/$defs/pageId" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "capability": { "$ref": "#/$defs/capability" },
+        "control": { "$ref": "#/$defs/controlSource" },
+        "permissions": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "sections": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/section" } }
+      },
+      "oneOf": [
+        { "required": ["capability"], "not": { "required": ["control"] } },
+        { "required": ["control"], "not": { "required": ["capability"] } }
+      ]
+    }
+  }
+}

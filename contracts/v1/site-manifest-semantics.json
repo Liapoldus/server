@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "manifestSchema": "site-manifest.schema.json",
+  "archiveEntry": {
+    "path": "site-manifest.json",
+    "location": "exactly-at-tar-root",
+    "count": 1,
+    "type": "regular-file",
+    "encoding": "UTF-8 JSON",
+    "duplicateObjectKeys": "reject",
+    "unknownFields": "reject"
+  },
+  "fields": {
+    "schemaVersion": "must-equal-1",
+    "siteId": "must-equal-the-UTF-8-byte-sequence-of-the-decoded-publish-metadata-payload-siteId-string-without-case-folding-or-Unicode-normalization",
+    "documentRoot": {
+      "format": "POSIX relative directory path using forward-slash separators",
+      "dot": "the archive root",
+      "reject": ["absolute-path", "backslash", "empty-segment", "dot-segment", "parent-segment", "trailing-slash", "NUL-C0-control-DEL"],
+      "mustResolveTo": "directory-containing-indexDocument-within-the-staged-archive"
+    },
+    "indexDocument": {
+      "format": "POSIX relative regular-file path using forward-slash separators, relative to documentRoot",
+      "reject": ["absolute-path", "backslash", "empty-segment", "dot-segment", "parent-segment", "trailing-slash", "NUL-C0-control-DEL"],
+      "mustResolveTo": "regular-file-within-documentRoot"
+    }
+  },
+  "archiveValidation": {
+    "manifestSiteIdMismatch": "reject-entire-candidate",
+    "missingOrDuplicateManifest": "reject-entire-candidate",
+    "unsupportedSchemaVersion": "reject-entire-candidate",
+    "missingDocumentRootOrIndexDocument": "reject-entire-candidate",
+    "manifestAsIndexDocumentWhenDocumentRootIsDot": "reject-with-reserved-manifest-as-index",
+    "symlinkOrHardlinkUsedForDocumentRootOrIndexDocument": "reject-entire-candidate",
+    "currentPreviousOnAnyRejection": "unchanged"
+  },
+  "staticServing": {
+    "rootRequest": "resolve-documentRoot-then-append-indexDocument",
+    "directoryRequest": "resolve-requested-directory-under-documentRoot-then-append-indexDocument",
+    "missingPath": "404",
+    "spaFallback": false,
+    "publicNamespace": "exclude-the-archive-root-site-manifest.json-before-static-path-resolution",
+    "manifestExposure": "site-manifest.json-is-never-served-as-public-static-content-even-when-documentRoot-is-dot"
+  },
+  "releaseLifecycle": "successful-publish-or-rollback-atomically-controls-current-previous",
+  "secrets": "manifest-contains-no-secret-values-or-secret-references"
+}

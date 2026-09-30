@@ -1,12 +1,17 @@
-module github.com/Liapoldus/caddy-plugin
+module liapoldus.local/server-plugin
 
-go 1.25.1
+go 1.26.0
 
 require (
 	github.com/Liapoldus/pluginprotocol v1.1.0
 	github.com/caddyserver/caddy/v2 v2.11.4
-	github.com/mholt/caddy-l4 v0.1.1
+	github.com/caddyserver/certmagic v0.25.3
+	github.com/quic-go/quic-go v0.59.1
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+	golang.org/x/net v0.55.0
+	golang.org/x/text v0.37.0
 	google.golang.org/grpc v1.81.0
+	liapoldus.local/plugin-sdk v0.0.0
 )
 
 require (
@@ -28,7 +33,6 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/aryann/difflib v0.0.0-20210328193216-ff5ff6dc229b // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/caddyserver/certmagic v0.25.3 // indirect
 	github.com/caddyserver/zerossl v0.1.5 // indirect
 	github.com/ccoveille/go-safecast/v2 v2.0.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -92,10 +96,8 @@ require (
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
@@ -159,12 +161,10 @@ require (
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20260213171211-a408498e5541 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	google.golang.org/api v0.277.0 // indirect
@@ -177,3 +177,5 @@ require (
 )
 
 replace github.com/Liapoldus/pluginprotocol => ../../pluginprotocol
+
+replace liapoldus.local/plugin-sdk => ../../plugin-sdk

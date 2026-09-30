@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Liapoldus/caddy-plugin/contracts"
+	"liapoldus.local/server-plugin/contracts"
 	"github.com/Liapoldus/pluginprotocol/pluginv1"
 	pluginsdk "github.com/Liapoldus/pluginprotocol/presentation/sdk"
 	caddycore "github.com/caddyserver/caddy/v2"
