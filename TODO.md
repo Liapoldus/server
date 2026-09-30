@@ -1,5 +1,16 @@
 # TODO — Server plugin v1
 
+## Проверенное состояние на 2026-09-30
+
+Последний локальный commit: `075fb52`. Settings compiler, site archive/manifest,
+Admin Surface contracts и SDK adapter добавлены, но это не завершённая миграция.
+После обновления `plugins/go.work` до Go 1.26.0 команда
+`go test ./server/... ./forms-db/...` запускается и падает: Server и его fixtures
+всё ещё импортируют удалённые `pluginprotocol/pluginv1` и
+`pluginprotocol/presentation/sdk`; `internal/presentation/restplugin` также не
+совпадает с текущим Plugin SDK API. До сборки `cmd/server` и реального
+Core→SDK→Server Reload/pull/ACK smoke Server v1 не готов.
+
 Нормативная цель: [Core target](../liapoldus.github.io/core/architecture/target),
 [v1 acceptance](../liapoldus.github.io/core/configuration/acceptance) и
 [Server contract](../liapoldus.github.io/plugins/server). Агентное задание:
