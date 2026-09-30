@@ -46,6 +46,15 @@ reverse proxy, WebSocket/SSE и согласованный plugin dispatch.
 - Product-specific strings and schemas имеют один owner contract; не копировать
   API docs/contracts в другой репозиторий как второй источник истины.
 
+## Документация
+
+- Каноническая архитектура, settings/runtime guide и примеры Server plugin
+  хранятся в `docs/site/`; Mermaid исходники принадлежат этому репозиторию.
+  Единый VitePress сайт синхронизирует закреплённый commit и сохраняет
+  публичные URL. Не редактировать generated copy в `liapoldus.github.io`.
+- Общие Core lifecycle и API описывает Core; этот репозиторий описывает только
+  Server-owned product behavior и ссылается на опубликованные Core pages.
+
 ## Изменения и проверки
 
 - Перед работой снять `git status --short`, branch/HEAD/remotes; посмотреть diff

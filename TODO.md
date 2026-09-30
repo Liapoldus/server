@@ -1,5 +1,12 @@
 # TODO — Server plugin v1
 
+## Документация
+
+- [x] Server-owned Markdown/examples перенесены в `docs/site/`; общие Core
+  страницы принадлежат Core, сайт агрегирует эту документацию по pinned SHA.
+- [ ] После изменения owner docs обновить pin в
+  `liapoldus.github.io/docs-sources.json` и проверить единый сайт.
+
 ## Проверенное состояние на 2026-09-30
 
 Последний локальный commit: `075fb52`. Settings compiler, site archive/manifest,
@@ -11,9 +18,9 @@ Admin Surface contracts и SDK adapter добавлены, но это не за
 совпадает с текущим Plugin SDK API. До сборки `cmd/server` и реального
 Core→SDK→Server Reload/pull/ACK smoke Server v1 не готов.
 
-Нормативная цель: [Core target](../liapoldus.github.io/core/architecture/target),
-[v1 acceptance](../liapoldus.github.io/core/configuration/acceptance) и
-[Server contract](../liapoldus.github.io/plugins/server). Агентное задание:
+Нормативная цель: [Core target](https://liapoldus.github.io/core/architecture/target),
+[v1 acceptance](https://liapoldus.github.io/core/configuration/acceptance) и
+[Server contract](https://liapoldus.github.io/plugins/server). Агентное задание:
 [`tasks/prompts/server-plugin.md`](../../tasks/prompts/server-plugin.md).
 Этот репозиторий — отдельный HTTP Server plugin; `server` — его product/API
 identity, Caddy — реализация внутри binary.
