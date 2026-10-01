@@ -9,14 +9,25 @@ import (
 	"net"
 	"net/netip"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
-	"liapoldus.local/server-plugin/contracts"
+	"github.com/Liapoldus/pluginprotocol/presentation/peer"
 	caddycore "github.com/caddyserver/caddy/v2"
+	"liapoldus.local/server-plugin/contracts"
 )
 
 var errUnsupportedSettings = errors.New("unsupported Caddy settings")
+
+func sortedMethods(values map[string]struct{}) []string {
+	result := make([]string, 0, len(values))
+	for value := range values {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
+}
 
 type settingsConfig struct {
 	Listeners []settingsListener `json:"listeners"`
@@ -63,9 +74,10 @@ type DispatchTarget struct {
 	ID            string
 	Endpoint      string
 	TimeoutMillis int
+	Security      peer.SecurityConfig
 }
 
-func compileSettings(contents []byte, targets []DispatchTarget, secrets map[string][]byte) ([]byte, error) {
+func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint64, secrets map[string][]byte) ([]byte, error) {
 	var desired settingsConfig
 	decoder := json.NewDecoder(bytes.NewReader(contents))
 	decoder.DisallowUnknownFields()
@@ -150,7 +162,7 @@ func compileSettings(contents []byte, targets []DispatchTarget, secrets map[stri
 
 	routesByListener := make(map[string][]any, len(listeners))
 	matcherIDsByListener := make(map[string]map[string]struct{}, len(listeners))
-	usedTargets := make(map[string]struct{})
+	usedTargets := make(map[string]map[string]struct{})
 	upstreamPools := make([]upstreamPoolConfig, 0)
 	routeIDs := make(map[string]struct{}, len(desired.Routes))
 	for _, route := range desired.Routes {
@@ -255,13 +267,13 @@ func compileSettings(contents []byte, targets []DispatchTarget, secrets map[stri
 			if _, used := usedTargets[target.ID]; !used {
 				continue
 			}
-			instance := map[string]any{"id": target.ID, "endpoint": target.Endpoint}
+			instance := map[string]any{"id": target.ID, "endpoint": target.Endpoint, "methods": sortedMethods(usedTargets[target.ID])}
 			if target.TimeoutMillis > 0 {
 				instance["timeoutMillis"] = target.TimeoutMillis
 			}
 			instances = append(instances, instance)
 		}
-		apps[contract.App] = map[string]any{"instances": instances}
+		apps[contract.App] = map[string]any{"instances": instances, "targetSetId": targetSetID}
 	}
 
 	compiled, err := json.Marshal(map[string]any{
@@ -325,7 +337,7 @@ func compileHTTPProtocols(configured []string, tlsMode string) ([]string, []stri
 	return protocols, alpn, nil
 }
 
-func compileHandler(routeID string, handler settingsHandler, targets map[string]DispatchTarget, usedTargets map[string]struct{}, upstreamPools *[]upstreamPoolConfig, secrets map[string][]byte, usedSecretReferences map[string]struct{}) (map[string]any, error) {
+func compileHandler(routeID string, handler settingsHandler, targets map[string]DispatchTarget, usedTargets map[string]map[string]struct{}, upstreamPools *[]upstreamPoolConfig, secrets map[string][]byte, usedSecretReferences map[string]struct{}) (map[string]any, error) {
 	switch handler.Type {
 	case "static":
 		root, err := SiteRoot(handler.SiteID)
@@ -378,7 +390,10 @@ func compileHandler(routeID string, handler settingsHandler, targets map[string]
 		if err != nil {
 			return nil, err
 		}
-		usedTargets[handler.InstanceID] = struct{}{}
+		if usedTargets[handler.InstanceID] == nil {
+			usedTargets[handler.InstanceID] = make(map[string]struct{})
+		}
+		usedTargets[handler.InstanceID][handler.Capability] = struct{}{}
 		module := contract.Module
 		if index := strings.LastIndexByte(module, '.'); index >= 0 {
 			module = module[index+1:]

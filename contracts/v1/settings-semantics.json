@@ -22,7 +22,7 @@
       "regex": {
         "engine": "Go RE2",
         "input": "regex source is not path-normalized",
-        "validation": "compile during ConfigApply; reject invalid UTF-8 and NUL/control",
+        "validation": "compile during SDK Reload candidate apply; reject invalid UTF-8 and NUL/control",
         "match": "the regex match must cover the complete canonical request path"
       }
     },

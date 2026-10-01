@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const schema = JSON.parse(readFileSync(path.join(root, "contracts/v1/settings.schema.json"), "utf8"));
 
-describe("Caddy plugin ConfigApply contract", () => {
+describe("Caddy plugin settings contract", () => {
   it("accepts strict Liapoldus settings and rejects native Caddy JSON", () => {
     const validate = new Ajv2020({ allErrors: true }).compile(schema);
 
@@ -45,7 +45,7 @@ describe("Caddy plugin ConfigApply contract", () => {
     expect(result.activeConfig).toContain('"listeners":[]');
   });
 
-  it("activates schema-shaped Caddy settings delivered through ConfigApply", async () => {
+  it("activates schema-shaped Caddy settings after validation", async () => {
     const port = await freePort();
     const output = execFileSync("go", ["run", "./tests/fixtures/caddy-activation"], {
       cwd: root,

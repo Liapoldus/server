@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,9 +13,7 @@ import (
 
 	"liapoldus.local/server-plugin/internal/application"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	"google.golang.org/grpc/status"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type input struct {
@@ -67,8 +64,6 @@ func main() {
 	check(os.WriteFile(siteFile, []byte(request.SiteFileContent), 0o600))
 	configuration, err := application.NewConfiguration(runtime)
 	check(err)
-	service, err := pluginadapter.New(configuration, func() {})
-	check(err)
 	settings := request.Settings
 	if len(settings) == 0 {
 		settings, err = json.Marshal(map[string]any{
@@ -85,22 +80,23 @@ func main() {
 		})
 		check(err)
 	}
-	result, err := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{Config: settings, SettingsRevision: "revision-1"})
-	check(err)
+	check(shared.Apply(configuration, settings, "revision-1", nil))
 	defer func() { _ = configuration.Stop() }()
 	candidateCode := ""
 	if len(request.Candidate) > 0 {
-		_, candidateErr := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{
-			Config: request.Candidate, SettingsRevision: "revision-2",
-		})
-		candidateCode = status.Code(candidateErr).String()
+		candidateErr := shared.Apply(configuration, request.Candidate, "revision-2", nil)
+		if candidateErr != nil {
+			candidateCode = "InvalidArgument"
+		}
 	}
 	candidateCodes := make([]string, 0, len(request.Candidates))
 	for index, candidateSettings := range request.Candidates {
-		_, candidateErr := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{
-			Config: candidateSettings, SettingsRevision: fmt.Sprintf("candidate-%d", index+1),
-		})
-		candidateCodes = append(candidateCodes, status.Code(candidateErr).String())
+		candidateErr := shared.Apply(configuration, candidateSettings, fmt.Sprintf("candidate-%d", index+1), nil)
+		if candidateErr != nil {
+			candidateCodes = append(candidateCodes, "InvalidArgument")
+		} else {
+			candidateCodes = append(candidateCodes, "OK")
+		}
 	}
 	requests := request.Requests
 	if len(requests) == 0 {
@@ -114,7 +110,7 @@ func main() {
 		responses = append(responses, response)
 	}
 	output := map[string]any{
-		"revision": result.GetSettingsRevision(), "status": responses[0].Status, "body": responses[0].Body,
+		"revision": configuration.Revision(), "status": responses[0].Status, "body": responses[0].Body,
 	}
 	if len(request.Candidate) > 0 {
 		output["candidateCode"] = candidateCode

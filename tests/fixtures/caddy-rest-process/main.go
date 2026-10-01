@@ -26,10 +26,10 @@ import (
 	"syscall"
 	"time"
 
+	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
+	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
 	"liapoldus.local/server-plugin/contracts"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	sdkmodels "liapoldus.local/plugin-sdk/domain/models"
-	sdkinfra "liapoldus.local/plugin-sdk/infrastructure"
 )
 
 const generation = "generation-rest-1"
@@ -41,7 +41,8 @@ type identity struct {
 }
 
 type identities struct {
-	root       *x509.CertPool
+	root       *x509.Certificate
+	rootKey    *ecdsa.PrivateKey
 	rootPEM    []byte
 	coreServer identity
 	coreClient identity
@@ -93,40 +94,34 @@ func run() error {
 		return err
 	}
 	controlPort := controlListener.Addr().(*net.TCPAddr).Port
-	listenerFile, err := controlListener.(*net.TCPListener).File()
-	if err != nil {
-		_ = controlListener.Close()
-		return err
-	}
 	if err := controlListener.Close(); err != nil {
-		_ = listenerFile.Close()
 		return err
 	}
 	trafficListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		_ = listenerFile.Close()
 		return err
 	}
 	trafficPort := trafficListener.Addr().(*net.TCPAddr).Port
 	if err := trafficListener.Close(); err != nil {
-		_ = listenerFile.Close()
 		return err
 	}
 	configBytes, err := json.Marshal(settings(trafficPort))
 	if err != nil || contracts.ValidateSettings(configBytes) != nil {
-		_ = listenerFile.Close()
 		return errors.New("test Caddy settings are invalid")
 	}
 	digest := sha256.Sum256(configBytes)
 	digestHex := hex.EncodeToString(digest[:])
 	coreListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		_ = listenerFile.Close()
 		return err
 	}
-	coreTLSListener, err := sdkinfra.NewMutualTLSListener(coreListener, issued.coreServer.certificate, issued.root, contract.TransportSecurity.MinimumTLSVersion)
+	coreProvider, err := newCredentialsProvider(contract, issued.rootPEM, issued.coreServer, issued.coreClient)
 	if err != nil {
-		_ = listenerFile.Close()
+		_ = coreListener.Close()
+		return err
+	}
+	revocation, err := newRevocation(issued)
+	if err != nil {
 		_ = coreListener.Close()
 		return err
 	}
@@ -141,38 +136,47 @@ func run() error {
 		writer.Header().Set(headers["generation"], generation)
 		writer.Header().Set(headers["schemaVersion"], "1")
 		writer.Header().Set(headers["sha256"], digestHex)
+		writer.Header().Set(headers["generationState"], "active")
 		_, _ = writer.Write(configBytes)
 	})
-	coreServer := &http.Server{Handler: coreMux}
-	go func() { _ = coreServer.Serve(coreTLSListener) }()
-	defer func() { _ = coreServer.Close() }()
-	bootstrap, err := json.Marshal(map[string]string{
-		"contractVersion":               "liapoldus.plugin-sdk.process-bootstrap.v1",
-		"coreURL":                       "https://" + coreListener.Addr().String(),
-		"instanceId":                    "server-",
-		"replicaId":                     "server-",
-		"replicaCertificatePEM":         string(issued.replica.certificatePEM),
-		"replicaPrivateKeyPEM":          string(issued.replica.privateKeyPEM),
-		"coreControlPlaneTrustRootsPEM": string(issued.rootPEM),
+	coreServer, err := sdkinfra.NewMutualTLSServer(contract, sdkinfra.MutualTLSServerConfig{
+		Handler: coreMux, Provider: coreProvider,
+		Peer: sdkmodels.PeerIdentity{CommonName: issued.replica.certificate.Leaf.Subject.CommonName}, Revocation: revocation,
 	})
 	if err != nil {
-		_ = listenerFile.Close()
+		_ = coreListener.Close()
 		return err
 	}
-	readPipe, writePipe, err := os.Pipe()
+	go func() { _ = coreServer.Serve(coreListener) }()
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = coreServer.GracefulShutdown(shutdown)
+	}()
+	writePEM := func(name string, content []byte) (string, error) {
+		path := filepath.Join(rootDirectory, name)
+		return path, os.WriteFile(path, content, 0o600)
+	}
+	caPath, err := writePEM("ca.pem", issued.rootPEM)
 	if err != nil {
-		_ = listenerFile.Close()
 		return err
 	}
-	if _, err = writePipe.Write(bootstrap); err != nil {
-		_ = listenerFile.Close()
-		_ = readPipe.Close()
-		_ = writePipe.Close()
+	certPath, err := writePEM("replica.pem", issued.replica.certificatePEM)
+	if err != nil {
 		return err
 	}
-	if err := writePipe.Close(); err != nil {
-		_ = listenerFile.Close()
-		_ = readPipe.Close()
+	keyPath, err := writePEM("replica-key.pem", issued.replica.privateKeyPEM)
+	if err != nil {
+		return err
+	}
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number: big.NewInt(1), ThisUpdate: time.Now().UTC().Add(-time.Minute), NextUpdate: time.Now().UTC().Add(time.Hour),
+	}, issued.root, issued.rootKey)
+	if err != nil {
+		return err
+	}
+	crlPath, err := writePEM("crl.pem", pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlDER}))
+	if err != nil {
 		return err
 	}
 	binaryPath := filepath.Join(rootDirectory, "server-")
@@ -180,34 +184,40 @@ func run() error {
 	build.Dir = repositoryRoot()
 	build.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=go1.26.0")
 	if output, buildErr := build.CombinedOutput(); buildErr != nil {
-		_ = listenerFile.Close()
-		_ = readPipe.Close()
 		return fmt.Errorf("build Caddy process: %w: %s", buildErr, string(output))
 	}
-	child := exec.Command(binaryPath)
+	child := exec.Command(binaryPath,
+		"--instance-id=server-", "--replica-id=server-",
+		fmt.Sprintf("--rest-listen=127.0.0.1:%d", controlPort),
+		"--core-url=https://"+coreListener.Addr().String(),
+		"--core-server-name=localhost", "--core-common-name=test Core server",
+		"--core-client-common-name=test Core client",
+		"--ca-file="+caPath, "--server-cert="+certPath, "--server-key="+keyPath,
+		"--client-cert="+certPath, "--client-key="+keyPath, "--crl-file="+crlPath)
 	child.Dir = repositoryRoot()
 	child.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=go1.26.0")
-	child.ExtraFiles = []*os.File{listenerFile, readPipe}
 	var childLogs bytes.Buffer
 	child.Stdout = &childLogs
 	child.Stderr = &childLogs
 	if err := child.Start(); err != nil {
-		_ = listenerFile.Close()
-		_ = readPipe.Close()
 		return err
 	}
-	_ = listenerFile.Close()
-	_ = readPipe.Close()
-	pluginHTTP, err := sdkinfra.NewMutualTLSHTTPClient(sdkinfra.MutualTLSClientConfiguration{
-		Certificate: issued.coreClient.certificate, TrustedServerRoots: issued.root,
-		ServerName: "localhost", MinimumTLSVersion: contract.TransportSecurity.MinimumTLSVersion,
+	pluginProvider, err := newCredentialsProvider(contract, issued.rootPEM, issued.coreClient, issued.coreClient)
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return err
+	}
+	pluginHTTP, err := sdkinfra.NewMutualTLSClient(contract, pluginProvider, sdkinfra.MutualTLSClientConfig{
+		Peer: sdkmodels.PeerIdentity{CommonName: issued.replica.certificate.Leaf.Subject.CommonName}, ServerName: "localhost", Revocation: revocation,
 	})
 	if err != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()
 		return err
 	}
-	pluginClient, err := sdkinfra.NewPluginClient(fmt.Sprintf("https://127.0.0.1:%d", controlPort), pluginHTTP, contract)
+	pluginClient, err := sdkinfra.NewPluginClient(contract, fmt.Sprintf("https://127.0.0.1:%d", controlPort), pluginHTTP,
+		sdkmodels.PeerIdentity{CommonName: issued.replica.certificate.Leaf.Subject.CommonName})
 	if err != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()
@@ -216,18 +226,24 @@ func run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	deadline := time.Now().Add(15 * time.Second)
+	var healthErr error
 	for time.Now().Before(deadline) {
-		if pluginClient.Health(ctx) == nil {
+		healthErr = pluginClient.Health(ctx)
+		if healthErr == nil {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	ack, err := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: generation, SHA256: digestHex, SchemaVersion: "1"})
-	if err != nil {
-		diagnostic, diagnosticErr := diagnoseReload(ctx, controlPort, issued, contract, generation, digestHex)
+	if healthErr != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()
-		return fmt.Errorf("REST Reload failed: %w; response %s (%v); child output: %s", err, diagnostic, diagnosticErr, childLogs.String())
+		return fmt.Errorf("plugin health unavailable: %w; child output: %s", healthErr, childLogs.String())
+	}
+	ack, err := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: generation, SHA256: digestHex, SchemaVersion: "1"})
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return fmt.Errorf("REST Reload failed: %w; child output: %s", err, childLogs.String())
 	}
 	ready, err := pluginClient.Readiness(ctx)
 	if err != nil {
@@ -272,30 +288,6 @@ func run() error {
 	})
 }
 
-func diagnoseReload(ctx context.Context, port int, issued identities, contract sdkinfra.HTTPContract, generation, digest string) (string, error) {
-	body, err := json.Marshal(sdkmodels.Reload{Generation: generation, SHA256: digest, SchemaVersion: "1"})
-	if err != nil {
-		return "", err
-	}
-	request, err := http.NewRequestWithContext(ctx, contract.Plugin.Endpoints.Reload.Method, fmt.Sprintf("https://127.0.0.1:%d%s", port, contract.Plugin.Endpoints.Reload.Path), bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	request.Header.Set("content-type", "application/json")
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		MinVersion:   contract.TransportSecurity.MinimumTLSVersion,
-		Certificates: []tls.Certificate{issued.coreClient.certificate}, RootCAs: issued.root,
-		ServerName: "localhost",
-	}}}
-	response, err := client.Do(request)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-	contents, err := io.ReadAll(io.LimitReader(response.Body, 4097))
-	return fmt.Sprintf("status=%d body=%s", response.StatusCode, string(contents)), err
-}
-
 func repositoryRoot() string {
 	return filepath.Clean(filepath.Join(filepath.Dir(sourceFile()), "../../.."))
 }
@@ -338,8 +330,6 @@ func createIdentities() (identities, error) {
 	if err != nil {
 		return identities{}, err
 	}
-	pool := x509.NewCertPool()
-	pool.AddCert(root)
 	rootPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootDER})
 	issue := func(serial int64, name string) (identity, error) {
 		key, keyErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -381,7 +371,46 @@ func createIdentities() (identities, error) {
 	if err != nil {
 		return identities{}, err
 	}
-	return identities{root: pool, rootPEM: rootPEM, coreServer: coreServer, coreClient: coreClient, replica: replica}, nil
+	return identities{root: root, rootKey: rootKey, rootPEM: rootPEM, coreServer: coreServer, coreClient: coreClient, replica: replica}, nil
+}
+
+func newCredentialsProvider(contract sdkinfra.HTTPContract, roots []byte, server, client identity) (*sdkinfra.StaticCredentialsProvider, error) {
+	credentials, err := sdkinfra.LoadCredentials(contract, sdkinfra.CredentialsMaterial{
+		CABundle:             roots,
+		ServerCertificatePEM: server.certificatePEM, ServerKeyPEM: server.privateKeyPEM,
+		ClientCertificatePEM: client.certificatePEM, ClientKeyPEM: client.privateKeyPEM,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return sdkinfra.NewStaticCredentialsProvider(credentials)
+}
+
+func newRevocation(issued identities) (*sdkinfra.Revocation, error) {
+	now := time.Now().UTC()
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number: big.NewInt(1), ThisUpdate: now.Add(-time.Minute), NextUpdate: now.Add(time.Hour),
+	}, issued.root, issued.rootKey)
+	if err != nil {
+		return nil, err
+	}
+	credentials, err := sdkinfra.LoadCredentials(mustContract(), sdkinfra.CredentialsMaterial{
+		CABundle: issued.rootPEM, ServerCertificatePEM: issued.replica.certificatePEM, ServerKeyPEM: issued.replica.privateKeyPEM,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return sdkinfra.NewRevocation(sdkinfra.RevocationConfiguration{
+		Authorities: credentials.TrustAuthorities(), Bundles: [][]byte{der}, Policy: sdkinfra.RevocationFailClosed,
+	})
+}
+
+func mustContract() sdkinfra.HTTPContract {
+	contract, err := sdkinfra.LoadHTTPContract()
+	if err != nil {
+		panic(err)
+	}
+	return contract
 }
 
 func fail(err error) {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -20,23 +19,16 @@ import (
 	"path/filepath"
 	"time"
 
-	"liapoldus.local/server-plugin/internal/application"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	pluginsdk "github.com/Liapoldus/pluginprotocol/presentation/sdk"
 	caddycore "github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/certmagic"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"liapoldus.local/server-plugin/internal/application"
+	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 const (
-	instanceID      = "server-"
 	certificateRef  = "fixture-certificate"
 	privateKeyRef   = "fixture-private-key"
-	grantHandle     = "fixture-config-grant"
-	grantPurpose    = "plugin-config-apply"
 	customHostname  = "custom.example.test"
 	invalidRevision = "revision-2"
 	validRevision   = "revision-3"
@@ -50,9 +42,7 @@ type input struct {
 
 type fixtureOutput struct {
 	InitialRevision          string `json:"initialRevision"`
-	MissingGrantCode         string `json:"missingGrantCode"`
-	WrongScopeCode           string `json:"wrongScopeCode"`
-	InvalidPairCode          string `json:"invalidPairCode"`
+	InvalidPairRejected      bool   `json:"invalidPairRejected"`
 	RevisionAfterInvalidPair string `json:"revisionAfterInvalidPair"`
 	OldRevisionStatus        int    `json:"oldRevisionStatus"`
 	OldRevisionBody          string `json:"oldRevisionBody"`
@@ -67,11 +57,6 @@ type result struct {
 	NegotiatedProtocol string `json:"negotiatedProtocol"`
 	Status             int    `json:"status"`
 	Body               string `json:"body"`
-}
-
-type grantBroker struct {
-	pluginv1.UnimplementedGrantBrokerServer
-	secrets map[string][]byte
 }
 
 func main() {
@@ -93,53 +78,27 @@ func main() {
 	configuration, err := application.NewConfiguration(runtime)
 	check(err)
 	defer func() { _ = configuration.Stop() }()
-	service, err := pluginadapter.New(configuration, func() {})
-	check(err)
-	broker, err := pluginsdk.StartGrantBroker(&grantBroker{secrets: map[string][]byte{
-		certificateRef: certificatePEM,
-		privateKeyRef:  privateKeyPEM,
-		"invalid-key":  wrongPrivateKeyPEM,
-	}})
-	check(err)
-	defer broker.Stop()
-	_, err = service.Bootstrap(context.Background(), &pluginv1.BootstrapRequest{
-		InstanceId: instanceID, GrantBrokerEndpoint: broker.Endpoint(),
-	})
-	check(err)
-
 	initialConfig := settings(request.HTTPPort, nil, "")
-	initial, err := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{
-		Config: initialConfig, SettingsRevision: initialRevision,
-	})
-	check(err)
+	check(shared.Apply(configuration, initialConfig, initialRevision, nil))
 	customConfig := settings(request.HTTPPort, &request.HTTPSPort, "invalid-key")
-	_, missingGrantErr := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{
-		Config: customConfig, SettingsRevision: invalidRevision,
+	invalidPairErr := shared.Apply(configuration, customConfig, invalidRevision, map[string][]byte{
+		certificateRef: certificatePEM, privateKeyRef: wrongPrivateKeyPEM,
 	})
-	wrongScopeRequest, err := customGrantRequest(customConfig, invalidRevision, certificateRef, "invalid-key")
-	check(err)
-	for _, grant := range wrongScopeRequest.Grants {
-		grant.Scope = pluginv1.GrantScope_GRANT_SCOPE_CALL
-	}
-	_, wrongScopeErr := service.ConfigApply(context.Background(), wrongScopeRequest)
-	wrongPair, err := customGrantRequest(customConfig, invalidRevision, certificateRef, "invalid-key")
-	check(err)
-	_, invalidPairErr := service.ConfigApply(context.Background(), wrongPair)
 	revisionAfterInvalidPair := configuration.Revision()
 
 	oldStatus, oldBody := getHTTP(request.HTTPPort)
 	check(os.WriteFile(sitePath, []byte("custom-tls"), 0o600))
 	validConfig := settings(request.HTTPPort, &request.HTTPSPort, "")
-	validGrant, err := customGrantRequest(validConfig, validRevision, certificateRef, privateKeyRef)
-	check(err)
-	active, validErr := service.ConfigApply(context.Background(), validGrant)
+	validErr := shared.Apply(configuration, validConfig, validRevision, map[string][]byte{
+		certificateRef: certificatePEM, privateKeyRef: privateKeyPEM,
+	})
 	output := fixtureOutput{
-		InitialRevision: initial.GetSettingsRevision(), MissingGrantCode: status.Code(missingGrantErr).String(),
-		WrongScopeCode:  status.Code(wrongScopeErr).String(),
-		InvalidPairCode: status.Code(invalidPairErr).String(), RevisionAfterInvalidPair: revisionAfterInvalidPair,
-		OldRevisionStatus: oldStatus, OldRevisionBody: oldBody, ValidCode: status.Code(validErr).String(),
+		InitialRevision: initialRevision, InvalidPairRejected: invalidPairErr != nil,
+		RevisionAfterInvalidPair: revisionAfterInvalidPair,
+		OldRevisionStatus:        oldStatus, OldRevisionBody: oldBody, ValidCode: "OK",
 	}
 	if validErr != nil {
+		output.ValidCode = "ERROR"
 		check(json.NewEncoder(os.Stdout).Encode(output))
 		return
 	}
@@ -148,7 +107,7 @@ func main() {
 	tls13 := requestTLS(request.HTTPSPort, rootPEM, customHostname, tls.VersionTLS13)
 	_, wrongHostnameErr := dialTLS(request.HTTPSPort, rootPEM, "wrong.example.test", tls.VersionTLS13)
 
-	output.ValidRevision = active.GetSettingsRevision()
+	output.ValidRevision = configuration.Revision()
 	output.TLS12 = tls12
 	output.TLS13 = tls13
 	output.WrongHostnameRejected = wrongHostnameErr != nil
@@ -188,25 +147,6 @@ func settings(httpPort int, httpsPort *int, invalidKeyRef string) []byte {
 	})
 	check(err)
 	return contents
-}
-
-func customGrantRequest(config []byte, revision, certRef, keyRef string) (*pluginv1.ConfigApplyRequest, error) {
-	return &pluginv1.ConfigApplyRequest{
-		Config: config, SettingsRevision: revision,
-		Grants: []*pluginv1.ActiveGrant{
-			{Handle: grantHandle, Purpose: grantPurpose, Scope: pluginv1.GrantScope_GRANT_SCOPE_CONFIG_APPLY, InstanceId: instanceID, SettingsRevision: revision, SecretReference: certRef},
-			{Handle: grantHandle, Purpose: grantPurpose, Scope: pluginv1.GrantScope_GRANT_SCOPE_CONFIG_APPLY, InstanceId: instanceID, SettingsRevision: revision, SecretReference: keyRef},
-		},
-	}, nil
-}
-
-func (broker *grantBroker) RedeemGrant(_ context.Context, request *pluginv1.RedeemGrantRequest) (*pluginv1.RedeemGrantResponse, error) {
-	secret, exists := broker.secrets[request.GetSecretReference()]
-	if request.GetHandle() != grantHandle || request.GetPurpose() != grantPurpose || request.GetScope() != pluginv1.GrantScope_GRANT_SCOPE_CONFIG_APPLY ||
-		request.GetInstanceId() != instanceID || request.GetSettingsRevision() == "" || request.GetCapability() != "" || request.GetDomain() != "" || !exists {
-		return nil, status.Error(codes.PermissionDenied, "")
-	}
-	return &pluginv1.RedeemGrantResponse{Secret: append([]byte(nil), secret...)}, nil
 }
 
 func getHTTP(port int) (int, string) {

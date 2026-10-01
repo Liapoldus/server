@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-describe("production ConfigApply settings-schema boundary", () => {
+describe("production settings-schema boundary", () => {
   it("validates strict Liapoldus settings before the runtime adapter and preserves the active revision on rejection", () => {
     const validSettings = { schemaVersion: 1, config: { listeners: [], routes: [] } };
     const input = {

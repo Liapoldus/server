@@ -79,7 +79,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/hostname" },
-          "description": "Explicit hostnames owned by this listener. IDNA/case-equivalent duplicates are rejected during ConfigApply."
+          "description": "Explicit hostnames owned by this listener. IDNA/case-equivalent duplicates are rejected during SDK Reload candidate apply."
         },
         "protocols": {
           "type": "array",
@@ -164,7 +164,7 @@
     "httpMatch": {
       "type": "object",
       "additionalProperties": false,
-      "description": "All supplied predicates are combined with AND; omitted predicates are wildcards. An absent match object matches every request for the listener. Hosts are exact or a leftmost one-label wildcard, canonicalized by ConfigApply as lowercase IDNA A-labels without ports; methods are exact case-sensitive HTTP method tokens.",
+      "description": "All supplied predicates are combined with AND; omitted predicates are wildcards. An absent match object matches every request for the listener. Hosts are exact or a leftmost one-label wildcard, canonicalized during SDK Reload candidate apply as lowercase IDNA A-labels without ports; methods are exact case-sensitive HTTP method tokens.",
       "properties": {
         "hosts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/hostname" } },
         "methods": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/method" } },
@@ -186,7 +186,7 @@
         "origin": {
           "type": "string",
           "pattern": "^https?://[^/@?#\\s]+$",
-          "description": "HTTP(S) origin authority only: no userinfo, path, query, or fragment. Full URL and port parsing is checked during ConfigApply."
+          "description": "HTTP(S) origin authority only: no userinfo, path, query, or fragment. Full URL and port parsing is checked during SDK Reload candidate apply."
         },
         "weight": {
           "type": "integer",
@@ -238,7 +238,7 @@
     "httpRoute": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Routes are evaluated in array order for their listener; the first matching route is terminal and executes exactly one handler. Supplied matcher predicates are ANDed. ConfigApply rejects unresolved listener references, duplicate IDs/binds, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and unsupported capability modes before activation.",
+      "description": "Routes are evaluated in array order for their listener; the first matching route is terminal and executes exactly one handler. Supplied matcher predicates are ANDed. SDK Reload candidate apply rejects unresolved listener references, duplicate IDs/binds, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and unsupported capability modes before activation.",
       "required": ["id", "listenerId", "handler"],
       "properties": {
         "id": { "$ref": "#/$defs/nonEmptyString" },
@@ -253,7 +253,7 @@
     "config": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Strict Liapoldus desired settings, not native Caddy JSON or Caddyfile. Before compiling a candidate runtime configuration, ConfigApply rejects duplicate IDs/binds, unresolved listener/site references, route/listener kind mismatches, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and unsupported capability modes.",
+      "description": "Strict Liapoldus desired settings, not native Caddy JSON or Caddyfile. Before compiling a candidate runtime configuration, SDK Reload candidate apply rejects duplicate IDs/binds, unresolved listener/site references, route/listener kind mismatches, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and unsupported capability modes.",
       "required": ["listeners", "routes"],
       "properties": {
         "listeners": { "type": "array", "items": { "$ref": "#/$defs/listener" } },

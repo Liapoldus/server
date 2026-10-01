@@ -17,27 +17,21 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
-	"liapoldus.local/server-plugin/internal/application"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	pluginsdk "github.com/Liapoldus/pluginprotocol/presentation/sdk"
 	caddycore "github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/certmagic"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
+	"liapoldus.local/server-plugin/internal/application"
+	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 const (
-	instanceID     = "server-"
 	certificateRef = "fixture-certificate"
 	privateKeyRef  = "fixture-private-key"
-	grantHandle    = "fixture-config-grant"
-	grantPurpose   = "plugin-config-apply"
 	settingsRev    = "http2-http3-revision"
 	hostname       = "custom.example.test"
 )
@@ -55,19 +49,12 @@ type fixtureResult struct {
 }
 
 type fixtureOutput struct {
-	ConfigApplied  bool          `json:"configApplied"`
-	GrantsRedeemed int32         `json:"grantsRedeemed"`
-	HTTP2          fixtureResult `json:"http2"`
-	HTTP3          fixtureResult `json:"http3"`
-	TLS12          fixtureResult `json:"tls12"`
-	TLS13          fixtureResult `json:"tls13"`
-	TLS11Rejected  bool          `json:"tls11Rejected"`
-}
-
-type grantBroker struct {
-	pluginv1.UnimplementedGrantBrokerServer
-	secrets  map[string][]byte
-	redeemed atomic.Int32
+	ConfigApplied bool          `json:"configApplied"`
+	HTTP2         fixtureResult `json:"http2"`
+	HTTP3         fixtureResult `json:"http3"`
+	TLS12         fixtureResult `json:"tls12"`
+	TLS13         fixtureResult `json:"tls13"`
+	TLS11Rejected bool          `json:"tls11Rejected"`
 }
 
 func main() {
@@ -88,44 +75,22 @@ func main() {
 	configuration, err := application.NewConfiguration(runtime)
 	check(err)
 	defer func() { _ = configuration.Stop() }()
-	service, err := pluginadapter.New(configuration, func() {})
-	check(err)
-	grantService := &grantBroker{secrets: map[string][]byte{
+	settings := makeSettings(request.HTTPSPort)
+	check(shared.Apply(configuration, settings, settingsRev, map[string][]byte{
 		certificateRef: certificatePEM,
 		privateKeyRef:  privateKeyPEM,
-	}}
-	broker, err := pluginsdk.StartGrantBroker(grantService)
-	check(err)
-	defer broker.Stop()
-	_, err = service.Bootstrap(context.Background(), &pluginv1.BootstrapRequest{
-		InstanceId: instanceID, GrantBrokerEndpoint: broker.Endpoint(),
-	})
-	check(err)
-
-	settings := makeSettings(request.HTTPSPort)
-	response, err := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{
-		Config: settings, SettingsRevision: settingsRev,
-		Grants: []*pluginv1.ActiveGrant{
-			configGrant(certificateRef),
-			configGrant(privateKeyRef),
-		},
-	})
-	check(err)
-	if !response.GetApplied() || response.GetSettingsRevision() != settingsRev {
-		panic("ConfigApply did not acknowledge the requested revision")
-	}
+	}))
 
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(rootPEM) {
 		panic("fixture root certificate could not be loaded")
 	}
-	output := fixtureOutput{ConfigApplied: response.GetApplied()}
+	output := fixtureOutput{ConfigApplied: configuration.Revision() == settingsRev}
 	output.HTTP2 = requestHTTP2(request.HTTPSPort, roots)
 	output.HTTP3 = requestHTTP3(request.HTTPSPort, roots)
 	output.TLS12 = requestHTTP1AtVersion(request.HTTPSPort, roots, tls.VersionTLS12)
 	output.TLS13 = requestHTTP1AtVersion(request.HTTPSPort, roots, tls.VersionTLS13)
 	output.TLS11Rejected = requestTLS11Rejected(request.HTTPSPort, roots)
-	output.GrantsRedeemed = grantService.redeemed.Load()
 	check(json.NewEncoder(os.Stdout).Encode(output))
 }
 
@@ -148,26 +113,6 @@ func makeSettings(port int) []byte {
 	})
 	check(err)
 	return contents
-}
-
-func configGrant(reference string) *pluginv1.ActiveGrant {
-	return &pluginv1.ActiveGrant{
-		Handle: grantHandle, Purpose: grantPurpose,
-		Scope:      pluginv1.GrantScope_GRANT_SCOPE_CONFIG_APPLY,
-		InstanceId: instanceID, SettingsRevision: settingsRev, SecretReference: reference,
-	}
-}
-
-func (broker *grantBroker) RedeemGrant(_ context.Context, request *pluginv1.RedeemGrantRequest) (*pluginv1.RedeemGrantResponse, error) {
-	secret, exists := broker.secrets[request.GetSecretReference()]
-	if request.GetHandle() != grantHandle || request.GetPurpose() != grantPurpose ||
-		request.GetScope() != pluginv1.GrantScope_GRANT_SCOPE_CONFIG_APPLY ||
-		request.GetInstanceId() != instanceID || request.GetSettingsRevision() != settingsRev ||
-		request.GetCapability() != "" || request.GetDomain() != "" || !exists {
-		return nil, fmt.Errorf("config-scoped secret grant rejected")
-	}
-	broker.redeemed.Add(1)
-	return &pluginv1.RedeemGrantResponse{Secret: append([]byte(nil), secret...)}, nil
 }
 
 func requestHTTP2(port int, roots *x509.CertPool) fixtureResult {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
@@ -12,9 +13,12 @@ import (
 type Runtime struct {
 	mu      sync.RWMutex
 	targets []DispatchTarget
+	id      uint64
 }
 
-func New() *Runtime { return &Runtime{} }
+var nextRuntimeID atomic.Uint64
+
+func New() *Runtime { return &Runtime{id: nextRuntimeID.Add(1)} }
 
 func (runtime *Runtime) SetDispatchTargets(targets []DispatchTarget) error {
 	if runtime == nil {
@@ -26,6 +30,14 @@ func (runtime *Runtime) SetDispatchTargets(targets []DispatchTarget) error {
 		if target.ID == "" || target.Endpoint == "" {
 			return errUnsupportedSettings
 		}
+		if target.Security.PlaintextLoopback {
+			if !endpointIsLoopback(target.Endpoint) {
+				return errUnsupportedSettings
+			}
+		} else if target.Security.Identity == "" || target.Security.PeerIdentity == "" ||
+			target.Security.Certificate.PrivateKey == nil || target.Security.Roots == nil {
+			return errUnsupportedSettings
+		}
 		if _, exists := seen[target.ID]; exists {
 			return errUnsupportedSettings
 		}
@@ -33,6 +45,7 @@ func (runtime *Runtime) SetDispatchTargets(targets []DispatchTarget) error {
 	}
 	runtime.mu.Lock()
 	runtime.targets = copyTargets
+	registerDispatchSecurity(runtime.id, copyTargets)
 	runtime.mu.Unlock()
 	return nil
 }
@@ -84,10 +97,16 @@ func (runtime *Runtime) compile(configuration []byte, secrets map[string][]byte)
 	runtime.mu.RLock()
 	targets := append([]DispatchTarget(nil), runtime.targets...)
 	runtime.mu.RUnlock()
-	return compileSettings(configuration, targets, secrets)
+	return compileSettings(configuration, targets, runtime.id, secrets)
 }
 
-func (runtime *Runtime) Stop() error { return caddycore.Stop() }
+func (runtime *Runtime) Stop() error {
+	err := caddycore.Stop()
+	if runtime != nil {
+		unregisterDispatchSecurity(runtime.id)
+	}
+	return err
+}
 
 func disableAutosave(configuration []byte) ([]byte, error) {
 	var root map[string]json.RawMessage

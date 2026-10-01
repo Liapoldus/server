@@ -11,7 +11,7 @@ require (
 	golang.org/x/net v0.55.0
 	golang.org/x/text v0.37.0
 	google.golang.org/grpc v1.81.0
-	liapoldus.local/plugin-sdk v0.0.0
+	github.com/Liapoldus/plugin-sdk v0.0.0
 )
 
 require (
@@ -178,4 +178,4 @@ require (
 
 replace github.com/Liapoldus/pluginprotocol => ../../pluginprotocol
 
-replace liapoldus.local/plugin-sdk => ../../plugin-sdk
+replace github.com/Liapoldus/plugin-sdk => ../../plugin-sdk

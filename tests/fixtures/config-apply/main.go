@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,10 +8,7 @@ import (
 
 	"liapoldus.local/server-plugin/internal/application"
 	"liapoldus.local/server-plugin/internal/domain/models"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type fakeRuntime struct{ active []byte }
@@ -71,22 +67,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	service, err := pluginadapter.New(configuration, func() {})
-	if err != nil {
-		panic(err)
-	}
 	results := make([]result, 0, len(input.Calls))
 	for _, item := range input.Calls {
 		payload, err := json.Marshal(item.Settings)
 		if err != nil {
 			panic(err)
 		}
-		response, err := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{Config: payload, SettingsRevision: item.Revision})
+		err = shared.Apply(configuration, payload, item.Revision, nil)
 		if err != nil {
-			results = append(results, result{Code: status.Code(err).String()})
+			code := "InvalidArgument"
+			if errors.Is(err, application.ErrRevisionConflict) || errors.Is(err, application.ErrInvalidRevision) {
+				code = "FailedPrecondition"
+			}
+			results = append(results, result{Code: code})
 			continue
 		}
-		results = append(results, result{Applied: response.GetApplied(), Revision: response.GetSettingsRevision(), Code: codes.OK.String()})
+		results = append(results, result{Applied: true, Revision: item.Revision, Code: "OK"})
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"calls": results, "activeRevision": configuration.Revision(), "activeConfig": string(runtime.active)}); err != nil {
 		panic(err)

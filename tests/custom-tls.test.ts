@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-describe("custom TLS settings and scoped certificate grants", () => {
-  it("loads only granted certificate material, verifies hostnames, and preserves the active revision on invalid pairs", async () => {
+describe("custom TLS settings", () => {
+	it("verifies hostnames and preserves the active revision when a certificate/key pair is invalid", async () => {
     const httpPort = await freePort();
     const httpsPort = await freePort();
     const output = execFileSync("go", ["run", "./tests/fixtures/custom-tls"], {
@@ -20,9 +20,7 @@ describe("custom TLS settings and scoped certificate grants", () => {
 
     expect(result).toMatchObject({
       initialRevision: "revision-1",
-      missingGrantCode: "PermissionDenied",
-      wrongScopeCode: "PermissionDenied",
-      invalidPairCode: "InvalidArgument",
+      invalidPairRejected: true,
       revisionAfterInvalidPair: "revision-1",
       oldRevisionStatus: 200,
       oldRevisionBody: "old-active",

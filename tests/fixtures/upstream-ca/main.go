@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -20,34 +19,22 @@ import (
 	"os"
 	"time"
 
-	"liapoldus.local/server-plugin/internal/application"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	pluginsdk "github.com/Liapoldus/pluginprotocol/presentation/sdk"
 	caddycore "github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/certmagic"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"liapoldus.local/server-plugin/internal/application"
+	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 const (
-	instanceID       = "server-"
 	settingsRevision = "revision-1"
 	caReference      = "private-upstream-ca"
-	grantHandle      = "fixture-config-grant"
-	grantPurpose     = "plugin-config-apply"
 )
 
 type input struct {
 	Port          int  `json:"port"`
 	TrustCA       bool `json:"trustCA"`
 	WrongHostname bool `json:"wrongHostname"`
-}
-
-type grantBroker struct {
-	pluginv1.UnimplementedGrantBrokerServer
-	certificateAuthority []byte
 }
 
 func main() {
@@ -86,8 +73,6 @@ func main() {
 	runtime := caddyruntime.New()
 	configuration, err := application.NewConfiguration(runtime)
 	check(err)
-	service, err := pluginadapter.New(configuration, func() {})
-	check(err)
 	requestSettings, err := json.Marshal(map[string]any{
 		"schemaVersion": 1,
 		"config": map[string]any{
@@ -102,25 +87,11 @@ func main() {
 	})
 	check(err)
 
-	bootstrap := &pluginv1.BootstrapRequest{InstanceId: instanceID}
-	var grants []*pluginv1.ActiveGrant
-	var broker *pluginsdk.StartedGrantServer
+	var secrets map[string][]byte
 	if request.TrustCA {
-		broker, err = pluginsdk.StartGrantBroker(&grantBroker{certificateAuthority: caPEM})
-		check(err)
-		defer broker.Stop()
-		bootstrap.GrantBrokerEndpoint = broker.Endpoint()
-		grants = []*pluginv1.ActiveGrant{{
-			Handle: grantHandle, Purpose: grantPurpose, Scope: pluginv1.GrantScope_GRANT_SCOPE_CONFIG_APPLY,
-			InstanceId: instanceID, SettingsRevision: settingsRevision, SecretReference: caReference,
-		}}
+		secrets = map[string][]byte{caReference: caPEM}
 	}
-	_, err = service.Bootstrap(context.Background(), bootstrap)
-	check(err)
-	result, err := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{
-		Config: requestSettings, SettingsRevision: settingsRevision, Grants: grants,
-	})
-	check(err)
+	check(shared.Apply(configuration, requestSettings, settingsRevision, secrets))
 	defer configuration.Stop()
 
 	requestCount := 1
@@ -140,18 +111,9 @@ func main() {
 		bodies = append(bodies, string(contents))
 	}
 	check(json.NewEncoder(os.Stdout).Encode(map[string]any{
-		"revision": result.GetSettingsRevision(), "statuses": statuses, "bodies": bodies,
+		"revision": configuration.Revision(), "statuses": statuses, "bodies": bodies,
 		"fallbackRequests": fallbackRequests,
 	}))
-}
-
-func (broker *grantBroker) RedeemGrant(_ context.Context, request *pluginv1.RedeemGrantRequest) (*pluginv1.RedeemGrantResponse, error) {
-	if request.GetHandle() != grantHandle || request.GetPurpose() != grantPurpose || request.GetScope() != pluginv1.GrantScope_GRANT_SCOPE_CONFIG_APPLY ||
-		request.GetInstanceId() != instanceID || request.GetSettingsRevision() != settingsRevision || request.GetSecretReference() != caReference ||
-		request.GetCapability() != "" || request.GetDomain() != "" {
-		return nil, status.Error(codes.PermissionDenied, "")
-	}
-	return &pluginv1.RedeemGrantResponse{Secret: append([]byte(nil), broker.certificateAuthority...)}, nil
 }
 
 func makeCertificate(wrongHostname bool) (tls.Certificate, []byte) {

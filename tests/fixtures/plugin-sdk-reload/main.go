@@ -23,12 +23,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
+	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
 	"liapoldus.local/server-plugin/contracts"
 	"liapoldus.local/server-plugin/internal/application"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/internal/presentation/restplugin"
-	sdkmodels "liapoldus.local/plugin-sdk/domain/models"
-	sdkinfra "liapoldus.local/plugin-sdk/infrastructure"
 )
 
 type input struct {
@@ -36,19 +36,26 @@ type input struct {
 }
 
 type output struct {
-	Acknowledgement       map[string]any `json:"acknowledgement"`
-	ExpectedDigest        string         `json:"expectedDigest"`
-	ReadyAfterApply       map[string]any `json:"readyAfterApply"`
-	FirstResponse         map[string]any `json:"firstResponse"`
-	RejectedCandidate     bool           `json:"rejectedCandidate"`
-	CandidateFailureStage string         `json:"candidateFailureStage"`
-	RevisionAfterReject   string         `json:"revisionAfterReject"`
-	ReadyAfterReject      map[string]any `json:"readyAfterReject"`
-	ResponseAfterReject   map[string]any `json:"responseAfterReject"`
+	Acknowledgement          map[string]any `json:"acknowledgement"`
+	ExpectedDigest           string         `json:"expectedDigest"`
+	ReadyAfterApply          map[string]any `json:"readyAfterApply"`
+	Registration             map[string]any `json:"registration"`
+	ManifestName             string         `json:"manifestName"`
+	ConfigurationSchemaValid bool           `json:"configurationSchemaValid"`
+	MetricsHasReadinessGauge bool           `json:"metricsHasReadinessGauge"`
+	FirstResponse            map[string]any `json:"firstResponse"`
+	RejectedCandidate        bool           `json:"rejectedCandidate"`
+	CandidateFailureStage    string         `json:"candidateFailureStage"`
+	RevisionAfterReject      string         `json:"revisionAfterReject"`
+	ReadyAfterReject         map[string]any `json:"readyAfterReject"`
+	ResponseAfterReject      map[string]any `json:"responseAfterReject"`
 }
 
 type identities struct {
 	roots        *x509.CertPool
+	root         *x509.Certificate
+	rootPEM      []byte
+	rootKey      *ecdsa.PrivateKey
 	coreServer   tlsCertificate
 	pluginServer tlsCertificate
 	pluginClient tlsCertificate
@@ -56,8 +63,10 @@ type identities struct {
 }
 
 type tlsCertificate struct {
-	certificate tls.Certificate
-	leaf        *x509.Certificate
+	certificate    tls.Certificate
+	leaf           *x509.Certificate
+	certificatePEM []byte
+	privateKeyPEM  []byte
 }
 
 func main() {
@@ -106,8 +115,7 @@ func main() {
 
 	coreListener, err := net.Listen("tcp", "127.0.0.1:0")
 	check(err)
-	coreSecureListener, err := sdkinfra.NewMutualTLSListener(coreListener, ids.coreServer.certificate, ids.roots, contract.TransportSecurity.MinimumTLSVersion)
-	check(err)
+	revocation := newRevocation(ids)
 	coreMux := http.NewServeMux()
 	coreMux.HandleFunc(contract.Core.ConfigPull.Method+" "+contract.Core.ConfigPull.PathTemplate, func(writer http.ResponseWriter, request *http.Request) {
 		generation := request.PathValue("generation")
@@ -123,41 +131,73 @@ func main() {
 		writer.Header().Set(headers["generation"], generation)
 		writer.Header().Set(headers["schemaVersion"], "1")
 		writer.Header().Set(headers["sha256"], digestValue)
+		writer.Header().Set(headers["generationState"], "active")
 		_, _ = writer.Write(contents)
 	})
-	coreServer := &http.Server{Handler: coreMux}
-	go func() { _ = coreServer.Serve(coreSecureListener) }()
-	defer func() { _ = coreServer.Close() }()
-
-	pluginCoreHTTP, err := sdkinfra.NewMutualTLSHTTPClient(sdkinfra.MutualTLSClientConfiguration{
-		Certificate: ids.pluginClient.certificate, TrustedServerRoots: ids.roots,
-		ServerName: "localhost", MinimumTLSVersion: contract.TransportSecurity.MinimumTLSVersion,
+	coreProvider := newCredentialsProvider(contract, ids, ids.coreServer, ids.coreClient)
+	coreServer, err := sdkinfra.NewMutualTLSServer(contract, sdkinfra.MutualTLSServerConfig{
+		Handler: coreMux, Provider: coreProvider,
+		Peer:       sdkmodels.PeerIdentity{CommonName: ids.pluginClient.leaf.Subject.CommonName},
+		Revocation: revocation,
 	})
 	check(err)
-	coreSource, err := sdkinfra.NewCoreConfigurationSource("https://"+coreListener.Addr().String(), pluginCoreHTTP, contract)
+	go func() { _ = coreServer.Serve(coreListener) }()
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = coreServer.GracefulShutdown(shutdown)
+	}()
+
+	pluginProvider := newCredentialsProvider(contract, ids, ids.pluginServer, ids.pluginClient)
+	pluginCoreTLS, err := sdkinfra.NewMutualTLSClient(contract, pluginProvider, sdkinfra.MutualTLSClientConfig{
+		Peer:       sdkmodels.PeerIdentity{CommonName: ids.coreServer.leaf.Subject.CommonName},
+		ServerName: "localhost", Revocation: revocation,
+	})
+	check(err)
+	coreSource, err := sdkinfra.NewCoreConfigurationSource(contract, "https://"+coreListener.Addr().String(), pluginCoreTLS)
 	check(err)
 	pluginListener, err := net.Listen("tcp", "127.0.0.1:0")
 	check(err)
-	pluginServer, pluginSecureListener, err := restplugin.NewMutualTLSServer(
-		configuration, coreSource, pluginListener,
-		ids.pluginServer.certificate, ids.roots, contract.TransportSecurity.MinimumTLSVersion,
-	)
+	identity, err := sdkmodels.NewReplicaIdentity("server", "replica-1")
 	check(err)
-	go func() { _ = pluginServer.Serve(pluginSecureListener) }()
-	defer func() { _ = pluginServer.Close() }()
-
-	corePluginHTTP, err := sdkinfra.NewMutualTLSHTTPClient(sdkinfra.MutualTLSClientConfiguration{
-		Certificate: ids.coreClient.certificate, TrustedServerRoots: ids.roots,
-		ServerName: "localhost", MinimumTLSVersion: contract.TransportSecurity.MinimumTLSVersion,
+	pluginServer, _, err := restplugin.NewMutualTLSServer(configuration, restplugin.LifecycleOptions{
+		Source: coreSource, Identity: identity, Credentials: pluginProvider,
+		CorePeer:   sdkmodels.PeerIdentity{CommonName: ids.coreClient.leaf.Subject.CommonName},
+		Revocation: revocation, LogOutput: io.Discard,
 	})
 	check(err)
-	pluginClient, err := sdkinfra.NewPluginClient("https://"+pluginListener.Addr().String(), corePluginHTTP, contract)
+	go func() { _ = pluginServer.Serve(pluginListener) }()
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = pluginServer.GracefulShutdown(shutdown)
+	}()
+
+	corePluginTLS, err := sdkinfra.NewMutualTLSClient(contract, coreProvider, sdkinfra.MutualTLSClientConfig{
+		Peer:       sdkmodels.PeerIdentity{CommonName: ids.pluginServer.leaf.Subject.CommonName},
+		ServerName: "localhost", Revocation: revocation,
+	})
+	check(err)
+	pluginClient, err := sdkinfra.NewPluginClient(contract, "https://"+pluginListener.Addr().String(), corePluginTLS,
+		sdkmodels.PeerIdentity{CommonName: ids.coreClient.leaf.Subject.CommonName})
 	check(err)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	firstAck, err := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: "generation-1", SHA256: activeDigest, SchemaVersion: "1"})
 	check(err)
 	ready, err := pluginClient.Readiness(ctx)
+	check(err)
+	registration, err := pluginClient.Identity(ctx)
+	check(err)
+	manifestBytes, err := pluginClient.Manifest(ctx)
+	check(err)
+	var manifest struct {
+		Name string `json:"name"`
+	}
+	check(json.Unmarshal(manifestBytes, &manifest))
+	schemaBytes, err := pluginClient.ConfigurationSchema(ctx)
+	check(err)
+	metrics, err := pluginClient.Metrics(ctx)
 	check(err)
 	firstResponse := requestDataPlane(request.Port)
 	_, rejectedErr := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: "generation-2", SHA256: failedDigest, SchemaVersion: "1"})
@@ -172,7 +212,10 @@ func main() {
 		Acknowledgement: map[string]any{"generation": firstAck.Generation, "sha256": firstAck.SHA256, "applied": firstAck.Applied},
 		ExpectedDigest:  activeDigest,
 		ReadyAfterApply: map[string]any{"ready": ready.Ready, "generation": ready.Generation},
-		FirstResponse:   firstResponse, RejectedCandidate: rejectedErr != nil,
+		Registration:    map[string]any{"instanceId": registration.InstanceID, "replicaId": registration.ReplicaID, "ready": registration.Ready, "appliedGeneration": registration.AppliedGeneration},
+		ManifestName:    manifest.Name, ConfigurationSchemaValid: json.Valid(schemaBytes),
+		MetricsHasReadinessGauge: strings.Contains(metrics, contract.Plugin.Responses.Metrics.ReadyMetricName),
+		FirstResponse:            firstResponse, RejectedCandidate: rejectedErr != nil,
 		CandidateFailureStage: failureStage,
 		RevisionAfterReject:   configuration.Revision(),
 		ReadyAfterReject:      map[string]any{"ready": readyAfterReject.Ready, "generation": readyAfterReject.Generation},
@@ -242,6 +285,7 @@ func createIdentities() (identities, error) {
 		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "test-only root"},
 		NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
 		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		SubjectKeyId: []byte{1, 2, 3, 4},
 	}
 	rootDER, err := x509.CreateCertificate(rand.Reader, rootTemplate, rootTemplate, &rootKey.PublicKey, rootKey)
 	if err != nil {
@@ -253,7 +297,8 @@ func createIdentities() (identities, error) {
 	}
 	pool := x509.NewCertPool()
 	pool.AddCert(root)
-	issue := func(serial int64, name string, usage x509.ExtKeyUsage) (tlsCertificate, error) {
+	rootPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootDER})
+	issue := func(serial int64, name string) (tlsCertificate, error) {
 		key, keyErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if keyErr != nil {
 			return tlsCertificate{}, keyErr
@@ -262,7 +307,8 @@ func createIdentities() (identities, error) {
 			SerialNumber: big.NewInt(serial), Subject: pkix.Name{CommonName: name},
 			DNSNames: []string{"localhost"}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 			NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
-			KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{usage},
+			KeyUsage:    x509.KeyUsageDigitalSignature,
+			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		}
 		der, issueErr := x509.CreateCertificate(rand.Reader, template, root, &key.PublicKey, rootKey)
 		if issueErr != nil {
@@ -279,25 +325,52 @@ func createIdentities() (identities, error) {
 			return tlsCertificate{}, issueErr
 		}
 		pair.Leaf, issueErr = x509.ParseCertificate(der)
-		return tlsCertificate{certificate: pair, leaf: pair.Leaf}, issueErr
+		return tlsCertificate{certificate: pair, leaf: pair.Leaf, certificatePEM: certificatePEM, privateKeyPEM: keyPEM}, issueErr
 	}
-	coreServer, err := issue(2, "Core test server", x509.ExtKeyUsageServerAuth)
+	coreServer, err := issue(2, "Core test server")
 	if err != nil {
 		return identities{}, err
 	}
-	pluginServer, err := issue(3, "plugin test server", x509.ExtKeyUsageServerAuth)
+	pluginServer, err := issue(3, "plugin test server")
 	if err != nil {
 		return identities{}, err
 	}
-	pluginClient, err := issue(4, "plugin test client", x509.ExtKeyUsageClientAuth)
+	pluginClient, err := issue(4, "plugin test client")
 	if err != nil {
 		return identities{}, err
 	}
-	coreClient, err := issue(5, "Core test client", x509.ExtKeyUsageClientAuth)
+	coreClient, err := issue(5, "Core test client")
 	if err != nil {
 		return identities{}, err
 	}
-	return identities{roots: pool, coreServer: coreServer, pluginServer: pluginServer, pluginClient: pluginClient, coreClient: coreClient}, nil
+	return identities{roots: pool, root: root, rootPEM: rootPEM, rootKey: rootKey, coreServer: coreServer, pluginServer: pluginServer, pluginClient: pluginClient, coreClient: coreClient}, nil
+}
+
+func newCredentialsProvider(contract sdkinfra.HTTPContract, ids identities, server, client tlsCertificate) *sdkinfra.StaticCredentialsProvider {
+	credentials, err := sdkinfra.LoadCredentials(contract, sdkinfra.CredentialsMaterial{
+		CABundle:             ids.rootPEM,
+		ServerCertificatePEM: server.certificatePEM,
+		ServerKeyPEM:         server.privateKeyPEM,
+		ClientCertificatePEM: client.certificatePEM,
+		ClientKeyPEM:         client.privateKeyPEM,
+	})
+	check(err)
+	provider, err := sdkinfra.NewStaticCredentialsProvider(credentials)
+	check(err)
+	return provider
+}
+
+func newRevocation(ids identities) *sdkinfra.Revocation {
+	now := time.Now()
+	contents, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number: big.NewInt(1), ThisUpdate: now.Add(-time.Minute), NextUpdate: now.Add(time.Hour),
+	}, ids.root, ids.rootKey)
+	check(err)
+	revocation, err := sdkinfra.NewRevocation(sdkinfra.RevocationConfiguration{
+		Authorities: []*x509.Certificate{ids.root}, Bundles: [][]byte{contents},
+	})
+	check(err)
+	return revocation
 }
 
 func marshal(value any) []byte {

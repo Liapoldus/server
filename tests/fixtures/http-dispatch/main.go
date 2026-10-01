@@ -2,94 +2,55 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
-	"fmt"
+	"encoding/pem"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
+	"github.com/Liapoldus/pluginprotocol/presentation/peer"
 	"liapoldus.local/server-plugin/internal/application"
+	"liapoldus.local/server-plugin/internal/domain/models"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	pluginsdk "github.com/Liapoldus/pluginprotocol/presentation/sdk"
 )
 
-const (
-	fixtureInstanceID = "fixture"
-	fixtureReplicaID  = "urn:liapoldus:plugin:caddy-fixture:replica:one"
-	fixtureRelease    = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-)
-
-type target struct {
-	pluginv1.UnimplementedPluginServiceServer
-	request httpRequest
-}
-
-type httpRequest struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
-}
-
-func (target *target) Manifest(context.Context, *pluginv1.ManifestRequest) (*pluginv1.Manifest, error) {
-	return &pluginv1.Manifest{
-		Name: "fixture", ProtocolVersion: pluginsdk.ProtocolVersion,
-		Capabilities: []string{"http.echo"},
-		CapabilityDescriptors: []*pluginv1.CapabilityDescriptor{{
-			Capability: "http.echo", Modes: []pluginv1.InvocationMode{pluginv1.InvocationMode_INVOCATION_MODE_CALL},
-		}},
-	}, nil
-}
-
-func (*target) Bootstrap(_ context.Context, request *pluginv1.BootstrapRequest) (*pluginv1.BootstrapResult, error) {
-	return &pluginv1.BootstrapResult{Accepted: request.GetInstanceId() == fixtureInstanceID}, nil
-}
-
-func (*target) ConfigSchema(context.Context, *pluginv1.ConfigSchemaRequest) (*pluginv1.ConfigSchema, error) {
-	return &pluginv1.ConfigSchema{}, nil
-}
-
-func (*target) ConfigApply(_ context.Context, request *pluginv1.ConfigApplyRequest) (*pluginv1.ConfigApplyResult, error) {
-	return &pluginv1.ConfigApplyResult{Applied: true, SettingsRevision: request.GetSettingsRevision()}, nil
-}
-
-func (instance *target) Call(_ context.Context, request *pluginv1.CallRequest) (*pluginv1.CallResponse, error) {
-	if err := json.Unmarshal(request.GetPayload(), &instance.request); err != nil {
-		return nil, err
-	}
-	return &pluginv1.CallResponse{Payload: []byte(`{"status":202,"headers":{"Content-Type":"text/plain"},"body":"plugin-response"}`)}, nil
+type requestPayload struct {
+	Method  string            `json:"method"`
+	Path    string            `json:"path"`
+	Headers map[string]string `json:"headers"`
+	Cookies []json.RawMessage `json:"cookies"`
 }
 
 func main() {
-	targetListener, err := net.Listen("tcp", "127.0.0.1:0")
+	serverSecurity, clientSecurity := peerCredentials()
+	var received requestPayload
+	registry, err := peer.NewRegistry().RegisterCall("http.echo", func(_ context.Context, call peer.Call) (peer.Result, error) {
+		if err := json.Unmarshal(call.Payload, &received); err != nil {
+			return peer.Result{}, err
+		}
+		return peer.Result{Payload: []byte(`{"status":202,"headers":{"Content-Type":"text/plain"},"body":"plugin-response"}`)}, nil
+	}).RegisterCall("http.invalid", func(context.Context, peer.Call) (peer.Result, error) {
+		return peer.Result{Payload: []byte(`{"status":200,"headers":{"Set-Cookie":"session=secret; HttpOnly"},"body":"must-not-escape"}`)}, nil
+	}).Build()
 	check(err)
-	targetService := &target{}
-	targetServer := pluginsdk.NewServer(targetService, pluginsdk.ServerOptions{
-		InstanceID: fixtureInstanceID, ReplicaIdentityURI: fixtureReplicaID, ReleaseDigest: fixtureRelease,
+	peerServer, err := peer.Listen(peer.ServerConfig{
+		Network:  peer.NetworkConfig{Carrier: peer.CarrierTCP, Endpoint: "127.0.0.1:0"},
+		Security: serverSecurity, Handler: registry,
 	})
-	go func() { _ = targetServer.Serve(targetListener) }()
-	defer targetServer.GracefulStop()
-
-	lifecycleContext, cancelLifecycle := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelLifecycle()
-	bootstrapClient, err := pluginsdk.DialContext(lifecycleContext, targetListener.Addr().String())
 	check(err)
-	defer bootstrapClient.Close()
-	bootstrapConfig := []byte("{}")
-	_, err = bootstrapClient.BootstrapAndHandshake(lifecycleContext,
-		&pluginv1.BootstrapRequest{InstanceId: fixtureInstanceID}, bootstrapConfig, "bootstrap-revision", nil)
-	check(err)
-	settingsDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(bootstrapConfig))
-	_, err = bootstrapClient.ApplyDispatch(lifecycleContext, &pluginv1.DispatchApplyRequest{
-		Generation: 1, InstanceId: fixtureInstanceID, SettingsDigest: settingsDigest, ReleaseDigest: fixtureRelease,
-		Capabilities: []*pluginv1.CapabilityDispatchScope{{
-			Capability: "http.echo", Modes: []pluginv1.InvocationMode{pluginv1.InvocationMode_INVOCATION_MODE_CALL},
-		}},
-	}, fixtureReplicaID)
-	check(err)
+	peerAddress := peerServer.Addr()
+	go func() { _ = peerServer.Sessions(context.Background()) }()
+	defer func() { _ = peerServer.Close() }()
 
 	publicListener, err := net.Listen("tcp", "127.0.0.1:0")
 	check(err)
@@ -98,11 +59,11 @@ func main() {
 
 	runtime := caddyruntime.New()
 	check(runtime.SetDispatchTargets([]caddyruntime.DispatchTarget{{
-		ID: "fixture", Endpoint: targetListener.Addr().String(), TimeoutMillis: 5000,
+		ID: "fixture", Endpoint: peerAddress, TimeoutMillis: 5000, Security: clientSecurity,
 	}}))
-	serviceConfiguration, err := application.NewConfiguration(runtime)
+	configuration, err := application.NewConfiguration(runtime)
 	check(err)
-	defer func() { _ = serviceConfiguration.Stop() }()
+	defer func() { _ = configuration.Stop() }()
 	settings, err := json.Marshal(map[string]any{
 		"schemaVersion": 1,
 		"config": map[string]any{
@@ -110,32 +71,97 @@ func main() {
 				"id": "web", "kind": "http", "address": publicAddress,
 				"hostnames": []string{}, "protocols": []string{"http1"}, "tls": map[string]any{"mode": "disabled"},
 			}},
-			"routes": []any{map[string]any{
-				"id": "dispatch", "listenerId": "web",
-				"handler": map[string]any{"type": "plugin", "instanceId": "fixture", "capability": "http.echo", "mode": "call"},
-			}},
+			"routes": []any{
+				map[string]any{
+					"id": "dispatch", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/submit"}},
+					"handler": map[string]any{"type": "plugin", "instanceId": "fixture", "capability": "http.echo", "mode": "call"},
+				},
+				map[string]any{
+					"id": "invalid-action", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/invalid"}},
+					"handler": map[string]any{"type": "plugin", "instanceId": "fixture", "capability": "http.invalid", "mode": "call"},
+				},
+			},
 		},
 	})
 	check(err)
-	service, err := pluginadapter.New(serviceConfiguration, func() {})
+	decoded, err := models.DecodeSettings(settings, "schemaVersion", "config", 1)
 	check(err)
-	result, err := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{Config: settings, SettingsRevision: "revision-1"})
-	check(err)
+	check(configuration.Apply(decoded, "revision-1"))
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	request, err := http.NewRequest(http.MethodPost, "http://"+publicAddress+"/submit", nil)
 	check(err)
 	request.Header.Set("X-Request-ID", "fixture-request")
+	request.Header.Set("Cookie", "private=must-not-cross-boundary")
 	response, err := client.Do(request)
 	check(err)
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 	check(err)
 	check(json.NewEncoder(os.Stdout).Encode(map[string]any{
-		"revision": result.GetSettingsRevision(), "status": response.StatusCode,
+		"revision": configuration.Revision(), "status": response.StatusCode,
 		"contentType": response.Header.Get("Content-Type"), "body": string(body),
-		"method": targetService.request.Method, "path": targetService.request.Path,
+		"method": received.Method, "path": received.Path,
+		"cookieForwarded": received.Headers["Cookie"] != "" || len(received.Cookies) != 0,
+		"mutualTLS":       true,
+		"invalidAction":   requestInvalidAction(client, publicAddress),
 	}))
+}
+
+func peerCredentials() (peer.SecurityConfig, peer.SecurityConfig) {
+	rootKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	check(err)
+	rootTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "fixture root"},
+		NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
+		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}
+	rootDER, err := x509.CreateCertificate(rand.Reader, rootTemplate, rootTemplate, &rootKey.PublicKey, rootKey)
+	check(err)
+	root, err := x509.ParseCertificate(rootDER)
+	check(err)
+	roots := x509.NewCertPool()
+	roots.AddCert(root)
+	issue := func(serial int64, name, uri string) tls.Certificate {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		check(err)
+		parsed, err := url.Parse(uri)
+		check(err)
+		template := &x509.Certificate{
+			SerialNumber: big.NewInt(serial), Subject: pkix.Name{CommonName: name}, URIs: []*url.URL{parsed},
+			DNSNames: []string{"localhost"}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+			NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
+			KeyUsage:    x509.KeyUsageDigitalSignature,
+			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		}
+		der, err := x509.CreateCertificate(rand.Reader, template, root, &key.PublicKey, rootKey)
+		check(err)
+		keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+		check(err)
+		certificate, err := tls.X509KeyPair(
+			pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+			pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}),
+		)
+		check(err)
+		return certificate
+	}
+	serverURI := "spiffe://liapoldus.test/forms"
+	clientURI := "spiffe://liapoldus.test/server"
+	return peer.SecurityConfig{Identity: serverURI, Certificate: issue(2, "forms", serverURI), Roots: roots, PeerIdentity: clientURI},
+		peer.SecurityConfig{Identity: clientURI, Certificate: issue(3, "server", clientURI), Roots: roots, PeerIdentity: serverURI}
+}
+
+func requestInvalidAction(client *http.Client, address string) map[string]any {
+	response, err := client.Get("http://" + address + "/invalid")
+	check(err)
+	defer response.Body.Close()
+	contents, err := io.ReadAll(response.Body)
+	check(err)
+	cookies := response.Header.Values("Set-Cookie")
+	if cookies == nil {
+		cookies = []string{}
+	}
+	return map[string]any{"status": response.StatusCode, "setCookie": cookies, "body": string(contents)}
 }
 
 func check(err error) {

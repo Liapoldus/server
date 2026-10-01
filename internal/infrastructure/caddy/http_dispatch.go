@@ -4,34 +4,35 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"time"
 
-	"liapoldus.local/server-plugin/contracts"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	pluginsdk "github.com/Liapoldus/pluginprotocol/presentation/sdk"
+	"github.com/Liapoldus/pluginprotocol/presentation/peer"
 	caddycore "github.com/caddyserver/caddy/v2"
 	caddyhttp "github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"liapoldus.local/server-plugin/contracts"
 )
 
 type dispatchInstance struct {
-	ID             string                   `json:"id"`
-	Endpoint       string                   `json:"endpoint"`
-	TimeoutMillis  int                      `json:"timeoutMillis,omitempty"`
-	CookiePolicies []pluginsdk.CookiePolicy `json:"cookiePolicies,omitempty"`
+	ID            string   `json:"id"`
+	Endpoint      string   `json:"endpoint"`
+	TimeoutMillis int      `json:"timeoutMillis,omitempty"`
+	Methods       []string `json:"methods"`
 }
 
 type dispatchApp struct {
-	Instances []dispatchInstance `json:"instances,omitempty"`
-	bindings  map[string]dispatchBinding
-	contract  contracts.HTTPDispatch
+	Instances   []dispatchInstance `json:"instances,omitempty"`
+	TargetSetID uint64             `json:"targetSetId,omitempty"`
+	bindings    map[string]dispatchBinding
+	contract    contracts.HTTPDispatch
 }
 
 type dispatchBinding struct {
-	client  *pluginsdk.Client
+	client  peer.Client
 	timeout time.Duration
-	cookies map[string]pluginsdk.CookiePolicy
 	calls   map[string]struct{}
 }
 
@@ -43,14 +44,25 @@ type httpDispatchHandler struct {
 }
 
 type httpRequestPayload struct {
-	Method     string                 `json:"method"`
-	Path       string                 `json:"path"`
-	Query      string                 `json:"query,omitempty"`
-	Headers    map[string]string      `json:"headers,omitempty"`
-	Cookies    []pluginsdk.CookiePair `json:"cookies,omitempty"`
-	Body       []byte                 `json:"body,omitempty"`
-	RequestID  string                 `json:"requestId"`
-	RemoteAddr string                 `json:"remoteAddr,omitempty"`
+	Method     string            `json:"method"`
+	Path       string            `json:"path"`
+	Query      string            `json:"query,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Cookies    []cookiePair      `json:"cookies,omitempty"`
+	Body       []byte            `json:"body,omitempty"`
+	RequestID  string            `json:"requestId"`
+	RemoteAddr string            `json:"remoteAddr,omitempty"`
+}
+
+type cookiePair struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type httpResponseAction struct {
+	Status  int               `json:"status"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Body    *string           `json:"body,omitempty"`
 }
 
 func init() {
@@ -75,7 +87,12 @@ func (app *dispatchApp) Provision(_ caddycore.Context) error {
 	app.contract = contract
 	app.bindings = make(map[string]dispatchBinding, len(app.Instances))
 	for _, instance := range app.Instances {
-		if instance.ID == "" || instance.Endpoint == "" {
+		if instance.ID == "" || instance.Endpoint == "" || len(instance.Methods) == 0 {
+			app.close()
+			return contracts.ErrInvalidDispatchAssets
+		}
+		security, ok := lookupDispatchSecurity(app.TargetSetID, instance.ID, instance.Endpoint)
+		if !ok {
 			app.close()
 			return contracts.ErrInvalidDispatchAssets
 		}
@@ -83,81 +100,46 @@ func (app *dispatchApp) Provision(_ caddycore.Context) error {
 			app.close()
 			return contracts.ErrInvalidDispatchAssets
 		}
+		methods := make(map[string]struct{}, len(instance.Methods))
+		for _, method := range instance.Methods {
+			if method == "" {
+				app.close()
+				return contracts.ErrInvalidDispatchAssets
+			}
+			if _, duplicate := methods[method]; duplicate {
+				app.close()
+				return contracts.ErrInvalidDispatchAssets
+			}
+			methods[method] = struct{}{}
+		}
 		timeout := time.Duration(instance.TimeoutMillis) * time.Millisecond
 		if timeout <= 0 {
 			timeout = time.Duration(contract.DefaultTimeoutMillis) * time.Millisecond
 		}
+		registry, buildErr := peer.NewRegistry().Build()
+		if buildErr != nil {
+			app.close()
+			return contracts.ErrInvalidDispatchAssets
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		client, err := pluginsdk.DialContext(ctx, instance.Endpoint)
+		client, dialErr := peer.Dial(ctx, peer.ClientConfig{
+			Network:  peer.NetworkConfig{Carrier: peer.CarrierTCP, Endpoint: instance.Endpoint},
+			Security: security,
+			Handler:  registry,
+		})
 		cancel()
-		if err != nil {
+		if dialErr != nil {
 			app.close()
-			return pluginsdk.ErrUnavailable
+			return peer.ErrUnavailable
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		manifest, err := client.Service().Manifest(ctx, &pluginv1.ManifestRequest{})
-		if err == nil {
-			err = client.CheckHealth(ctx)
-		}
-		cancel()
-		if err != nil || manifest == nil || manifest.GetName() != instance.ID {
-			_ = client.Close()
-			app.close()
-			return pluginsdk.ErrUnavailable
-		}
-		calls := manifestCallCapabilities(manifest)
-		cookiePolicies := make(map[string]pluginsdk.CookiePolicy, len(instance.CookiePolicies))
-		for _, policy := range instance.CookiePolicies {
-			if policy.InstanceID != instance.ID || policy.Capability == "" {
-				_ = client.Close()
-				app.close()
-				return pluginsdk.ErrInvalidCookiePolicy
-			}
-			if _, duplicate := cookiePolicies[policy.Capability]; duplicate {
-				_ = client.Close()
-				app.close()
-				return pluginsdk.ErrInvalidCookiePolicy
-			}
-			cookiePolicies[policy.Capability] = policy
-		}
-		for _, policy := range instance.CookiePolicies {
-			if _, supported := calls[policy.Capability]; !supported {
-				_ = client.Close()
-				app.close()
-				return pluginsdk.ErrInvalidCookiePolicy
-			}
-		}
-		app.bindings[instance.ID] = dispatchBinding{client: client, timeout: timeout, cookies: cookiePolicies, calls: calls}
+		app.bindings[instance.ID] = dispatchBinding{client: client, timeout: timeout, calls: methods}
 	}
 	return nil
 }
 
-func manifestCallCapabilities(manifest *pluginv1.Manifest) map[string]struct{} {
-	capabilities := make(map[string]struct{})
-	for _, capability := range manifest.GetCapabilities() {
-		capabilities[capability] = struct{}{}
-	}
-	for _, descriptor := range manifest.GetCapabilityDescriptors() {
-		for _, mode := range descriptor.GetModes() {
-			if mode == pluginv1.InvocationMode_INVOCATION_MODE_CALL {
-				capabilities[descriptor.GetCapability()] = struct{}{}
-			}
-		}
-	}
-	return capabilities
-}
-
-func (app *dispatchApp) Start() error { return nil }
-
-func (app *dispatchApp) Stop() error {
-	app.close()
-	return nil
-}
-
-func (app *dispatchApp) Cleanup() error {
-	app.close()
-	return nil
-}
+func (app *dispatchApp) Start() error   { return nil }
+func (app *dispatchApp) Stop() error    { app.close(); return nil }
+func (app *dispatchApp) Cleanup() error { app.close(); return nil }
 
 func (app *dispatchApp) close() {
 	for _, binding := range app.bindings {
@@ -183,14 +165,14 @@ func (handler *httpDispatchHandler) Provision(ctx caddycore.Context) error {
 	}
 	app, ok := value.(*dispatchApp)
 	if !ok {
-		return pluginsdk.ErrUnavailable
+		return peer.ErrUnavailable
 	}
 	binding, ok := app.bindings[handler.Instance]
 	if !ok {
-		return pluginsdk.ErrUnavailable
+		return peer.ErrUnavailable
 	}
 	if _, supported := binding.calls[handler.Capability]; !supported {
-		return pluginsdk.ErrUnavailable
+		return peer.ErrMethodNotFound
 	}
 	handler.binding = binding
 	return nil
@@ -206,10 +188,14 @@ func (handler *httpDispatchHandler) ServeHTTP(writer http.ResponseWriter, reques
 		writer.WriteHeader(handler.contract.RequestTooLargeStatus)
 		return nil
 	}
-	blocked := make(map[string]struct{}, len(handler.contract.BlockedHeaders))
+	blocked := make(map[string]struct{}, len(handler.contract.BlockedHeaders)+1)
 	for _, name := range handler.contract.BlockedHeaders {
 		blocked[http.CanonicalHeaderKey(name)] = struct{}{}
 	}
+	// Cookies are deliberately omitted until the per-instance/capability allow-list
+	// is supplied by the Core dispatch snapshot. Forwarding an unfiltered Cookie
+	// header would cross the product security boundary.
+	blocked[http.CanonicalHeaderKey(handler.contract.CookieHeader)] = struct{}{}
 	headers := make(map[string]string, len(request.Header))
 	for name, values := range request.Header {
 		if _, skip := blocked[http.CanonicalHeaderKey(name)]; skip || len(values) == 0 {
@@ -217,23 +203,9 @@ func (handler *httpDispatchHandler) ServeHTTP(writer http.ResponseWriter, reques
 		}
 		headers[name] = strings.Join(values, ",")
 	}
-	var cookies []pluginsdk.CookiePair
-	if policy, allowed := handler.binding.cookies[handler.Capability]; allowed {
-		pairs, parseErr := pluginsdk.ParseCookieHeader(request.Header.Values(handler.contract.CookieHeader))
-		if parseErr != nil {
-			writer.WriteHeader(handler.contract.InvalidRequestStatus)
-			return nil
-		}
-		cookies, err = pluginsdk.FilterCookiePairs(policy, handler.Instance, handler.Capability, pairs)
-		if err != nil {
-			writer.WriteHeader(handler.contract.InvalidRequestStatus)
-			return nil
-		}
-	}
 	payload, err := json.Marshal(httpRequestPayload{
 		Method: request.Method, Path: request.URL.EscapedPath(), Query: request.URL.RawQuery,
-		Headers: headers, Cookies: cookies, Body: body, RequestID: request.Header.Get(handler.contract.RequestIDHeader),
-		RemoteAddr: request.RemoteAddr,
+		Headers: headers, Body: body, RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr,
 	})
 	if err != nil {
 		writer.WriteHeader(handler.contract.InvalidRequestStatus)
@@ -241,12 +213,12 @@ func (handler *httpDispatchHandler) ServeHTTP(writer http.ResponseWriter, reques
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), handler.binding.timeout)
 	defer cancel()
-	response, err := handler.binding.client.Call(ctx, handler.Capability, payload)
-	if err != nil || response == nil {
+	response, err := handler.binding.client.Call(ctx, peer.Method(handler.Capability), payload)
+	if err != nil {
 		writer.WriteHeader(handler.contract.UnavailableStatus)
 		return nil
 	}
-	action, setCookie, err := pluginsdk.DecodeHTTPResponseAction(response.GetPayload(), request.Host)
+	action, err := decodeHTTPResponseAction(response.Payload)
 	if err != nil {
 		writer.WriteHeader(handler.contract.InvalidResponseStatus)
 		return nil
@@ -254,14 +226,39 @@ func (handler *httpDispatchHandler) ServeHTTP(writer http.ResponseWriter, reques
 	for name, value := range action.Headers {
 		writer.Header().Set(name, value)
 	}
-	for _, cookie := range setCookie {
-		writer.Header().Add(handler.contract.SetCookieHeader, cookie)
-	}
 	writer.WriteHeader(action.Status)
 	if action.Body != nil {
 		_, _ = io.WriteString(writer, *action.Body)
 	}
 	return nil
+}
+
+func decodeHTTPResponseAction(payload []byte) (httpResponseAction, error) {
+	var action httpResponseAction
+	decoder := json.NewDecoder(strings.NewReader(string(payload)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&action); err != nil || action.Status < 200 || action.Status > 599 {
+		return httpResponseAction{}, peer.ErrInvalidRequest
+	}
+	for name, value := range action.Headers {
+		canonical := http.CanonicalHeaderKey(name)
+		if canonical == "" || canonical == http.CanonicalHeaderKey("Set-Cookie") || strings.ContainsAny(name+value, "\r\n") {
+			return httpResponseAction{}, peer.ErrInvalidRequest
+		}
+		if textproto.CanonicalMIMEHeaderKey(name) == "" {
+			return httpResponseAction{}, peer.ErrInvalidRequest
+		}
+	}
+	return action, nil
+}
+
+func endpointIsLoopback(endpoint string) bool {
+	host, _, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
 }
 
 var _ caddyhttp.MiddlewareHandler = (*httpDispatchHandler)(nil)

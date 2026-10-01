@@ -1,17 +1,13 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"os"
 
 	"liapoldus.local/server-plugin/internal/application"
 	"liapoldus.local/server-plugin/internal/domain/models"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/plugin"
-	"github.com/Liapoldus/pluginprotocol/pluginv1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type observingRuntime struct {
@@ -59,22 +55,18 @@ func main() {
 	runtime := &observingRuntime{}
 	configuration, err := application.NewConfiguration(runtime)
 	check(err)
-	service, err := pluginadapter.New(configuration, func() {})
-	check(err)
 
 	results := make([]callResult, 0, len(input.Calls))
 	for _, item := range input.Calls {
 		settings, marshalErr := json.Marshal(item.Settings)
 		check(marshalErr)
-		response, applyErr := service.ConfigApply(context.Background(), &pluginv1.ConfigApplyRequest{
-			Config: settings, SettingsRevision: item.Revision,
-		})
+		applyErr := shared.Apply(configuration, settings, item.Revision, nil)
 		if applyErr != nil {
-			results = append(results, callResult{Code: status.Code(applyErr).String()})
+			results = append(results, callResult{Code: "InvalidArgument"})
 			continue
 		}
 		results = append(results, callResult{
-			Applied: response.GetApplied(), Revision: response.GetSettingsRevision(), Code: codes.OK.String(),
+			Applied: true, Revision: item.Revision, Code: "OK",
 		})
 	}
 

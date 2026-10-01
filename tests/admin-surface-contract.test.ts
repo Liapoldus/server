@@ -4,7 +4,6 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const protocolRoot = fileURLToPath(new URL("../../../pluginprotocol", import.meta.url));
 
 async function json(path: string): Promise<any> {
   return JSON.parse(await readFile(path, "utf8"));
@@ -17,7 +16,6 @@ describe("Server plugin-owned Admin Surface v1", () => {
     const surface = await json(`${root}/contracts/v1/admin-surface.json`);
     const actionsSchema = await json(`${root}/contracts/v1/admin-actions.schema.json`);
     const actions = await json(`${root}/contracts/v1/admin-actions.json`);
-    const generic = await json(`${protocolRoot}/contracts/admin-ui/v1/schema.json`);
     const ajv = new Ajv2020({ allErrors: true, strict: false });
 
     expect(plugin.adminSurface).toMatchObject({
@@ -30,13 +28,13 @@ describe("Server plugin-owned Admin Surface v1", () => {
     expect(ajv.compile(actionsSchema)(actions)).toBe(true);
     expect(surface.requiredCapabilities).toContain("admin.surface.get");
     expect(Object.keys(actions.operations).sort()).toEqual(surface.requiredCapabilities.filter((capability: string) => capability !== "admin.surface.get").sort());
-    const pageProperties = new Set(Object.keys(generic.page.properties));
-    const sectionProperties = new Set(Object.keys(generic.section.properties));
-    const actionProperties = new Set(Object.keys(generic.action.properties));
+    const pageProperties = new Set(Object.keys(schema.$defs.page.properties));
+    const sectionProperties = new Set(Object.keys({ ...schema.$defs.tableSection.properties, ...schema.$defs.detailSection.properties }));
+    const actionProperties = new Set(Object.keys(schema.$defs.action.properties));
     for (const page of surface.pages) {
       expect(Object.keys(page).every((key) => pageProperties.has(key))).toBe(true);
       for (const section of page.sections) {
-        expect(generic.section.kinds).toContain(section.kind);
+        expect([schema.$defs.tableSection.properties.kind.const, schema.$defs.detailSection.properties.kind.const]).toContain(section.kind);
         expect(Object.keys(section).every((key) => key === "kind" || sectionProperties.has(key))).toBe(true);
         for (const action of section.actions ?? []) expect(Object.keys(action).every((key) => actionProperties.has(key))).toBe(true);
       }
@@ -45,25 +43,29 @@ describe("Server plugin-owned Admin Surface v1", () => {
 
   it("keeps common settings lifecycle outside the product Admin Surface", async () => {
     const surface = await json(`${root}/contracts/v1/admin-surface.json`);
+    const schema = await json(`${root}/contracts/v1/admin-surface.schema.json`);
     const settingsPage = surface.pages.find((page: any) => page.id === "settings");
 
     expect(settingsPage).toBeUndefined();
     expect(JSON.stringify(surface)).not.toMatch(/ConfigSchema|ConfigApply|settingsSchemaRpc|settingsApplyRpc/);
+    expect(JSON.stringify(schema)).not.toMatch(/ConfigSchema|ConfigApply|fieldsFromControlRpc/);
   });
 
   it("declares every UI capability and validates each action input and row binding explicitly", async () => {
     const surface = await json(`${root}/contracts/v1/admin-surface.json`);
     const actions = await json(`${root}/contracts/v1/admin-actions.json`);
-    const protocolAdmin = await json(`${protocolRoot}/contracts/admin-ui/v1/schema.json`);
-    const properties = protocolAdmin.action.properties;
-    const allowedKeywords = new Set<string>(properties.inputSchema.allowedKeywords);
-    const allowedTypes = new Set<string>(properties.inputSchema.allowedTypeValues);
+    const surfaceSchema = await json(`${root}/contracts/v1/admin-surface.schema.json`);
+    const allowedKeywords = new Set<string>([
+      ...Object.keys(surfaceSchema.$defs.inputField.properties),
+      ...Object.keys(surfaceSchema.$defs.actionInputSchema.properties),
+    ]);
+    const allowedTypes = new Set<string>(["object", ...surfaceSchema.$defs.inputField.properties.type.enum]);
 
     const validInputSchema = (value: unknown, topLevel = true): boolean => {
       if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
       const candidate = value as Record<string, unknown>;
       if (Object.keys(candidate).some((key) => !allowedKeywords.has(key))) return false;
-      if (topLevel && properties.inputSchema.requiredTopLevelKeywords.some((key: string) => !Object.hasOwn(candidate, key))) return false;
+      if (topLevel && surfaceSchema.$defs.actionInputSchema.required.some((key: string) => !Object.hasOwn(candidate, key))) return false;
       if (topLevel && (candidate.type !== "object" || candidate.additionalProperties !== false || !Array.isArray(candidate.required) || candidate.properties === null || typeof candidate.properties !== "object" || Array.isArray(candidate.properties))) return false;
       if (typeof candidate.type !== "string" || !allowedTypes.has(candidate.type)) return false;
       if (candidate.type === "object") {
@@ -175,10 +177,10 @@ describe("Server plugin-owned Admin Surface v1", () => {
       rowInput: { operationId: "operationId" },
     }));
     expect(actions.operations["server.sites.publish"]).toMatchObject({
-      transport: "pluginprotocol.v1.artifact-stream",
+      transport: "plugin-sdk.rest.artifact-stream",
       multipart: { parts: ["metadata", "artifact"], artifactFilenameForwarded: false },
       acceptedHttpStatus: 202,
-      receiptSchema: "pluginprotocol/contracts/protocol/v1/artifact-operation-result.schema.json",
+      receiptSchema: "contracts/v1/artifact-operation-result.schema.json",
     });
     expect(actions.operations["server.sites.publish"].archiveLimits).toEqual(actions.archive);
     expect(actions.archive).toMatchObject({
@@ -254,16 +256,14 @@ describe("Server plugin-owned Admin Surface v1", () => {
     expect(revokeAction.inputSchema.properties.reason.minLength).toBe(1);
   });
 
-  it("aligns artifact action inputs and archive safety limits with generic protocol v1", async () => {
+  it("aligns artifact action inputs and archive safety limits with Server-owned contracts", async () => {
     const surface = await json(`${root}/contracts/v1/admin-surface.json`);
     const actionSchema = await json(`${root}/contracts/v1/admin-surface.schema.json`);
-    const protocolAdmin = await json(`${protocolRoot}/contracts/admin-ui/v1/schema.json`);
-    const artifactTransport = await json(`${protocolRoot}/contracts/protocol/v1/artifact-stream.json`);
-    const metadataSchema = await json(`${protocolRoot}/contracts/protocol/v1/artifact-metadata.schema.json`);
-    const receiptSchema = await json(`${protocolRoot}/contracts/protocol/v1/artifact-operation-result.schema.json`);
+    const metadataSchema = await json(`${root}/contracts/v1/artifact-metadata.schema.json`);
+    const receiptSchema = await json(`${root}/contracts/v1/artifact-operation-result.schema.json`);
     const sites = surface.pages.find((page: any) => page.id === "sites");
     const publish = sites.sections.find((section: any) => section.id === "sites").actions.find((action: any) => action.id === "publish");
-    const protocolAction = protocolAdmin.action.properties;
+    const actionProperties = actionSchema.$defs.action.properties;
     const ajv = new Ajv2020({ allErrors: true, strict: false });
     const validateSurface = ajv.compile(actionSchema);
     const validateInputSchema = (candidate: unknown) => {
@@ -277,17 +277,13 @@ describe("Server plugin-owned Admin Surface v1", () => {
       })) });
     };
 
-    expect(protocolAction.inputSchema).toBeDefined();
-    expect(protocolAction.artifactInput.required).toEqual(["mediaTypes", "maxBytes", "maxMetadataBytes", "maxMultipartOverheadBytes"]);
-    expect(publish.artifactInput.maxBytes).toBeLessThanOrEqual(artifactTransport.limits.artifactBytes);
-    expect(publish.artifactInput.maxMetadataBytes).toBeLessThanOrEqual(artifactTransport.limits.metadataBytes);
-    expect(publish.artifactInput.maxMultipartOverheadBytes).toBeLessThanOrEqual(artifactTransport.limits.multipartHeadersAndFramingBytes);
-    expect(artifactTransport.limits.multipartEnvelopeBytes).toBe(134348800);
+    expect(actionProperties.inputSchema).toBeDefined();
+    expect(actionSchema.$defs.artifactInput.required).toEqual(["mediaTypes", "maxBytes", "maxMetadataBytes", "maxMultipartOverheadBytes"]);
     const catalog = await json(`${root}/contracts/v1/admin-actions.json`);
-    expect(catalog.archive.artifactBytes).toBe(artifactTransport.limits.artifactBytes);
-    expect(catalog.archive.metadataBytes).toBe(artifactTransport.limits.metadataBytes);
-    expect(catalog.archive.multipartOverheadBytes).toBe(artifactTransport.limits.multipartHeadersAndFramingBytes);
-    expect(catalog.archive.requestEnvelopeBytes).toBe(artifactTransport.limits.multipartEnvelopeBytes);
+    expect(publish.artifactInput.maxBytes).toBeLessThanOrEqual(catalog.archive.artifactBytes);
+    expect(publish.artifactInput.maxMetadataBytes).toBeLessThanOrEqual(catalog.archive.metadataBytes);
+    expect(publish.artifactInput.maxMultipartOverheadBytes).toBeLessThanOrEqual(catalog.archive.multipartOverheadBytes);
+    expect(catalog.archive.requestEnvelopeBytes).toBe(134348800);
     expect(catalog.operations["server.sites.publish"].archiveLimits).toEqual(catalog.archive);
     expect(metadataSchema.properties.payload.description).toContain("capability validates its own schema");
     expect(ajv.compile(metadataSchema)({
@@ -328,12 +324,11 @@ describe("Server plugin-owned Admin Surface v1", () => {
     }
   });
 
-  it("uses only the generic plugin admin API and declares negative vectors for malformed contracts", async () => {
-    const protocolAdmin = await json(`${protocolRoot}/contracts/admin-ui/v1/schema.json`);
+  it("declares negative vectors for malformed product contracts without a peer-protocol admin API", async () => {
     const vectors = await json(`${root}/contracts/v1/admin-surface-vectors.json`);
     const serialized = JSON.stringify(await json(`${root}/contracts/v1/admin-surface.json`));
 
-    expect(protocolAdmin.coreApi.base).toBe("/api/plugins/{instance}/admin");
+    expect(serialized).not.toMatch(/ConfigSchema|ConfigApply|fieldsFromControlRpc/);
     expect(serialized).not.toMatch(/\/api\/(?:caddy|sites|certificates)(?:\/|"|$)/);
     expect(vectors.scenarios.map((scenario: any) => scenario.id)).toEqual(expect.arrayContaining([
       "admin-surface-valid",

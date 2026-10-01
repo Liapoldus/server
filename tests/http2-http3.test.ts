@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("custom TLS HTTP protocol conformance", () => {
-  it("negotiates HTTP/2 over TLS and serves HTTP/3 over QUIC using ConfigApply-scoped certificate grants", async () => {
+  it("negotiates HTTP/2 over TLS and serves HTTP/3 over QUIC with plugin-owned certificate settings", async () => {
     const httpsPort = await freePort();
     const output = execFileSync("go", ["run", "./tests/fixtures/http2-http3"], {
       cwd: root,
@@ -19,7 +19,6 @@ describe("custom TLS HTTP protocol conformance", () => {
 
     expect(result).toMatchObject({
       configApplied: true,
-      grantsRedeemed: 2,
       http2: { protocol: "HTTP/2.0", alpn: "h2", status: 200, body: "secure-site", tlsVersion: "1.3" },
       http3: { protocol: "HTTP/3.0", alpn: "h3", status: 200, body: "secure-site", tlsVersion: "1.3" },
       tls12: { status: 200, tlsVersion: "1.2" },

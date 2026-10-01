@@ -39,7 +39,7 @@ describe("Server plugin strict settings schema v1", () => {
       expect.objectContaining({ name: "listeners", type: "array", required: true }),
       expect.objectContaining({ name: "routes", type: "array", required: true }),
     ]);
-    expect(schema.$defs.config.description).toContain("ConfigApply");
+    expect(schema.$defs.config.description).toContain("SDK Reload candidate apply");
     expect(schema.$defs.httpRoute.description).toContain("canonical-equivalent matchers");
   });
 

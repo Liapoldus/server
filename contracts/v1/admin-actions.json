@@ -122,10 +122,10 @@
       "kind": "artifact-action",
       "ownership": "plugin-admin-surface-action",
       "surfaceBinding": { "page": "sites", "section": "sites", "action": "publish" },
-      "transport": "pluginprotocol.v1.artifact-stream",
+      "transport": "plugin-sdk.rest.artifact-stream",
       "multipart": { "parts": ["metadata", "artifact"], "order": ["metadata", "artifact"], "artifactFilenameForwarded": false },
       "acceptedHttpStatus": 202,
-      "receiptSchema": "pluginprotocol/contracts/protocol/v1/artifact-operation-result.schema.json",
+      "receiptSchema": "contracts/v1/artifact-operation-result.schema.json",
       "archiveLimits": {
         "mediaType": "application/gzip",
         "minArtifactBytes": 1,

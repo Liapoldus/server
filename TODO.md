@@ -9,19 +9,44 @@
 
 ## Проверенное состояние на 2026-09-30
 
-Последний локальный commit: `075fb52`. Settings compiler, site archive/manifest,
-Admin Surface contracts и SDK adapter добавлены, но это не завершённая миграция.
-После обновления `plugins/go.work` до Go 1.26.0 команда
-`go test ./server/... ./forms-db/...` запускается и падает: Server и его fixtures
-всё ещё импортируют удалённые `pluginprotocol/pluginv1` и
-`pluginprotocol/presentation/sdk`; `internal/presentation/restplugin` также не
-совпадает с текущим Plugin SDK API. До сборки `cmd/server` и реального
-Core→SDK→Server Reload/pull/ACK smoke Server v1 не готов.
+Рабочее дерево содержит незакоммиченный переход production `cmd/server` на
+ручной запуск с обязательными CLI bootstrap-параметрами, Plugin SDK REST и
+generic `pluginprotocol/presentation/peer`. Legacy ConfigApply service удалён.
+Сам binary собирается (`GOWORK=off go build ./...`, `go test ./...`,
+`go vet ./...`); полный child-process Core→SDK→Server mTLS smoke и scoped
+grants для custom TLS ещё не пройдены. `npm test` прошёл: 19 файлов,
+52 теста (2026-10-01). Старые Admin Surface tests ссылались
+на удалённые `pluginprotocol/contracts/admin-ui` и artifact contracts:
+product schema/receipt/metadata теперь принадлежат Server, а архивный
+transport заявлен как Plugin SDK REST stream. Технический SDK stream endpoint
+и Core forwarder остаются не реализованы — contract-only test не закрывает их.
+`caddy-rest-process` fixture переведён на CLI+PEM, раздельные Core server/client
+identities и проходит real-process Reload→exact pull→ACK→HTTP smoke. Общий
+Core→SDK→Server сценарий с настоящим Core остаётся открытым.
+
+Проверено:
+- `GOWORK=off go test ./internal/presentation/restplugin ./internal/infrastructure/caddy`
+  — проходит.
+- `GOWORK=off go test ./tests/fixtures/caddy-rest-process` — проходит;
+  `GOWORK=off go run ./tests/fixtures/caddy-rest-process` возвращает
+  `applied:true`, `ready:true` и HTTP 200 из дочернего Server binary.
+- Целевой Go suite для migrated fixture packages и
+  `GOWORK=off go test ./internal/infrastructure/caddy ./internal/presentation/restplugin`
+  проходит. Непостоянный сбой `ConfigurationSchema` после Reload был вызван
+  преждевременной отменой request context в SDK до чтения response body;
+  исправлен в SDK и покрыт отдельным красным→зелёным regression test.
+  `npx vitest run tests/plugin-sdk-reload.test.ts` прошёл три повтора подряд
+  после исправления. Полный Server gate ещё не проходил.
+- Старый child-process blocker на неподдерживаемом SDK bootstrap устранён;
+  оставшиеся runtime и security gates перечислены ниже.
+
+Этот частичный migration не является Core→SDK→Server production smoke; Server
+v1 не готов.
 
 Нормативная цель: [Core target](https://liapoldus.github.io/core/architecture/target),
 [v1 acceptance](https://liapoldus.github.io/core/configuration/acceptance) и
 [Server contract](https://liapoldus.github.io/plugins/server). Агентное задание:
-[`tasks/prompts/server-plugin.md`](../../tasks/prompts/server-plugin.md).
+[`tasks/CORE_V1_CODEX_SOL.md`](../../tasks/CORE_V1_CODEX_SOL.md).
 Этот репозиторий — отдельный HTTP Server plugin; `server` — его product/API
 identity, Caddy — реализация внутри binary.
 
@@ -63,12 +88,14 @@ identity, Caddy — реализация внутри binary.
 
 ## P0 — единый SDK lifecycle
 
-- [ ] Полностью перенести production `cmd/server` startup, manifest/schema,
+- [x] Перенести production `cmd/server` startup, manifest/schema,
   health/readiness, settings pull/apply и ACK на Plugin SDK; сохранить real
-  HTTP child process и private mTLS.
-- [ ] Удалить legacy `pluginprotocol` ConfigSchema/ConfigApply/Shutdown and
-  Bootstrap lifecycle service, generated product stubs, fixtures и dependencies
-  после migration всех consumers. Не оставлять dual API/fallback.
+  HTTP child process и private mTLS; доказать сквозным smoke отдельно.
+- [x] Удалить Server-owned legacy `pluginprotocol` ConfigSchema/ConfigApply/
+  Shutdown/Bootstrap service и заменить generic HTTP dispatch на generic peer
+  Call. Не оставлять dual API/fallback.
+- [ ] Завершить замену оставшихся REST lifecycle fixtures и удалить оставшиеся
+  direct `pluginprotocol` imports/dependencies только после полного green gate.
 - [ ] Подключить Core-managed per-replica identity/mTLS и scoped grants для
   certificate/private key references. При отсутствии scoped grant отказать
   безопасно; не читать ключи через environment или arbitrary filesystem paths.
@@ -125,6 +152,11 @@ identity, Caddy — реализация внутри binary.
 - [ ] Проверить прямой plugin dispatch/policies без Core traffic proxy и без
   protocol product methods. Отдельно доказать disabled/unreachable Caddy Admin
   API и отсутствие слушающих legacy public L4 endpoints.
+  Production `cmd/server` принимает один вручную объявленный peer target с
+  mTLS credentials; HTTP-dispatch fixture проверяет реальный peer mTLS.
+  Реальный Server→forms-db child-process HTTP route проверен в
+  `plugins/forms-db/tests/integration/child-process-sdk.test.ts` (2026-10-01).
+  Применение нескольких targets и lifecycle их обновления ещё не проверены.
 - [ ] Удалить dead Caddy-L4/TCP/UDP code/contracts/vectors после import/test
   audit; удалить устаревшие Caddy-named API aliases. Сохранить `Caddy` только
   как technology/internal implementation name.

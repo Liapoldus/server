@@ -20,6 +20,9 @@ describe("Caddy plugin unary HTTP dispatch", () => {
       body: "plugin-response",
       method: "POST",
       path: "/submit",
+      cookieForwarded: false,
+      mutualTLS: true,
+      invalidAction: { status: 502, setCookie: [], body: "" },
     });
   }, 60_000);
 });
