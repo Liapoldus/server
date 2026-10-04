@@ -37,8 +37,9 @@ Ubuntu 24.04.5 ARM64: 3 файла / 26 тестов.
 
 - [x] Server-owned Markdown/examples перенесены в `docs/site/`; общие Core
   страницы принадлежат Core, сайт агрегирует эту документацию по pinned SHA.
-- [ ] После изменения owner docs обновить pin в
-  `liapoldus.github.io/docs-sources.json` и проверить единый сайт.
+- [x] Owner docs опубликованы; pin
+  `037dc8e863f28a0e5e78f288ab6776b8dfd4c031` синхронизирован, VitePress
+  build/deployment прошли.
 
 ## Актуальная проверка — 2026-10-02
 
@@ -342,9 +343,9 @@ identity, Caddy — реализация внутри binary.
   полный Core→Server→forms-db production walkthrough прошёл на memory и на
   PostgreSQL 16, MySQL 8.0, MariaDB 11.4. Server HTTP/1.1–3, ACME Pebble,
   site publish, WebSocket и SSE также проверены в Linux guest.
-- [ ] Закрыть оставшуюся release matrix: hosted CI на согласованном дереве,
-  published docs pins и release metadata. Bare-metal Linux host не является
-  отдельным v1 gate.
+- [x] Release matrix закрыта: hosted Server CI (включая Pebble/ACME) и Core
+  cross-repository integration прошли; docs pin опубликован; tag `v1.0.1`
+  создан после gates. Bare-metal Linux host не является отдельным v1 gate.
 - [x] Изолировать Caddy runtime fixtures от пользовательского app data: общий
   helper задаёт временные XDG data/config paths и переназначает Caddy globals,
   которые инициализируются при import до `main`. Все 10 runtime fixtures
