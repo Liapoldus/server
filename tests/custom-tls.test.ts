@@ -30,6 +30,16 @@ describe("custom TLS settings", () => {
       tls13: { negotiatedProtocol: "http/1.1", status: 200, body: "custom-tls" },
       wrongHostnameRejected: true,
     });
+    expect(result.certificateList).toMatchObject({
+      status: 200,
+      body: { items: [{ domain: "custom.example.test", source: "custom", readiness: "ready", notAfter: expect.any(String), serial: expect.any(String) }] },
+    });
+    expect(result.certificateStatus).toMatchObject({
+      status: 200,
+      body: { domain: "custom.example.test", source: "custom", readiness: "ready", notBefore: expect.any(String), notAfter: expect.any(String), serial: expect.any(String), lastErrorCode: null },
+    });
+    expect(result.certificateMissing).toMatchObject({ status: 404, body: { code: "not_found" } });
+    expect(result.certificateInvalidCursor).toMatchObject({ status: 400, body: { code: "invalid_input" } });
     expect(JSON.stringify(result)).not.toMatch(/PRIVATE KEY|certificatePem|privateKeyPem/i);
   }, 90_000);
 });

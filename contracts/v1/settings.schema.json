@@ -47,8 +47,8 @@
       "required": ["mode", "certificateRef", "privateKeyRef"],
       "properties": {
         "mode": { "const": "custom" },
-        "certificateRef": { "$ref": "#/$defs/nonEmptyString", "description": "Opaque Gateway-generated secret reference; never PEM bytes or a path." },
-        "privateKeyRef": { "$ref": "#/$defs/nonEmptyString", "description": "Opaque Gateway-generated secret reference; never PEM bytes or a path." }
+        "certificateRef": { "$ref": "#/$defs/nonEmptyString", "description": "Opaque Core-generated secret reference; never PEM bytes or a path." },
+        "privateKeyRef": { "$ref": "#/$defs/nonEmptyString", "description": "Opaque Core-generated secret reference; never PEM bytes or a path." }
       }
     },
     "tlsDisabled": {
@@ -222,11 +222,33 @@
         "type": { "const": "plugin" },
         "instanceId": { "$ref": "#/$defs/nonEmptyString" },
         "capability": { "$ref": "#/$defs/nonEmptyString" },
+        "requestCookieNames": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$" },
+          "description": "Only these request Cookie names are included in the plugin request context; all other cookies are omitted."
+        },
         "mode": {
           "enum": ["call", "http_stream", "websocket", "sse"],
-          "description": "Must be declared for this exact capability by the target plugin Manifest and active DispatchApply generation."
+          "description": "Selects a Server-supported invocation mode. Target method availability is determined by the generic peer call at invocation time; Core does not inspect product capabilities."
+        },
+        "streamLimits": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional per-route bounds for long-lived streaming modes; all limits remain subject to the per-instance ceiling. Omitted values use the versioned defaults: concurrency 128 per route and instance, idle 60000 ms, maximum duration 3600000 ms.",
+          "properties": {
+            "maxConcurrency": { "type": "integer", "minimum": 1, "maximum": 128 },
+            "idleTimeoutMillis": { "type": "integer", "minimum": 1000, "maximum": 60000 },
+            "maxDurationMillis": { "type": "integer", "minimum": 1000, "maximum": 3600000 }
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "call" } }, "required": ["mode"] },
+          "then": { "not": { "required": ["streamLimits"] } }
+        }
+      ]
     },
     "httpHandler": {
       "oneOf": [
@@ -238,7 +260,7 @@
     "httpRoute": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Routes are evaluated in array order for their listener; the first matching route is terminal and executes exactly one handler. Supplied matcher predicates are ANDed. SDK Reload candidate apply rejects unresolved listener references, duplicate IDs/binds, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and unsupported capability modes before activation.",
+      "description": "Routes are evaluated in array order for their listener; the first matching route is terminal and executes exactly one handler. Supplied matcher predicates are ANDed. SDK Reload candidate apply rejects unresolved listener references, duplicate IDs/binds, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and mode values outside the Server-supported enum before activation. Target peer method availability is checked only when invoked.",
       "required": ["id", "listenerId", "handler"],
       "properties": {
         "id": { "$ref": "#/$defs/nonEmptyString" },
@@ -253,7 +275,7 @@
     "config": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Strict Liapoldus desired settings, not native Caddy JSON or Caddyfile. Before compiling a candidate runtime configuration, SDK Reload candidate apply rejects duplicate IDs/binds, unresolved listener/site references, route/listener kind mismatches, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and unsupported capability modes.",
+      "description": "Strict Liapoldus desired settings, not native Caddy JSON or Caddyfile. Before compiling a candidate runtime configuration, SDK Reload candidate apply rejects duplicate IDs/binds, unresolved listener/site references, route/listener kind mismatches, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and mode values outside the Server-supported enum. It does not preflight product methods on remote peers.",
       "required": ["listeners", "routes"],
       "properties": {
         "listeners": { "type": "array", "items": { "$ref": "#/$defs/listener" } },

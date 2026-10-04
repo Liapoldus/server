@@ -21,6 +21,7 @@ describe("Caddy site archive manifest v1", () => {
       version: 1,
       plugin: "server",
       publishCapability: "server.sites.publish",
+      rollbackCapability: "server.sites.rollback",
       archiveEntry: "site-manifest.json",
       schema: "contracts/v1/site-manifest.schema.json",
       semantics: "contracts/v1/site-manifest-semantics.json",

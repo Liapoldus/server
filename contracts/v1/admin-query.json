@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "plugin": "server",
+  "defaultLimit": 50,
+  "fallbackCapability": "server.sites.list",
+  "actionId": "query",
+  "certificateStatusCapability": "server.certificates.get",
+  "pageResources": {
+    "sites": ["sites", "releases", "operations"],
+    "certificates": ["certificates"]
+  },
+  "resources": {
+    "sites": "server.sites.list",
+    "releases": "server.sites.releases.list",
+    "operations": "server.operations.list",
+    "certificates": "server.certificates.list"
+  }
+}

@@ -38,8 +38,15 @@
     "failure": "keep-current-and-previous-unchanged",
     "publishStatus": 202
   },
+  "publishOperation": {
+    "acceptance": "after-validated-metadata-and-bounded-artifact-bytes-are-durably-stored-and-sha256-matches",
+    "archiveValidation": "asynchronous-durable-operation-before-release-activation",
+    "archiveValidationFailure": "operation-failed-with-stable-error-code-current-and-previous-unchanged",
+    "currentPointer": "changes-only-after-all-archive-and-manifest-validation-succeeds"
+  },
   "operationStatus": {
     "coreResource": "GET /api/operations/{id}",
+    "workerPollMilliseconds": 100,
     "pluginStatusCapability": "server.operations.get",
     "pluginStates": ["accepted", "running", "completed", "failed"],
     "coreStates": ["pending", "running", "succeeded", "failed", "degraded"],
@@ -113,9 +120,10 @@
       "kind": "action",
       "ownership": "plugin-admin-surface-action",
       "surfaceBinding": { "page": "sites", "section": "sites", "action": "rollback" },
+      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "siteId": { "type": "string", "minLength": 1, "maxLength": 128 }, "expectedCurrentRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "targetRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }, "required": ["siteId", "expectedCurrentRevision", "targetRevision"], "additionalProperties": false },
       "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "siteId": { "type": "string", "minLength": 1 }, "currentRevision": { "type": "string", "minLength": 1 }, "previousRevision": { "type": ["string", "null"] } }, "required": ["siteId", "currentRevision", "previousRevision"], "additionalProperties": false },
       "httpStatus": 200,
-      "idempotency": { "required": true, "scope": ["plugin-instance", "capability", "idempotency-key"], "sameInput": "return-the-existing-completed-result", "differentInput": "reject-with-conflict" },
+      "idempotency": { "required": true, "scope": ["plugin-instance", "capability", "idempotency-key"], "semantics": "correlation-only", "repeat": "invoke-again" },
       "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
     },
     "server.sites.publish": {
@@ -162,6 +170,7 @@
       "kind": "action",
       "ownership": "plugin-admin-surface-action",
       "surfaceBinding": { "page": "sites", "section": "operations", "action": "status" },
+      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 256 } }, "required": ["operationId"], "additionalProperties": false },
       "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 256 }, "siteId": { "type": ["string", "null"] }, "kind": { "type": "string", "minLength": 1 }, "state": { "enum": ["accepted", "running", "completed", "failed"] }, "progressPercent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 }, "updatedAt": { "type": "string", "minLength": 1 }, "errorCode": { "type": ["string", "null"], "maxLength": 128 } }, "required": ["operationId", "siteId", "kind", "state", "progressPercent", "updatedAt", "errorCode"], "additionalProperties": false },
       "httpStatus": 200,
       "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
@@ -178,30 +187,9 @@
       "kind": "action",
       "ownership": "plugin-admin-surface-action",
       "surfaceBinding": { "page": "certificates", "section": "domains", "action": "status" },
+      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 } }, "required": ["domain"], "additionalProperties": false },
       "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 }, "source": { "enum": ["acme", "custom"] }, "readiness": { "enum": ["pending", "ready", "failed", "unknown"] }, "notBefore": { "type": ["string", "null"] }, "notAfter": { "type": ["string", "null"] }, "serial": { "type": ["string", "null"] }, "lastErrorCode": { "type": ["string", "null"], "maxLength": 128 } }, "required": ["domain", "source", "readiness", "notBefore", "notAfter", "serial", "lastErrorCode"], "additionalProperties": false },
       "httpStatus": 200,
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.certificates.renew": {
-      "kind": "action",
-      "ownership": "plugin-admin-surface-action",
-      "surfaceBinding": { "page": "certificates", "section": "domains", "action": "renew" },
-      "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "version": { "const": 1 }, "operationId": { "type": "string", "minLength": 1, "maxLength": 256 }, "state": { "const": "accepted" } }, "required": ["version", "operationId", "state"], "additionalProperties": false },
-      "httpStatus": 202,
-      "acceptedHttpStatus": 202,
-      "preconditions": ["certificate-is-caddy-managed"],
-      "idempotency": { "required": true, "scope": ["plugin-instance", "capability", "idempotency-key"], "sameInput": "return-existing-operation-without-duplicate-effect", "differentInput": "reject-with-conflict" },
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.certificates.revoke": {
-      "kind": "action",
-      "ownership": "plugin-admin-surface-action",
-      "surfaceBinding": { "page": "certificates", "section": "domains", "action": "revoke" },
-      "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "version": { "const": 1 }, "operationId": { "type": "string", "minLength": 1, "maxLength": 256 }, "state": { "const": "accepted" } }, "required": ["version", "operationId", "state"], "additionalProperties": false },
-      "httpStatus": 202,
-      "acceptedHttpStatus": 202,
-      "preconditions": ["certificate-is-caddy-managed", "serial-matches-current-certificate-for-domain", "non-empty-reason"],
-      "idempotency": { "required": true, "scope": ["plugin-instance", "capability", "idempotency-key"], "sameInput": "return-existing-operation-without-duplicate-effect", "differentInput": "reject-with-conflict" },
       "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
     }
   }

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://liapoldus.github.io/plugins/server/v1/admin-query.schema.json",
+  "type": "object",
+  "properties": {
+    "resource": { "enum": ["sites", "releases", "operations", "certificates"] }
+  },
+  "required": ["resource"],
+  "additionalProperties": true
+}

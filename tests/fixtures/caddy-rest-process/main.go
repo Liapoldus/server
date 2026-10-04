@@ -1,7 +1,9 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -23,13 +25,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
+
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
+	"golang.org/x/net/http2"
 
 	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
 	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
 	"liapoldus.local/server-plugin/contracts"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 )
 
 const generation = "generation-rest-1"
@@ -50,10 +56,16 @@ type identities struct {
 }
 
 type result struct {
-	Acknowledgement map[string]any `json:"acknowledgement"`
-	Readiness       map[string]any `json:"readiness"`
-	Response        map[string]any `json:"response"`
-	ChildExitCode   int            `json:"childExitCode"`
+	Acknowledgement  map[string]any `json:"acknowledgement"`
+	Readiness        map[string]any `json:"readiness"`
+	Response         map[string]any `json:"response"`
+	AdminSurface     map[string]any `json:"adminSurface"`
+	Artifact         map[string]any `json:"artifact"`
+	CrossPageQuery   map[string]any `json:"crossPageQuery"`
+	BeforeCompletion map[string]any `json:"beforeCompletion"`
+	ManifestResponse map[string]any `json:"manifestResponse"`
+	ChildExitCode    int            `json:"childExitCode"`
+	Protocols        map[string]any `json:"protocols"`
 }
 
 func main() {
@@ -79,16 +91,6 @@ func run() error {
 	if err := os.Setenv("XDG_DATA_HOME", rootDirectory); err != nil {
 		return err
 	}
-	siteRoot, err := caddyruntime.SiteRoot("rest-site")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(siteRoot, 0o700); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(siteRoot, "index.html"), []byte("server-"), 0o600); err != nil {
-		return err
-	}
 	controlListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err
@@ -105,7 +107,15 @@ func run() error {
 	if err := trafficListener.Close(); err != nil {
 		return err
 	}
-	configBytes, err := json.Marshal(settings(trafficPort))
+	secureListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	securePort := secureListener.Addr().(*net.TCPAddr).Port
+	if err := secureListener.Close(); err != nil {
+		return err
+	}
+	configBytes, err := json.Marshal(settings(trafficPort, securePort))
 	if err != nil || contracts.ValidateSettings(configBytes) != nil {
 		return errors.New("test Caddy settings are invalid")
 	}
@@ -138,6 +148,53 @@ func run() error {
 		writer.Header().Set(headers["sha256"], digestHex)
 		writer.Header().Set(headers["generationState"], "active")
 		_, _ = writer.Write(configBytes)
+	})
+	secretPurposes, err := contracts.LoadSecretPurposes()
+	if err != nil {
+		_ = coreListener.Close()
+		return err
+	}
+	secretValues := map[string][]byte{
+		"fixture-certificate": issued.replica.certificatePEM,
+		"fixture-private-key": issued.replica.privateKeyPEM,
+	}
+	secretPurpose := map[string]string{
+		"fixture-certificate": secretPurposes.ServerCertificate,
+		"fixture-private-key": secretPurposes.ServerPrivateKey,
+	}
+	var grantsLock sync.Mutex
+	grants := map[string][]byte{}
+	coreMux.HandleFunc(contract.Core.SecretGrant.Issue.Method+" "+contract.Core.SecretGrant.Issue.PathTemplate, func(writer http.ResponseWriter, request *http.Request) {
+		var wanted sdkmodels.SecretGrantRequest
+		if json.NewDecoder(http.MaxBytesReader(writer, request.Body, 4096)).Decode(&wanted) != nil ||
+			wanted.Generation != generation || secretPurpose[wanted.Reference] != wanted.Purpose || secretValues[wanted.Reference] == nil {
+			http.Error(writer, "invalid grant request", http.StatusBadRequest)
+			return
+		}
+		handle := "grant-" + wanted.Reference
+		grantsLock.Lock()
+		grants[handle] = secretValues[wanted.Reference]
+		grantsLock.Unlock()
+		writer.Header().Set("content-type", contract.Core.SecretGrant.Issue.ResponseMediaType)
+		_ = json.NewEncoder(writer).Encode(sdkmodels.SecretGrant{Handle: handle, Reference: wanted.Reference,
+			Purpose: wanted.Purpose, Generation: wanted.Generation, ExpiresAt: time.Now().Add(time.Minute)})
+	})
+	coreMux.HandleFunc(contract.Core.SecretGrant.Redemption.Method+" "+contract.Core.SecretGrant.Redemption.PathTemplate, func(writer http.ResponseWriter, request *http.Request) {
+		var redemption sdkmodels.SecretRedemption
+		if json.NewDecoder(http.MaxBytesReader(writer, request.Body, 4096)).Decode(&redemption) != nil || redemption.Handle != request.PathValue("handle") {
+			http.Error(writer, "invalid redemption", http.StatusBadRequest)
+			return
+		}
+		grantsLock.Lock()
+		value := grants[redemption.Handle]
+		delete(grants, redemption.Handle)
+		grantsLock.Unlock()
+		if value == nil {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("content-type", contract.Core.SecretGrant.Redemption.ResponseMediaType)
+		_, _ = writer.Write(value)
 	})
 	coreServer, err := sdkinfra.NewMutualTLSServer(contract, sdkinfra.MutualTLSServerConfig{
 		Handler: coreMux, Provider: coreProvider,
@@ -251,6 +308,119 @@ func run() error {
 		_ = child.Wait()
 		return err
 	}
+	surface, err := pluginClient.AdminSurface(ctx)
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return fmt.Errorf("admin surface unavailable: %w; child output: %s", err, childLogs.String())
+	}
+	var descriptor struct {
+		Pages []struct {
+			ID       string `json:"id"`
+			Sections []struct {
+				Actions []struct {
+					Capability string `json:"capability"`
+				} `json:"actions"`
+			} `json:"sections"`
+		} `json:"pages"`
+	}
+	if err := json.Unmarshal(surface.Bytes, &descriptor); err != nil {
+		return err
+	}
+	hasPublishAction := false
+	for _, page := range descriptor.Pages {
+		for _, section := range page.Sections {
+			for _, action := range section.Actions {
+				if page.ID == "sites" && action.Capability == "server.sites.publish" {
+					hasPublishAction = true
+				}
+			}
+		}
+	}
+	archive, err := siteArchive()
+	if err != nil {
+		return err
+	}
+	queryInvocation := sdkmodels.AdminActionInvocation{
+		CallerID: "test operator", InstanceID: "server", PageID: "certificates", ActionID: "query",
+		SurfaceDigest: surface.SHA256, RequestID: "cross-page-query",
+	}
+	crossPageResult, err := pluginClient.AdminAction(ctx, queryInvocation, []byte(`{"resource":"sites"}`))
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return fmt.Errorf("cross-page admin query failed: %w; child output: %s", err, childLogs.String())
+	}
+	archiveDigest := sha256.Sum256(archive)
+	metadata, err := json.Marshal(map[string]any{
+		"version":  1,
+		"artifact": map[string]any{"mediaType": "application/gzip", "byteLength": len(archive), "sha256": "sha256:" + hex.EncodeToString(archiveDigest[:])},
+		"payload":  map[string]any{"siteId": "rest-site"},
+	})
+	if err != nil {
+		return err
+	}
+	surfaceDigest := sha256.Sum256(surface.Bytes)
+	artifactResult, err := pluginClient.ArtifactStream(ctx, sdkmodels.ArtifactInvocation{
+		CallerID: "test operator", InstanceID: "server", PageID: "sites", ActionID: "publish",
+		SurfaceDigest: "sha256:" + hex.EncodeToString(surfaceDigest[:]), IdempotencyKey: "site-publish-1", RequestID: "test-publish-1",
+	}, metadata, "application/gzip", io.NopCloser(bytes.NewReader(archive)))
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return fmt.Errorf("artifact publish failed: %w; child output: %s", err, childLogs.String())
+	}
+	beforeResponse, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/", trafficPort))
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return err
+	}
+	beforeBody, readErr := io.ReadAll(beforeResponse.Body)
+	_ = beforeResponse.Body.Close()
+	if readErr != nil {
+		return readErr
+	}
+	var artifactReceipt struct {
+		State       string `json:"state"`
+		OperationID string `json:"operationId"`
+	}
+	if err := json.Unmarshal(artifactResult.Body, &artifactReceipt); err != nil {
+		return err
+	}
+	if artifactReceipt.OperationID == "" {
+		return errors.New("artifact receipt omitted operation id")
+	}
+	operationInvocation := sdkmodels.AdminActionInvocation{
+		CallerID: "test operator", InstanceID: "server", PageID: "sites", ActionID: "status",
+		SurfaceDigest: surface.SHA256, RequestID: "operation-status",
+	}
+	operationStatus := ""
+	var lastOperationResponse string
+	operationDeadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(operationDeadline) {
+		statusBody, _ := json.Marshal(map[string]string{"operationId": artifactReceipt.OperationID})
+		statusResult, statusErr := pluginClient.AdminAction(ctx, operationInvocation, statusBody)
+		if statusErr == nil && statusResult.StatusCode == http.StatusOK {
+			var document struct {
+				State string `json:"state"`
+			}
+			if json.Unmarshal(statusResult.Body, &document) == nil {
+				operationStatus = document.State
+				if operationStatus == "completed" || operationStatus == "failed" {
+					break
+				}
+			}
+		} else if statusErr != nil {
+			lastOperationResponse = statusErr.Error()
+		} else {
+			lastOperationResponse = fmt.Sprintf("HTTP %d: %s", statusResult.StatusCode, statusResult.Body)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if operationStatus != "completed" {
+		return fmt.Errorf("site publish operation did not complete: state=%s last=%s", operationStatus, lastOperationResponse)
+	}
 	response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/", trafficPort))
 	if err != nil {
 		_ = child.Process.Kill()
@@ -259,10 +429,30 @@ func run() error {
 	}
 	body, readErr := io.ReadAll(response.Body)
 	_ = response.Body.Close()
-	if readErr != nil || response.StatusCode != http.StatusOK || string(body) != "server-" {
+	if readErr != nil || response.StatusCode != http.StatusOK || string(body) != "published-site" {
 		_ = child.Process.Kill()
 		_ = child.Wait()
 		return errors.New("Caddy data-plane response did not match active config")
+	}
+	// A static site must serve the manifest-selected release rather than any
+	// bootstrap directory. The archive root manifest is never public content.
+	manifestResponse, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/site-manifest.json", trafficPort))
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return err
+	}
+	_ = manifestResponse.Body.Close()
+	if manifestResponse.StatusCode != http.StatusNotFound {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return errors.New("Caddy exposed the private site manifest")
+	}
+	protocols, err := requestSecureProtocols(securePort, issued.rootPEM)
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		return fmt.Errorf("Server binary protocol gate: %w; child output: %s", err, childLogs.String())
 	}
 	if err := child.Process.Signal(syscall.SIGTERM); err != nil {
 		_ = child.Process.Kill()
@@ -281,11 +471,105 @@ func run() error {
 		return ctx.Err()
 	}
 	return json.NewEncoder(os.Stdout).Encode(result{
-		Acknowledgement: map[string]any{"generation": ack.Generation, "applied": ack.Applied},
-		Readiness:       map[string]any{"ready": ready.Ready, "generation": ready.Generation},
-		Response:        map[string]any{"status": response.StatusCode, "body": string(body)},
-		ChildExitCode:   0,
+		Acknowledgement:  map[string]any{"generation": ack.Generation, "applied": ack.Applied},
+		Readiness:        map[string]any{"ready": ready.Ready, "generation": ready.Generation},
+		Response:         map[string]any{"status": response.StatusCode, "body": string(body)},
+		AdminSurface:     map[string]any{"status": http.StatusOK, "hasPublishAction": hasPublishAction},
+		Artifact:         map[string]any{"status": artifactResult.StatusCode, "state": artifactReceipt.State},
+		CrossPageQuery:   map[string]any{"status": crossPageResult.StatusCode, "body": json.RawMessage(crossPageResult.Body)},
+		BeforeCompletion: map[string]any{"status": beforeResponse.StatusCode, "body": string(beforeBody)},
+		ManifestResponse: map[string]any{"status": manifestResponse.StatusCode},
+		ChildExitCode:    0,
+		Protocols:        protocols,
 	})
+}
+
+func requestSecureProtocols(port int, rootPEM []byte) (map[string]any, error) {
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(rootPEM) {
+		return nil, errors.New("invalid test trust roots")
+	}
+	address := fmt.Sprintf("127.0.0.1:%d", port)
+	url := fmt.Sprintf("https://localhost:%d/", port)
+	request := func(client *http.Client) (map[string]any, error) {
+		response, err := client.Get(url)
+		if err != nil {
+			return nil, err
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			return nil, err
+		}
+		alpn := ""
+		if response.TLS != nil {
+			alpn = response.TLS.NegotiatedProtocol
+		}
+		return map[string]any{"protocol": response.Proto, "alpn": alpn, "status": response.StatusCode, "body": string(body)}, nil
+	}
+	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", address)
+	}
+	first := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "localhost", NextProtos: []string{"http/1.1"}}, DialContext: dial}
+	defer first.CloseIdleConnections()
+	http1, err := request(&http.Client{Transport: first, Timeout: 10 * time.Second})
+	if err != nil {
+		return nil, err
+	}
+	second := &http2.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "localhost"}, DialTLSContext: func(ctx context.Context, _, _ string, config *tls.Config) (net.Conn, error) {
+		connection, err := dial(ctx, "tcp", address)
+		if err != nil {
+			return nil, err
+		}
+		secured := tls.Client(connection, config)
+		if err := secured.HandshakeContext(ctx); err != nil {
+			_ = connection.Close()
+			return nil, err
+		}
+		return secured, nil
+	}}
+	defer second.CloseIdleConnections()
+	http2Result, err := request(&http.Client{Transport: second, Timeout: 10 * time.Second})
+	if err != nil {
+		return nil, err
+	}
+	third := &http3.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "localhost"}, Dial: func(ctx context.Context, _ string, config *tls.Config, quicConfig *quic.Config) (*quic.Conn, error) {
+		return quic.DialAddr(ctx, address, config, quicConfig)
+	}}
+	defer third.Close()
+	http3Result, err := request(&http.Client{Transport: third, Timeout: 10 * time.Second})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"http1": http1, "http2": http2Result, "http3": http3Result}, nil
+}
+
+func siteArchive() ([]byte, error) {
+	var buffer bytes.Buffer
+	compressed := gzip.NewWriter(&buffer)
+	archive := tar.NewWriter(compressed)
+	entries := []struct {
+		name string
+		body []byte
+	}{
+		{"site-manifest.json", []byte(`{"schemaVersion":1,"siteId":"rest-site","documentRoot":"public","indexDocument":"index.html"}`)},
+		{"public/index.html", []byte("published-site")},
+	}
+	for _, entry := range entries {
+		if err := archive.WriteHeader(&tar.Header{Name: entry.name, Mode: 0o600, Size: int64(len(entry.body)), Typeflag: tar.TypeReg}); err != nil {
+			return nil, err
+		}
+		if _, err := archive.Write(entry.body); err != nil {
+			return nil, err
+		}
+	}
+	if err := archive.Close(); err != nil {
+		return nil, err
+	}
+	if err := compressed.Close(); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
 }
 
 func repositoryRoot() string {
@@ -297,16 +581,22 @@ func sourceFile() string {
 	return file
 }
 
-func settings(port int) map[string]any {
+func settings(port, securePort int) map[string]any {
 	return map[string]any{
 		"schemaVersion": 1,
 		"config": map[string]any{
 			"listeners": []any{map[string]any{
 				"id": "web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", port),
 				"hostnames": []string{}, "protocols": []string{"http1"}, "tls": map[string]any{"mode": "disabled"},
+			}, map[string]any{
+				"id": "secure-web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", securePort),
+				"hostnames": []string{"localhost"}, "protocols": []string{"http1", "http2", "http3"},
+				"tls": map[string]any{"mode": "custom", "certificateRef": "fixture-certificate", "privateKeyRef": "fixture-private-key"},
 			}},
 			"routes": []any{map[string]any{
 				"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "rest-site"},
+			}, map[string]any{
+				"id": "secure-site", "listenerId": "secure-web", "handler": map[string]any{"type": "static", "siteId": "rest-site"},
 			}},
 		},
 	}

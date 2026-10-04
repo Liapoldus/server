@@ -17,9 +17,11 @@ import (
 
 	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
 	pluginsdk "github.com/Liapoldus/plugin-sdk/infrastructure"
-	"github.com/Liapoldus/pluginprotocol/presentation/peer"
+	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
+	"liapoldus.local/server-plugin/contracts"
 	"liapoldus.local/server-plugin/internal/application"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	"liapoldus.local/server-plugin/internal/infrastructure/site"
 	pluginadapter "liapoldus.local/server-plugin/internal/presentation/restplugin"
 )
 
@@ -117,6 +119,11 @@ func run(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
+	stage = "secret-broker"
+	secretBroker, err := pluginsdk.NewCoreSecretBroker(contract, settings.coreURL, controlClient, 1024)
+	if err != nil {
+		return err
+	}
 	stage = "product-runtime"
 	runtime := caddyruntime.New()
 	if settings.peerTargetID != "" {
@@ -146,15 +153,38 @@ func run(args []string) (runErr error) {
 		return err
 	}
 	defer func() { _ = configuration.Stop() }()
+	stage = "site-release-store"
+	releaseStore, err := site.NewReleaseStore(caddyruntime.SiteDataRoot())
+	if err != nil {
+		return err
+	}
+	publisher, err := application.NewSitePublisher(releaseStore)
+	if err != nil {
+		return err
+	}
+	if err := publisher.ProcessPending(context.Background()); err != nil {
+		return err
+	}
+	if err := caddyruntime.SetSiteDocumentReader(publisher); err != nil {
+		return err
+	}
+	siteOperations, err := contracts.LoadSiteOperationContract()
+	if err != nil {
+		return err
+	}
 	stage = "sdk-rest-server"
-	server, _, err := pluginadapter.NewMutualTLSServer(configuration, pluginadapter.LifecycleOptions{
-		Source: source, Identity: identity, Credentials: credentials, CorePeer: coreClientPeer,
+	server, _, err := pluginadapter.NewMutualTLSServer(configuration, publisher, pluginadapter.LifecycleOptions{
+		Source: source, Broker: secretBroker, Identity: identity, Credentials: credentials, CorePeer: coreClientPeer,
 		Revocation: revocation, ErrorLog: log.New(io.Discard, "", 0), LogOutput: os.Stdout,
 	})
 	if err != nil {
 		return err
 	}
 	stage = "serve"
+	workerContext, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	workerResult := make(chan error, 1)
+	go func() { workerResult <- publisher.RunWorker(workerContext, siteOperations.WorkerPollInterval) }()
 	serveResult := make(chan error, 1)
 	go func() { serveResult <- server.ListenAndServe(settings.restListen) }()
 	stop := make(chan os.Signal, 1)
@@ -162,11 +192,16 @@ func run(args []string) (runErr error) {
 	defer signal.Stop(stop)
 	select {
 	case <-stop:
+	case workerErr := <-workerResult:
+		if workerErr != nil {
+			return workerErr
+		}
 	case err := <-serveResult:
 		if !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 	}
+	stopWorker()
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return server.GracefulShutdown(shutdownContext)

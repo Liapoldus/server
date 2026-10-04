@@ -44,7 +44,7 @@ func ValidateStagedManifest(stagedRoot, expectedSiteID string) (Manifest, error)
 		return Manifest{}, ErrInvalidManifest
 	}
 	contents, err := os.ReadFile(manifestPath)
-	if err != nil || !utf8.Valid(contents) || hasDuplicateJSONKeys(contents) {
+	if err != nil || !utf8.Valid(contents) || !contracts.ValidJSONNoDuplicateKeys(contents) {
 		return Manifest{}, ErrInvalidManifest
 	}
 	if err := contracts.ValidateSiteManifest(contents); err != nil {
@@ -131,65 +131,6 @@ func requirePath(root, relative string, directory bool) error {
 		if last && !directory && !info.Mode().IsRegular() {
 			return ErrInvalidManifest
 		}
-	}
-	return nil
-}
-
-func hasDuplicateJSONKeys(contents []byte) bool {
-	decoder := json.NewDecoder(bytes.NewReader(contents))
-	decoder.UseNumber()
-	if err := consumeJSONValue(decoder); err != nil {
-		return true
-	}
-	_, err := decoder.Token()
-	return err != io.EOF
-}
-
-func consumeJSONValue(decoder *json.Decoder) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return err
-	}
-	delimiter, isDelimiter := token.(json.Delim)
-	if !isDelimiter {
-		return nil
-	}
-	switch delimiter {
-	case '{':
-		keys := make(map[string]struct{})
-		for decoder.More() {
-			keyToken, err := decoder.Token()
-			if err != nil {
-				return err
-			}
-			key, ok := keyToken.(string)
-			if !ok {
-				return ErrInvalidManifest
-			}
-			if _, duplicate := keys[key]; duplicate {
-				return ErrInvalidManifest
-			}
-			keys[key] = struct{}{}
-			if err := consumeJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil || closing != json.Delim('}') {
-			return ErrInvalidManifest
-		}
-	case '[':
-		for decoder.More() {
-			if err := consumeJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil || closing != json.Delim(']') {
-			return ErrInvalidManifest
-		}
-	default:
-		return ErrInvalidManifest
 	}
 	return nil
 }

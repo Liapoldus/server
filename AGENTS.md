@@ -40,9 +40,13 @@ reverse proxy, WebSocket/SSE и согласованный plugin dispatch.
 - Site releases принадлежат Server plugin и используют immutable release
   directories с атомарными `current`/`previous`. Архив полностью проверяется
   до activation; путь и записи не могут escape release root.
-- Любой Admin Action/auth operation имеет bounded input, idempotency и audit
-  context по владельцу API. Не раскрывать cookies, authorization, credentials,
-  private keys, grants или file paths.
+- Любой Admin Action/auth operation имеет bounded input и audit context по
+  владельцу API. Для синхронного JSON Admin Action `Idempotency-Key` обязателен,
+  но служит только correlation metadata: повторный принятый запрос вызывает
+  действие заново и не обещает exactly-once effects. Durable artifact actions
+  используют operation-level idempotency своего versioned contract. Не
+  раскрывать cookies, authorization, credentials, private keys, grants или file
+  paths.
 - Product-specific strings and schemas имеют один owner contract; не копировать
   API docs/contracts в другой репозиторий как второй источник истины.
 

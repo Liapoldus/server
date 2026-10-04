@@ -10,9 +10,7 @@
     "server.operations.list",
     "server.operations.get",
     "server.certificates.list",
-    "server.certificates.get",
-    "server.certificates.renew",
-    "server.certificates.revoke"
+    "server.certificates.get"
   ],
   "pages": [
     {
@@ -129,37 +127,6 @@
                 "additionalProperties": false
               },
               "rowInput": { "domain": "domain" }
-            },
-            {
-              "id": "renew",
-              "title": "Запустить продление",
-              "capability": "server.certificates.renew",
-              "confirmation": "Запустить асинхронное продление Caddy-managed сертификата домена?",
-              "inputSchema": {
-                "type": "object",
-                "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 } },
-                "required": ["domain"],
-                "additionalProperties": false
-              },
-              "rowInput": { "domain": "domain" }
-            },
-            {
-              "id": "revoke",
-              "title": "Отозвать сертификат",
-              "capability": "server.certificates.revoke",
-              "confirmation": "Отозвать указанный Caddy-managed сертификат? Операция необратима.",
-              "dangerous": true,
-              "inputSchema": {
-                "type": "object",
-                "properties": {
-                  "domain": { "type": "string", "minLength": 1, "maxLength": 253 },
-                  "serial": { "type": "string", "minLength": 1, "maxLength": 256 },
-                  "reason": { "type": "string", "minLength": 1, "maxLength": 512 }
-                },
-                "required": ["domain", "serial", "reason"],
-                "additionalProperties": false
-              },
-              "rowInput": { "domain": "domain", "serial": "serial" }
             }
           ]
         }

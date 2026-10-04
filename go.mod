@@ -3,15 +3,15 @@ module liapoldus.local/server-plugin
 go 1.26.0
 
 require (
-	github.com/Liapoldus/pluginprotocol v1.1.0
+	github.com/Liapoldus/plugin-sdk v1.0.0
+	github.com/Liapoldus/pluginprotocol/v2 v2.0.0
 	github.com/caddyserver/caddy/v2 v2.11.4
 	github.com/caddyserver/certmagic v0.25.3
+	github.com/gorilla/websocket v1.5.3
 	github.com/quic-go/quic-go v0.59.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	golang.org/x/net v0.55.0
 	golang.org/x/text v0.37.0
-	google.golang.org/grpc v1.81.0
-	github.com/Liapoldus/plugin-sdk v0.0.0
 )
 
 require (
@@ -49,7 +49,6 @@ require (
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.5 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.5 // indirect
@@ -115,7 +114,6 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tailscale/go-winio v0.0.0-20231025203758-c4f33415bf55 // indirect
 	github.com/tailscale/tscert v0.0.0-20251216020129-aea342f6d747 // indirect
-	github.com/things-go/go-socks5 v0.1.1 // indirect
 	github.com/urfave/cli v1.22.17 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
@@ -170,12 +168,9 @@ require (
 	google.golang.org/api v0.277.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260406210006-6f92a3bedf2d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
+	google.golang.org/grpc v1.81.0 // indirect
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	howett.net/plist v1.0.0 // indirect
 )
-
-replace github.com/Liapoldus/pluginprotocol => ../../pluginprotocol
-
-replace github.com/Liapoldus/plugin-sdk => ../../plugin-sdk

@@ -7,15 +7,35 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Caddy Plugin SDK Reload adapter", () => {
-  it("preserves the serving generation when a schema-valid Caddy activation fails", async () => {
+  it("preserves the last-good Caddy generation and reports the replica not-ready after activation failure", async () => {
     const port = await freePort();
-    const output = execFileSync("go", ["run", "./tests/fixtures/plugin-sdk-reload"], {
-      cwd: root,
-      env: { ...process.env, GOWORK: "off", GOTOOLCHAIN: "go1.26.0" },
-      input: JSON.stringify({ port }),
-      encoding: "utf8",
-      timeout: 120_000,
+    const adminProbe = createServer();
+    await new Promise<void>((resolve, reject) => {
+      adminProbe.once("error", reject);
+      adminProbe.listen(0, "127.0.0.1", resolve);
     });
+    const adminAddress = adminProbe.address();
+    if (!adminAddress || typeof adminAddress === "string") throw new Error("could not reserve Caddy admin port");
+
+    let output: string;
+    try {
+      // Caddy must start while its configured default admin address is owned
+      // by this probe; the Server runtime must not bind or expose that API.
+      output = execFileSync("go", ["run", "./tests/fixtures/plugin-sdk-reload"], {
+        cwd: root,
+        env: {
+          ...process.env,
+          GOWORK: "off",
+          GOTOOLCHAIN: "go1.26.0",
+          CADDY_ADMIN: `127.0.0.1:${adminAddress.port}`,
+        },
+        input: JSON.stringify({ port }),
+        encoding: "utf8",
+        timeout: 120_000,
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => adminProbe.close((error) => error ? reject(error) : resolve()));
+    }
 
     const result = JSON.parse(output);
     expect(result).toEqual({
@@ -30,8 +50,11 @@ describe("Caddy Plugin SDK Reload adapter", () => {
       rejectedCandidate: true,
       candidateFailureStage: "runtime-activation",
       revisionAfterReject: "generation-1",
-      readyAfterReject: { ready: true, generation: "generation-1" },
+      readyAfterReject: { ready: false, generation: "generation-1" },
       responseAfterReject: { status: 200, body: "sdk-caddy-active" },
+      secretsRedeemed: 2,
+      secretPurposesValidated: true,
+      redactionPassed: true,
     });
   }, 120_000);
 });

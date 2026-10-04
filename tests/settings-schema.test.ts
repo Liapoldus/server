@@ -68,7 +68,7 @@ describe("Server plugin strict settings schema v1", () => {
     expect(schema.$defs.tlsCustom.description).toContain("validates the pair before activation");
   });
 
-  it("leaves IDNA hostname canonicalization to semantic ConfigApply validation", () => {
+	it("leaves IDNA hostname canonicalization to semantic settings validation", () => {
     expect(accepts(settings({
       listeners: [{ ...httpListener, hostnames: ["münich.example.test"] }],
       routes: [{ ...httpRoute, match: { hosts: ["münich.example.test"] } }],

@@ -4,12 +4,13 @@
   "title": "Server plugin Admin Surface action catalog v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "plugin", "archive", "releaseLifecycle", "operationStatus", "operations"],
+  "required": ["version", "plugin", "archive", "releaseLifecycle", "publishOperation", "operationStatus", "operations"],
   "properties": {
     "version": { "const": 1 },
     "plugin": { "const": "server" },
     "archive": { "$ref": "#/$defs/archive" },
     "releaseLifecycle": { "$ref": "#/$defs/releaseLifecycle" },
+    "publishOperation": { "$ref": "#/$defs/publishOperation" },
     "operationStatus": { "$ref": "#/$defs/operationStatus" },
     "operations": {
       "type": "object",
@@ -22,9 +23,7 @@
         "server.operations.list",
         "server.operations.get",
         "server.certificates.list",
-        "server.certificates.get",
-        "server.certificates.renew",
-        "server.certificates.revoke"
+        "server.certificates.get"
       ],
       "properties": {
         "server.sites.list": { "$ref": "#/$defs/queryOperation" },
@@ -34,9 +33,7 @@
         "server.operations.list": { "$ref": "#/$defs/queryOperation" },
         "server.operations.get": { "$ref": "#/$defs/actionOperation" },
         "server.certificates.list": { "$ref": "#/$defs/queryOperation" },
-        "server.certificates.get": { "$ref": "#/$defs/actionOperation" },
-        "server.certificates.renew": { "$ref": "#/$defs/actionOperation" },
-        "server.certificates.revoke": { "$ref": "#/$defs/actionOperation" }
+        "server.certificates.get": { "$ref": "#/$defs/actionOperation" }
       }
     }
   },
@@ -73,16 +70,17 @@
     "actionOperation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "ownership", "surfaceBinding", "responseSchema", "httpStatus", "errors"],
+      "required": ["kind", "ownership", "surfaceBinding", "requestSchema", "responseSchema", "httpStatus", "errors"],
       "properties": {
         "kind": { "const": "action" },
         "ownership": { "const": "plugin-admin-surface-action" },
         "surfaceBinding": { "$ref": "#/$defs/surfaceBinding" },
+        "requestSchema": { "$ref": "#/$defs/jsonSchema" },
         "responseSchema": { "$ref": "#/$defs/jsonSchema" },
         "httpStatus": { "enum": [200, 202] },
         "acceptedHttpStatus": { "const": 202 },
         "preconditions": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "idempotency": { "type": "object", "additionalProperties": false, "required": ["required", "scope", "sameInput", "differentInput"], "properties": { "required": { "const": true }, "scope": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }, "sameInput": { "type": "string" }, "differentInput": { "type": "string" } } },
+        "idempotency": { "type": "object", "additionalProperties": false, "required": ["required", "scope", "semantics", "repeat"], "properties": { "required": { "const": true }, "scope": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }, "semantics": { "const": "correlation-only" }, "repeat": { "const": "invoke-again" } } },
         "errors": { "$ref": "#/$defs/errors" }
       }
     },
@@ -193,12 +191,24 @@
         "publishStatus": { "const": 202 }
       }
     },
+    "publishOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acceptance", "archiveValidation", "archiveValidationFailure", "currentPointer"],
+      "properties": {
+        "acceptance": { "const": "after-validated-metadata-and-bounded-artifact-bytes-are-durably-stored-and-sha256-matches" },
+        "archiveValidation": { "const": "asynchronous-durable-operation-before-release-activation" },
+        "archiveValidationFailure": { "const": "operation-failed-with-stable-error-code-current-and-previous-unchanged" },
+        "currentPointer": { "const": "changes-only-after-all-archive-and-manifest-validation-succeeds" }
+      }
+    },
     "operationStatus": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["coreResource", "pluginStatusCapability", "pluginStates", "coreStates", "stateMapping", "coreControlUsesPluginSdkRest"],
+      "required": ["coreResource", "workerPollMilliseconds", "pluginStatusCapability", "pluginStates", "coreStates", "stateMapping", "coreControlUsesPluginSdkRest"],
       "properties": {
         "coreResource": { "const": "GET /api/operations/{id}" },
+        "workerPollMilliseconds": { "type": "integer", "minimum": 25, "maximum": 60000 },
         "pluginStatusCapability": { "const": "server.operations.get" },
         "pluginStates": { "const": ["accepted", "running", "completed", "failed"] },
         "coreStates": { "const": ["pending", "running", "succeeded", "failed", "degraded"] },

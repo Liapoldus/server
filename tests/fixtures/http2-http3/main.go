@@ -19,8 +19,6 @@ import (
 	"path/filepath"
 	"time"
 
-	caddycore "github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/certmagic"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
@@ -60,11 +58,10 @@ type fixtureOutput struct {
 func main() {
 	var request input
 	check(json.NewDecoder(os.Stdin).Decode(&request))
-	storageDirectory, err := os.MkdirTemp("", "liapoldus-caddy-http2-http3-")
+	_, cleanup, err := shared.IsolateCaddyDataHome()
 	check(err)
-	defer func() { _ = os.RemoveAll(storageDirectory) }()
-	check(os.Setenv("XDG_DATA_HOME", storageDirectory))
-	caddycore.DefaultStorage = &certmagic.FileStorage{Path: storageDirectory}
+	defer cleanup()
+	check(shared.RegisterSiteDirectoryReader())
 
 	certificatePEM, privateKeyPEM, rootPEM := makeCertificates()
 	runtime := caddyruntime.New()

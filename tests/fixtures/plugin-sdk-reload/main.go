@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,7 +30,9 @@ import (
 	"liapoldus.local/server-plugin/contracts"
 	"liapoldus.local/server-plugin/internal/application"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	"liapoldus.local/server-plugin/internal/infrastructure/site"
 	"liapoldus.local/server-plugin/internal/presentation/restplugin"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type input struct {
@@ -49,6 +53,40 @@ type output struct {
 	RevisionAfterReject      string         `json:"revisionAfterReject"`
 	ReadyAfterReject         map[string]any `json:"readyAfterReject"`
 	ResponseAfterReject      map[string]any `json:"responseAfterReject"`
+	SecretsRedeemed          int            `json:"secretsRedeemed"`
+	SecretPurposesValidated  bool           `json:"secretPurposesValidated"`
+	RedactionPassed          bool           `json:"redactionPassed"`
+}
+
+type fixtureSecretBroker struct {
+	mu          sync.Mutex
+	values      map[string][]byte
+	permissions map[string]string
+	grants      map[string][]byte
+	issued      int
+}
+
+func (broker *fixtureSecretBroker) IssueGrant(_ context.Context, request sdkmodels.SecretGrantRequest) (sdkmodels.SecretGrant, error) {
+	broker.mu.Lock()
+	defer broker.mu.Unlock()
+	if broker.values[request.Reference] == nil || broker.permissions[request.Reference] != request.Purpose || request.Generation == "" {
+		return sdkmodels.SecretGrant{}, sdkmodels.ErrInvalidSecretGrant
+	}
+	broker.issued++
+	handle := fmt.Sprintf("fixture-grant-%d", broker.issued)
+	broker.grants[handle] = append([]byte(nil), broker.values[request.Reference]...)
+	return sdkmodels.SecretGrant{Handle: handle, Reference: request.Reference, Purpose: request.Purpose, Generation: request.Generation, ExpiresAt: time.Now().Add(time.Minute)}, nil
+}
+
+func (broker *fixtureSecretBroker) Redeem(_ context.Context, redemption sdkmodels.SecretRedemption) (sdkmodels.SecretValue, error) {
+	broker.mu.Lock()
+	defer broker.mu.Unlock()
+	value, exists := broker.grants[redemption.Handle]
+	if !exists {
+		return sdkmodels.SecretValue{}, sdkmodels.ErrInvalidSecretGrant
+	}
+	delete(broker.grants, redemption.Handle)
+	return sdkmodels.NewSecretValue(value), nil
 }
 
 type identities struct {
@@ -79,10 +117,10 @@ func main() {
 	check(err)
 	ids, err := createIdentities()
 	check(err)
-	storageDirectory, err := os.MkdirTemp("", "server-")
+	storageDirectory, cleanup, err := shared.IsolateCaddyDataHome()
 	check(err)
-	defer func() { _ = os.RemoveAll(storageDirectory) }()
-	check(os.Setenv("XDG_DATA_HOME", storageDirectory))
+	defer cleanup()
+	check(shared.RegisterSiteDirectoryReader())
 	runtime := caddyruntime.New()
 	activationProbe := &activationProbe{runtime: runtime}
 	configuration, err := application.NewConfiguration(activationProbe)
@@ -93,7 +131,7 @@ func main() {
 	check(os.MkdirAll(siteRoot, 0o700))
 	check(os.WriteFile(filepath.Join(siteRoot, "index.html"), []byte("sdk-caddy-active"), 0o600))
 
-	activeSettings := settings(request.Port)
+	activeSettings := addCustomTLS(settings(request.Port), ephemeralPort())
 	activeBytes := marshal(activeSettings)
 	activeDigest := digest(activeBytes)
 
@@ -160,10 +198,25 @@ func main() {
 	check(err)
 	identity, err := sdkmodels.NewReplicaIdentity("server", "replica-1")
 	check(err)
-	pluginServer, _, err := restplugin.NewMutualTLSServer(configuration, restplugin.LifecycleOptions{
-		Source: coreSource, Identity: identity, Credentials: pluginProvider,
+	releaseStore, err := site.NewReleaseStore(filepath.Join(storageDirectory, "server-actions"))
+	check(err)
+	publisher, err := application.NewSitePublisher(releaseStore)
+	check(err)
+	secretPurposes, err := contracts.LoadSecretPurposes()
+	check(err)
+	secretBroker := &fixtureSecretBroker{
+		values: map[string][]byte{"fixture-certificate": ids.pluginServer.certificatePEM, "fixture-private-key": ids.pluginServer.privateKeyPEM},
+		permissions: map[string]string{
+			"fixture-certificate": secretPurposes.ServerCertificate,
+			"fixture-private-key": secretPurposes.ServerPrivateKey,
+		},
+		grants: make(map[string][]byte),
+	}
+	var pluginLogs bytes.Buffer
+	pluginServer, _, err := restplugin.NewMutualTLSServer(configuration, publisher, restplugin.LifecycleOptions{
+		Source: coreSource, Broker: secretBroker, Identity: identity, Credentials: pluginProvider,
 		CorePeer:   sdkmodels.PeerIdentity{CommonName: ids.coreClient.leaf.Subject.CommonName},
-		Revocation: revocation, LogOutput: io.Discard,
+		Revocation: revocation, LogOutput: &pluginLogs,
 	})
 	check(err)
 	go func() { _ = pluginServer.Serve(pluginListener) }()
@@ -204,6 +257,16 @@ func main() {
 	readyAfterReject, readyErr := pluginClient.Readiness(ctx)
 	check(readyErr)
 	responseAfterReject := requestDataPlane(request.Port)
+	redactionPassed := !strings.Contains(pluginLogs.String(), string(ids.pluginServer.privateKeyPEM)) &&
+		!strings.Contains(pluginLogs.String(), string(ids.pluginServer.certificatePEM)) &&
+		!strings.Contains(pluginLogs.String(), "fixture-certificate") &&
+		!strings.Contains(pluginLogs.String(), "fixture-private-key") &&
+		!strings.Contains(metrics, string(ids.pluginServer.privateKeyPEM)) &&
+		!strings.Contains(metrics, string(ids.pluginServer.certificatePEM)) &&
+		!strings.Contains(metrics, "fixture-certificate") &&
+		!strings.Contains(metrics, "fixture-private-key") &&
+		!strings.Contains(pluginLogs.String(), "fixture-grant-") &&
+		!strings.Contains(metrics, "fixture-grant-")
 	failureStage := ""
 	if activationProbe.failed.Load() {
 		failureStage = "runtime-activation"
@@ -216,12 +279,40 @@ func main() {
 		ManifestName:    manifest.Name, ConfigurationSchemaValid: json.Valid(schemaBytes),
 		MetricsHasReadinessGauge: strings.Contains(metrics, contract.Plugin.Responses.Metrics.ReadyMetricName),
 		FirstResponse:            firstResponse, RejectedCandidate: rejectedErr != nil,
-		CandidateFailureStage: failureStage,
-		RevisionAfterReject:   configuration.Revision(),
-		ReadyAfterReject:      map[string]any{"ready": readyAfterReject.Ready, "generation": readyAfterReject.Generation},
-		ResponseAfterReject:   responseAfterReject,
+		CandidateFailureStage:   failureStage,
+		RevisionAfterReject:     configuration.Revision(),
+		ReadyAfterReject:        map[string]any{"ready": readyAfterReject.Ready, "generation": readyAfterReject.Generation},
+		ResponseAfterReject:     responseAfterReject,
+		SecretsRedeemed:         secretBroker.issued,
+		SecretPurposesValidated: secretBroker.issued == 2,
+		RedactionPassed:         redactionPassed,
 	}
 	check(json.NewEncoder(os.Stdout).Encode(result))
+}
+
+func addCustomTLS(settings map[string]any, port int) map[string]any {
+	configuration := settings["config"].(map[string]any)
+	listeners := configuration["listeners"].([]any)
+	listeners = append(listeners, map[string]any{
+		"id": "custom-web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", port),
+		"hostnames": []string{"localhost"}, "protocols": []string{"http1"},
+		"tls": map[string]any{"mode": "custom", "certificateRef": "fixture-certificate", "privateKeyRef": "fixture-private-key"},
+	})
+	configuration["listeners"] = listeners
+	routes := configuration["routes"].([]any)
+	routes = append(routes, map[string]any{
+		"id": "custom-site", "listenerId": "custom-web", "handler": map[string]any{"type": "static", "siteId": "frontend"},
+	})
+	configuration["routes"] = routes
+	return settings
+}
+
+func ephemeralPort() int {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	check(err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	check(listener.Close())
+	return port
 }
 
 type activationProbe struct {
@@ -235,6 +326,26 @@ func (probe *activationProbe) Validate(configuration []byte) error {
 
 func (probe *activationProbe) Activate(configuration []byte) error {
 	if err := probe.runtime.Activate(configuration); err != nil {
+		probe.failed.Store(true)
+		return err
+	}
+	return nil
+}
+
+func (probe *activationProbe) ValidateWithSecrets(configuration []byte, secrets map[string][]byte) error {
+	runtime, ok := probe.runtime.(application.SecretAwareRuntime)
+	if !ok {
+		return application.ErrCandidateRejected
+	}
+	return runtime.ValidateWithSecrets(configuration, secrets)
+}
+
+func (probe *activationProbe) ActivateWithSecrets(configuration []byte, secrets map[string][]byte) error {
+	runtime, ok := probe.runtime.(application.SecretAwareRuntime)
+	if !ok {
+		return application.ErrCandidateRejected
+	}
+	if err := runtime.ActivateWithSecrets(configuration, secrets); err != nil {
 		probe.failed.Store(true)
 		return err
 	}

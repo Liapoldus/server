@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("strict settings to Caddy runtime compilation", () => {
-  it("serves the current site release through a schema-shaped ConfigApply revision", async () => {
+	it("serves the current site release from a schema-validated settings revision", async () => {
     const port = await freePort();
     const settings = httpSettings(port, { type: "static", siteId: "frontend" });
     const result = await runActivation({ port, settings, siteContent: "compiled-static" });
@@ -17,7 +17,7 @@ describe("strict settings to Caddy runtime compilation", () => {
     expect(result).toEqual({ revision: "revision-1", status: 200, body: "compiled-static" });
   }, 60_000);
 
-  it("proxies to one HTTP origin through a schema-shaped ConfigApply revision", async () => {
+	it("proxies to one HTTP origin from a schema-validated settings revision", async () => {
     const upstream = createServer((_request, response) => {
       response.writeHead(202, { "Content-Type": "text/plain" });
       response.end("compiled-proxy");

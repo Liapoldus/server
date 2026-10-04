@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -19,10 +20,13 @@ import (
 	"path/filepath"
 	"time"
 
-	caddycore "github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/certmagic"
+	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
+	sdkpresentation "github.com/Liapoldus/plugin-sdk/presentation"
+	"liapoldus.local/server-plugin/contracts"
 	"liapoldus.local/server-plugin/internal/application"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	"liapoldus.local/server-plugin/internal/infrastructure/site"
+	"liapoldus.local/server-plugin/internal/presentation/restplugin"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
@@ -41,16 +45,25 @@ type input struct {
 }
 
 type fixtureOutput struct {
-	InitialRevision          string `json:"initialRevision"`
-	InvalidPairRejected      bool   `json:"invalidPairRejected"`
-	RevisionAfterInvalidPair string `json:"revisionAfterInvalidPair"`
-	OldRevisionStatus        int    `json:"oldRevisionStatus"`
-	OldRevisionBody          string `json:"oldRevisionBody"`
-	ValidCode                string `json:"validCode"`
-	ValidRevision            string `json:"validRevision"`
-	TLS12                    result `json:"tls12"`
-	TLS13                    result `json:"tls13"`
-	WrongHostnameRejected    bool   `json:"wrongHostnameRejected"`
+	InitialRevision          string      `json:"initialRevision"`
+	InvalidPairRejected      bool        `json:"invalidPairRejected"`
+	RevisionAfterInvalidPair string      `json:"revisionAfterInvalidPair"`
+	OldRevisionStatus        int         `json:"oldRevisionStatus"`
+	OldRevisionBody          string      `json:"oldRevisionBody"`
+	ValidCode                string      `json:"validCode"`
+	ValidRevision            string      `json:"validRevision"`
+	TLS12                    result      `json:"tls12"`
+	TLS13                    result      `json:"tls13"`
+	WrongHostnameRejected    bool        `json:"wrongHostnameRejected"`
+	CertificateList          adminResult `json:"certificateList"`
+	CertificateInvalidCursor adminResult `json:"certificateInvalidCursor"`
+	CertificateStatus        adminResult `json:"certificateStatus"`
+	CertificateMissing       adminResult `json:"certificateMissing"`
+}
+
+type adminResult struct {
+	Status int            `json:"status"`
+	Body   map[string]any `json:"body"`
 }
 
 type result struct {
@@ -62,11 +75,10 @@ type result struct {
 func main() {
 	var request input
 	check(json.NewDecoder(os.Stdin).Decode(&request))
-	storageDirectory, err := os.MkdirTemp("", "liapoldus-caddy-custom-tls-")
+	storageDirectory, cleanup, err := shared.IsolateCaddyDataHome()
 	check(err)
-	defer func() { _ = os.RemoveAll(storageDirectory) }()
-	check(os.Setenv("XDG_DATA_HOME", storageDirectory))
-	caddycore.DefaultStorage = &certmagic.FileStorage{Path: storageDirectory}
+	defer cleanup()
+	check(shared.RegisterSiteDirectoryReader())
 
 	certificatePEM, privateKeyPEM, wrongPrivateKeyPEM, rootPEM := makeCertificates()
 	runtime := caddyruntime.New()
@@ -111,7 +123,31 @@ func main() {
 	output.TLS12 = tls12
 	output.TLS13 = tls13
 	output.WrongHostnameRejected = wrongHostnameErr != nil
+	releaseStore, err := site.NewReleaseStore(filepath.Join(storageDirectory, "site-releases"))
+	check(err)
+	publisher, err := application.NewSitePublisher(releaseStore)
+	check(err)
+	adapter, err := restplugin.New(configuration, publisher)
+	check(err)
+	queryAction, err := contracts.AdminQueryActionID()
+	check(err)
+	output.CertificateList = callAdminAction(adapter, "certificates", queryAction, []byte(`{"resource":"certificates","limit":50}`))
+	output.CertificateInvalidCursor = callAdminAction(adapter, "certificates", queryAction, []byte(`{"resource":"certificates","cursor":"%%%","limit":50}`))
+	output.CertificateStatus = callAdminAction(adapter, "certificates", "status", []byte(`{"domain":"custom.example.test"}`))
+	output.CertificateMissing = callAdminAction(adapter, "certificates", "status", []byte(`{"domain":"missing.example.test"}`))
 	check(json.NewEncoder(os.Stdout).Encode(output))
+}
+
+func callAdminAction(adapter *restplugin.Adapter, pageID, actionID string, body []byte) adminResult {
+	response, err := adapter.HandleAdminAction(context.Background(), sdkpresentation.AdminActionInput{
+		Invocation: sdkmodels.AdminActionInvocation{CallerID: "fixture", InstanceID: "server", PageID: pageID,
+			ActionID: actionID, SurfaceDigest: "fixture-digest", RequestID: "fixture-request"},
+		Body: body,
+	})
+	check(err)
+	var decoded map[string]any
+	check(json.Unmarshal(response.Body, &decoded))
+	return adminResult{Status: response.StatusCode, Body: decoded}
 }
 
 func settings(httpPort int, httpsPort *int, invalidKeyRef string) []byte {

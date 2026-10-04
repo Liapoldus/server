@@ -12,8 +12,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
-	"github.com/Liapoldus/pluginprotocol/presentation/peer"
+	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
 	caddycore "github.com/caddyserver/caddy/v2"
 	"liapoldus.local/server-plugin/contracts"
 )
@@ -56,12 +57,18 @@ type settingsRoute struct {
 }
 
 type settingsHandler struct {
-	Type       string     `json:"type"`
-	SiteID     string     `json:"siteId"`
-	InstanceID string     `json:"instanceId"`
-	Capability string     `json:"capability"`
-	Mode       string     `json:"mode"`
-	Upstreams  []upstream `json:"upstreams"`
+	Type               string   `json:"type"`
+	SiteID             string   `json:"siteId"`
+	InstanceID         string   `json:"instanceId"`
+	Capability         string   `json:"capability"`
+	Mode               string   `json:"mode"`
+	RequestCookieNames []string `json:"requestCookieNames,omitempty"`
+	StreamLimits       struct {
+		MaxConcurrency    int `json:"maxConcurrency"`
+		IdleTimeoutMillis int `json:"idleTimeoutMillis"`
+		MaxDurationMillis int `json:"maxDurationMillis"`
+	} `json:"streamLimits,omitempty"`
+	Upstreams []upstream `json:"upstreams"`
 }
 
 type upstream struct {
@@ -97,6 +104,10 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 
 	listeners := make(map[string]settingsListener, len(desired.Listeners))
 	servers := make(map[string]any, len(desired.Listeners))
+	httpLimits, err := contracts.LoadHTTPDispatch()
+	if err != nil {
+		return nil, err
+	}
 	tlsCertificates := make([]any, 0, len(desired.Listeners))
 	usedSecretReferences := make(map[string]struct{})
 	for _, listener := range desired.Listeners {
@@ -142,7 +153,7 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 			return nil, errUnsupportedSettings
 		}
 		listeners[listener.ID] = listener
-		server := map[string]any{"listen": []string{listener.Address}, "protocols": protocols, "routes": []any{}}
+		server := map[string]any{"listen": []string{listener.Address}, "protocols": protocols, "routes": []any{}, "max_header_bytes": httpLimits.MaxRequestHeaderBytes}
 		switch listener.TLS.Mode {
 		case "disabled", "custom":
 			server["automatic_https"] = map[string]any{"disable": true, "disable_redirects": true}
@@ -201,6 +212,27 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 		if matcher.Path != nil {
 			matcherConfig["path"] = matcher.Path
 		}
+		if route.Handler.Mode == "http_stream" || route.Handler.Mode == "websocket" || route.Handler.Mode == "sse" {
+			limits, limitsErr := contracts.LoadHTTPDispatch()
+			if limitsErr != nil {
+				return nil, limitsErr
+			}
+			if route.Handler.StreamLimits.MaxConcurrency == 0 {
+				route.Handler.StreamLimits.MaxConcurrency = limits.MaxStreamConcurrencyPerInstance
+			}
+			if route.Handler.StreamLimits.IdleTimeoutMillis == 0 {
+				route.Handler.StreamLimits.IdleTimeoutMillis = limits.DefaultStreamIdleTimeoutMillis
+			}
+			if route.Handler.StreamLimits.MaxDurationMillis == 0 {
+				route.Handler.StreamLimits.MaxDurationMillis = limits.DefaultStreamMaxDurationMillis
+			}
+			if route.Handler.StreamLimits.MaxConcurrency > limits.MaxStreamConcurrencyPerInstance || route.Handler.StreamLimits.IdleTimeoutMillis > limits.DefaultStreamIdleTimeoutMillis || route.Handler.StreamLimits.MaxDurationMillis > limits.DefaultStreamMaxDurationMillis {
+				return nil, errUnsupportedSettings
+			}
+			handler["maxConcurrentStreams"] = route.Handler.StreamLimits.MaxConcurrency
+			handler["idleTimeoutMillis"] = route.Handler.StreamLimits.IdleTimeoutMillis
+			handler["maxDurationMillis"] = route.Handler.StreamLimits.MaxDurationMillis
+		}
 		routesByListener[route.ListenerID] = append(routesByListener[route.ListenerID], map[string]any{
 			"match":    []any{map[string]any{routeMatcherModule: matcherConfig}},
 			"handle":   []any{handler},
@@ -242,7 +274,8 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 	}
 	for listenerID, server := range servers {
 		serverConfig := server.(map[string]any)
-		serverConfig["routes"] = routesByListener[listenerID]
+		guard := map[string]any{"handle": []any{headerLimitHandler(httpLimits)}, "terminal": false}
+		serverConfig["routes"] = append([]any{guard}, routesByListener[listenerID]...)
 	}
 
 	apps := map[string]any{
@@ -340,11 +373,10 @@ func compileHTTPProtocols(configured []string, tlsMode string) ([]string, []stri
 func compileHandler(routeID string, handler settingsHandler, targets map[string]DispatchTarget, usedTargets map[string]map[string]struct{}, upstreamPools *[]upstreamPoolConfig, secrets map[string][]byte, usedSecretReferences map[string]struct{}) (map[string]any, error) {
 	switch handler.Type {
 	case "static":
-		root, err := SiteRoot(handler.SiteID)
-		if err != nil {
+		if _, err := SiteRoot(handler.SiteID); err != nil {
 			return nil, errUnsupportedSettings
 		}
-		return map[string]any{"handler": "file_server", "root": root}, nil
+		return map[string]any{"handler": siteFileServerModule, "siteId": handler.SiteID}, nil
 	case "reverseProxy":
 		if routeID == "" || len(handler.Upstreams) == 0 || len(handler.Upstreams) > 32 || upstreamPools == nil {
 			return nil, errUnsupportedSettings
@@ -380,7 +412,7 @@ func compileHandler(routeID string, handler settingsHandler, targets map[string]
 			"transport": map[string]any{"protocol": "liapoldus_upstream_pool", "pool": routeID},
 		}, nil
 	case "plugin":
-		if handler.Mode != "call" || handler.InstanceID == "" || handler.Capability == "" {
+		if (handler.Mode != "call" && handler.Mode != "http_stream" && handler.Mode != "websocket" && handler.Mode != "sse") || handler.InstanceID == "" || handler.Capability == "" {
 			return nil, errUnsupportedSettings
 		}
 		if _, exists := targets[handler.InstanceID]; !exists {
@@ -398,20 +430,33 @@ func compileHandler(routeID string, handler settingsHandler, targets map[string]
 		if index := strings.LastIndexByte(module, '.'); index >= 0 {
 			module = module[index+1:]
 		}
-		return map[string]any{"handler": module, "instance": handler.InstanceID, "capability": handler.Capability}, nil
+		moduleConfig := map[string]any{"handler": module, "instance": handler.InstanceID, "capability": handler.Capability, "mode": handler.Mode}
+		if len(handler.RequestCookieNames) > 0 {
+			moduleConfig["requestCookieNames"] = append([]string(nil), handler.RequestCookieNames...)
+		}
+		return moduleConfig, nil
 	default:
 		return nil, fmt.Errorf("%w: handler", errUnsupportedSettings)
 	}
 }
 
 func SiteRoot(siteID string) (string, error) {
-	if siteID == "" || siteID == "." || siteID == ".." || strings.ContainsAny(siteID, `/\\`) {
+	if siteID == "" || len(siteID) > 128 || !utf8.ValidString(siteID) || siteID == "." || siteID == ".." || strings.ContainsAny(siteID, `/\\`) {
 		return "", errUnsupportedSettings
 	}
-	root := filepath.Join(caddycore.AppDataDir(), "liapoldus", "sites", siteID, "current")
-	relative, err := filepath.Rel(filepath.Join(caddycore.AppDataDir(), "liapoldus", "sites"), root)
+	for _, character := range siteID {
+		if character < 0x20 || character == 0x7f {
+			return "", errUnsupportedSettings
+		}
+	}
+	root := filepath.Join(SiteDataRoot(), "sites", siteID, "active", "current")
+	relative, err := filepath.Rel(filepath.Join(SiteDataRoot(), "sites"), root)
 	if err != nil || !filepath.IsLocal(relative) {
 		return "", errUnsupportedSettings
 	}
 	return root, nil
+}
+
+func SiteDataRoot() string {
+	return filepath.Join(caddycore.AppDataDir(), "liapoldus")
 }

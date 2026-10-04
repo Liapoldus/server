@@ -25,7 +25,13 @@ var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration co
 // applies them through the Server's own contracts and runtime.
 type Adapter struct {
 	configuration *application.Configuration
+	publisher     *application.SitePublisher
 	contract      contracts.Plugin
+	secrets       SecretProvider
+}
+
+type SecretProvider interface {
+	SecretProvider(context.Context, string, string) (sdkmodels.SecretValue, error)
 }
 
 // LifecycleOptions contains operational inputs supplied by the process
@@ -33,6 +39,7 @@ type Adapter struct {
 // only through the SDK Reload/pull lifecycle.
 type LifecycleOptions struct {
 	Source      sdkinterfaces.ConfigurationSource
+	Broker      sdkinterfaces.SecretBroker
 	Identity    sdkmodels.ReplicaIdentity
 	Credentials sdkinfra.CredentialsProvider
 	CorePeer    sdkmodels.PeerIdentity
@@ -41,12 +48,12 @@ type LifecycleOptions struct {
 	LogOutput   io.Writer
 }
 
-func New(configuration *application.Configuration) (*Adapter, error) {
+func New(configuration *application.Configuration, publisher *application.SitePublisher) (*Adapter, error) {
 	contract, err := contracts.Load()
-	if err != nil || configuration == nil {
+	if err != nil || configuration == nil || publisher == nil {
 		return nil, contracts.ErrInvalidAssets
 	}
-	return &Adapter{configuration: configuration, contract: contract}, nil
+	return &Adapter{configuration: configuration, publisher: publisher, contract: contract}, nil
 }
 
 func (adapter *Adapter) Manifest(context.Context) ([]byte, error) {
@@ -85,9 +92,55 @@ func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configurat
 		return models.ErrInvalidSettings
 	}
 	if len(references) != 0 {
-		return ErrSecretReferencesRequireCoreGrantAPI
+		return adapter.applyWithSecrets(ctx, settings, incoming.Generation)
 	}
 	return adapter.configuration.Apply(settings, incoming.Generation)
+}
+
+func (adapter *Adapter) SetSecretProvider(provider SecretProvider) {
+	if adapter != nil {
+		adapter.secrets = provider
+	}
+}
+
+func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings models.Settings, generation string) error {
+	if adapter.secrets == nil {
+		return ErrSecretReferencesRequireCoreGrantAPI
+	}
+	kinds, err := settings.ConfigSecretReferenceKinds()
+	if err != nil {
+		return models.ErrInvalidSettings
+	}
+	purposes, err := contracts.LoadSecretPurposes()
+	if err != nil {
+		return models.ErrInvalidSettings
+	}
+	values := make(map[string][]byte, len(kinds))
+	defer func() {
+		for _, value := range values {
+			clear(value)
+		}
+	}()
+	for reference, kind := range kinds {
+		purpose := ""
+		switch kind {
+		case models.SecretReferenceCertificate:
+			purpose = purposes.ServerCertificate
+		case models.SecretReferencePrivateKey:
+			purpose = purposes.ServerPrivateKey
+		case models.SecretReferenceUpstreamCA:
+			purpose = purposes.UpstreamCA
+		default:
+			return models.ErrInvalidSettings
+		}
+		value, err := adapter.secrets.SecretProvider(ctx, reference, purpose)
+		if err != nil {
+			return models.ErrInvalidSettings
+		}
+		values[reference] = value.Bytes()
+		value.Destroy()
+	}
+	return adapter.configuration.ApplyWithSecrets(settings, generation, values)
 }
 
 // NewHandler creates the Plugin SDK REST lifecycle handler and its use case.
@@ -95,9 +148,10 @@ func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configurat
 // those separately through the SDK's transport constructors.
 func NewHandler(
 	configuration *application.Configuration,
+	publisher *application.SitePublisher,
 	options LifecycleOptions,
 ) (http.Handler, *sdkapp.Lifecycle, *sdkinfra.ObserverPrometheusCollector, error) {
-	adapter, err := New(configuration)
+	adapter, err := New(configuration, publisher)
 	if err != nil || options.Source == nil || !options.Identity.Valid() || options.LogOutput == nil {
 		return nil, nil, nil, contracts.ErrInvalidAssets
 	}
@@ -149,6 +203,16 @@ func NewHandler(
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	if options.Broker != nil {
+		secrets, err := sdkapp.NewSecretManager(sdkapp.SecretManagerConfiguration{
+			Broker: options.Broker, Clock: wallClock{}, Lifecycle: lifecycle,
+			Observer: observer, MaximumTrackedGrants: 1024,
+		})
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		adapter.SetSecretProvider(secrets)
+	}
 	metadata := sdkinterfaces.PluginMetadata(adapter)
 	handler, err := sdkpresentation.NewHandlerSet(sdkpresentation.HandlerConfiguration{
 		Contracts:    presentationContracts(contract),
@@ -157,12 +221,19 @@ func NewHandler(
 		Registration: lifecycle,
 		Metadata:     metadata,
 		Metrics:      collector,
+		Artifacts:    adapter,
+		AdminSurface: adapter,
+		AdminActions: adapter,
 	})
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	return handler.Handler(), lifecycle, collector, nil
 }
+
+type wallClock struct{}
+
+func (wallClock) Now() time.Time { return time.Now() }
 
 type collectorMetricsSink struct {
 	collector *sdkinfra.ObserverPrometheusCollector
@@ -185,9 +256,10 @@ func (sink collectorMetricsSink) SetReady(ready bool) {
 // are never discovered from request data or product settings.
 func NewMutualTLSServer(
 	configuration *application.Configuration,
+	publisher *application.SitePublisher,
 	options LifecycleOptions,
 ) (*sdkinfra.MutualTLSServer, *sdkapp.Lifecycle, error) {
-	handler, lifecycle, _, err := NewHandler(configuration, options)
+	handler, lifecycle, _, err := NewHandler(configuration, publisher, options)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -217,7 +289,10 @@ func presentationContracts(contract sdkinfra.HTTPContract) sdkpresentation.Contr
 		return sdkpresentation.Endpoint{Method: value.Method, Path: value.Path}
 	}
 	document := func(value sdkinfra.DocumentContract) sdkpresentation.DocumentContract {
-		return sdkpresentation.DocumentContract{MediaType: value.MediaType, MaximumBytes: value.MaximumBytes, Required: append([]string(nil), value.Required...)}
+		return sdkpresentation.DocumentContract{
+			MediaType: value.MediaType, MaximumBytes: value.MaximumBytes,
+			Required: append([]string(nil), value.Required...), DigestAlgorithm: value.DigestAlgorithm,
+		}
 	}
 	problems := make(map[string]sdkpresentation.Problem, len(contract.Problems))
 	for name, value := range contract.Problems {
@@ -241,7 +316,51 @@ func presentationContracts(contract sdkinfra.HTTPContract) sdkpresentation.Contr
 		ReloadRequest:         document(contract.Plugin.ReloadRequest),
 		ReloadAcknowledgement: document(contract.Plugin.ReloadAcknowledgement),
 		Readiness:             document(contract.Plugin.Readiness), Manifest: document(contract.Plugin.Manifest),
-		ConfigurationSchema: document(contract.Plugin.ConfigurationSchema),
+		ConfigurationSchema:    document(contract.Plugin.ConfigurationSchema),
+		ArtifactStreamEndpoint: endpoint("artifactStream"), AdminSurfaceEndpoint: endpoint("adminSurface"),
+		AdminActionEndpoint: endpoint("adminAction"),
+		ArtifactStream: sdkpresentation.ArtifactStreamContract{
+			MediaType:                     contract.Plugin.ArtifactStream.MediaType,
+			MetadataMediaType:             contract.Plugin.ArtifactStream.MetadataMediaType,
+			Parts:                         append([]string(nil), contract.Plugin.ArtifactStream.Parts...),
+			PartOrder:                     append([]string(nil), contract.Plugin.ArtifactStream.PartOrder...),
+			MaximumArtifactBytes:          contract.Plugin.ArtifactStream.MaximumArtifactBytes,
+			MinimumArtifactBytes:          contract.Plugin.ArtifactStream.MinimumArtifactBytes,
+			MaximumMetadataBytes:          contract.Plugin.ArtifactStream.MaximumMetadataBytes,
+			MaximumMultipartOverheadBytes: contract.Plugin.ArtifactStream.MaximumMultipartOverheadBytes,
+			MaximumRequestBytes:           contract.Plugin.ArtifactStream.MaximumRequestBytes,
+			MaximumReceiptBytes:           contract.Plugin.ArtifactStream.MaximumReceiptBytes,
+			AcceptedStatus:                contract.Plugin.ArtifactStream.AcceptedStatus,
+			Deadline:                      time.Duration(contract.Deadlines.ArtifactStreamSeconds) * time.Second,
+			FilenameForwarded:             contract.Plugin.ArtifactStream.FilenameForwarded,
+			InvocationContext: sdkpresentation.ArtifactInvocationContract{
+				MaximumBytes: contract.Plugin.ArtifactStream.InvocationContext.MaximumBytes,
+				Required:     append([]string(nil), contract.Plugin.ArtifactStream.InvocationContext.Required...),
+				Optional:     append([]string(nil), contract.Plugin.ArtifactStream.InvocationContext.Optional...),
+				Headers:      cloneStringMap(contract.Plugin.ArtifactStream.InvocationContext.Headers),
+			},
+		},
+		AdminSurface: document(contract.Plugin.AdminSurface),
+		AdminAction: sdkpresentation.AdminActionContract{
+			MediaType:            contract.Plugin.AdminAction.MediaType,
+			MaximumRequestBytes:  contract.Plugin.AdminAction.MaximumRequestBytes,
+			MaximumResponseBytes: contract.Plugin.AdminAction.MaximumResponseBytes,
+			MaximumPageIDBytes:   contract.Plugin.AdminAction.MaximumPageIDBytes,
+			MaximumActionIDBytes: contract.Plugin.AdminAction.MaximumActionIDBytes,
+			PathSegmentPattern:   contract.Plugin.AdminAction.PathSegmentPattern,
+			ResponseStatus: sdkpresentation.StatusRangeContract{
+				Minimum: contract.Plugin.AdminAction.ResponseStatus.Minimum,
+				Maximum: contract.Plugin.AdminAction.ResponseStatus.Maximum,
+			},
+			Deadline: time.Duration(contract.Plugin.AdminAction.DeadlineSeconds) * time.Second,
+			InvocationContext: sdkpresentation.AdminInvocationContract{
+				MaximumBytes:        contract.Plugin.AdminAction.InvocationContext.MaximumBytes,
+				UnknownHeaderPrefix: contract.Plugin.AdminAction.InvocationContext.UnknownHeaderPrefix,
+				Required:            append([]string(nil), contract.Plugin.AdminAction.InvocationContext.Required...),
+				Optional:            append([]string(nil), contract.Plugin.AdminAction.InvocationContext.Optional...),
+				Headers:             cloneStringMap(contract.Plugin.AdminAction.InvocationContext.Headers),
+			},
+		},
 		Registration: document(sdkinfra.DocumentContract{
 			MediaType:    contract.Identity.Registration.MediaType,
 			MaximumBytes: contract.Identity.Registration.MaximumBytes,

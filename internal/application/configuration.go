@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"sync"
 
+	"liapoldus.local/server-plugin/internal/domain/interfaces"
 	"liapoldus.local/server-plugin/internal/domain/models"
 )
 
@@ -129,4 +131,26 @@ func (configuration *Configuration) Revision() string {
 	configuration.mu.Lock()
 	defer configuration.mu.Unlock()
 	return configuration.revision
+}
+
+func (configuration *Configuration) ListCertificates(ctx context.Context, domain string, limit int, cursor string) (models.CertificatePage, error) {
+	if configuration == nil || ctx == nil || limit < 1 || limit > 100 {
+		return models.CertificatePage{}, models.ErrInvalidCertificateQuery
+	}
+	inventory, ok := configuration.runtime.(interfaces.CertificateInventory)
+	if !ok {
+		return models.CertificatePage{}, models.ErrCertificateInventoryUnavailable
+	}
+	return inventory.ListCertificates(ctx, domain, limit, cursor)
+}
+
+func (configuration *Configuration) CertificateStatus(ctx context.Context, domain string) (models.CertificateStatus, error) {
+	if configuration == nil || ctx == nil || domain == "" {
+		return models.CertificateStatus{}, models.ErrInvalidCertificateQuery
+	}
+	inventory, ok := configuration.runtime.(interfaces.CertificateInventory)
+	if !ok {
+		return models.CertificateStatus{}, models.ErrCertificateInventoryUnavailable
+	}
+	return inventory.CertificateStatus(ctx, domain)
 }

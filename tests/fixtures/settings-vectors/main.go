@@ -10,6 +10,7 @@ import (
 
 	"liapoldus.local/server-plugin/internal/domain/models"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type fixtureInput struct {
@@ -24,6 +25,10 @@ type fixtureInput struct {
 }
 
 func main() {
+	_, cleanup, err := shared.IsolateCaddyDataHome()
+	check(err)
+	defer cleanup()
+
 	contents, err := io.ReadAll(os.Stdin)
 	check(err)
 	var input fixtureInput

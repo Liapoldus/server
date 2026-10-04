@@ -21,8 +21,10 @@ var (
 )
 
 type sitePublishManifestLink struct {
-	ArchiveEntry string `json:"archiveEntry"`
-	Schema       string `json:"schema"`
+	ArchiveEntry       string `json:"archiveEntry"`
+	Schema             string `json:"schema"`
+	PublishCapability  string `json:"publishCapability"`
+	RollbackCapability string `json:"rollbackCapability"`
 }
 
 func SiteManifestArchiveEntry() (string, error) {
@@ -96,7 +98,7 @@ func loadSitePublishManifestLink() (sitePublishManifestLink, error) {
 		return sitePublishManifestLink{}, ErrInvalidAssets
 	}
 	var link sitePublishManifestLink
-	if err := json.Unmarshal(contents, &link); err != nil || link.ArchiveEntry == "" || link.Schema == "" {
+	if err := json.Unmarshal(contents, &link); err != nil || link.ArchiveEntry == "" || link.Schema == "" || link.PublishCapability == "" {
 		return sitePublishManifestLink{}, ErrInvalidAssets
 	}
 	return link, nil

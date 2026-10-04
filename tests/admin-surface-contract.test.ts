@@ -10,7 +10,32 @@ async function json(path: string): Promise<any> {
 }
 
 describe("Server plugin-owned Admin Surface v1", () => {
-  it("publishes a strict surface fixture and action catalog through the plugin contract", async () => {
+	it("treats synchronous admin-action idempotency keys as correlation only", async () => {
+		const actions = await json(`${root}/contracts/v1/admin-actions.json`);
+		const rollback = actions.operations["server.sites.rollback"];
+
+		expect(rollback.idempotency).toMatchObject({
+			required: true,
+			semantics: "correlation-only",
+			repeat: "invoke-again",
+		});
+		expect(rollback.idempotency).not.toHaveProperty("sameInput", "return-the-existing-completed-result");
+		expect(actions.operations["server.sites.publish"].idempotency.sameInput).toBe("return-existing-operation-without-duplicate-effect");
+	});
+
+	it("leaves certificate renewal automatic and exposes no manual renew or revoke actions", async () => {
+		const surface = await json(`${root}/contracts/v1/admin-surface.json`);
+		const actions = await json(`${root}/contracts/v1/admin-actions.json`);
+
+		expect(surface.requiredCapabilities).not.toContain("server.certificates.renew");
+		expect(surface.requiredCapabilities).not.toContain("server.certificates.revoke");
+		expect(actions.operations).not.toHaveProperty("server.certificates.renew");
+		expect(actions.operations).not.toHaveProperty("server.certificates.revoke");
+		expect(surface.requiredCapabilities).toContain("server.certificates.list");
+		expect(surface.requiredCapabilities).toContain("server.certificates.get");
+	});
+
+	it("publishes a strict surface fixture and action catalog through the plugin contract", async () => {
     const plugin = await json(`${root}/contracts/v1/plugin.json`);
     const schema = await json(`${root}/contracts/v1/admin-surface.schema.json`);
     const surface = await json(`${root}/contracts/v1/admin-surface.json`);
@@ -125,6 +150,7 @@ describe("Server plugin-owned Admin Surface v1", () => {
       if (operation.responseSchema) expect(() => ajv.compile(operation.responseSchema)).not.toThrow();
       if (operation.requestSchema) expect(validateAllObjectSchemas(operation.requestSchema)).toBe(true);
       if (operation.responseSchema) expect(validateAllObjectSchemas(operation.responseSchema)).toBe(true);
+      if (operation.kind === "action") expect(operation.requestSchema).toBeDefined();
     }
     expect(catalog.operations["server.sites.publish"].receiptSchema).toContain("artifact-operation-result.schema.json");
 
@@ -212,12 +238,18 @@ describe("Server plugin-owned Admin Surface v1", () => {
     expect(archiveVectors.scenarios).toContainEqual(expect.objectContaining({
       id: "admin-publish-counts-explicit-directories-toward-entry-limit",
       input: { regularFileEntries: 2, explicitDirectoryEntries: 9999, implicitParentDirectories: 0 },
-      expected: { effectiveTarEntries: 10001, plugin: "reject-before-durable-acceptance" },
+      expected: { effectiveTarEntries: 10001, plugin: "accept-then-fail-operation-before-current-pointer-change" },
     }));
     expect(actions.releaseLifecycle).toMatchObject({
       storage: "plugin-owned-persistent-filesystem",
       activation: "atomic-current-previous-pointer-swap-only-after-successful-terminal-operation",
       failure: "keep-current-and-previous-unchanged",
+    });
+    expect(actions.publishOperation).toEqual({
+      acceptance: "after-validated-metadata-and-bounded-artifact-bytes-are-durably-stored-and-sha256-matches",
+      archiveValidation: "asynchronous-durable-operation-before-release-activation",
+      archiveValidationFailure: "operation-failed-with-stable-error-code-current-and-previous-unchanged",
+      currentPointer: "changes-only-after-all-archive-and-manifest-validation-succeeds",
     });
     expect(actions.operationStatus).toMatchObject({
       pluginStatusCapability: "server.operations.get",
@@ -229,7 +261,7 @@ describe("Server plugin-owned Admin Surface v1", () => {
     expect(actions.operations["server.operations.get"].ownership).toBe("plugin-admin-surface-action");
   });
 
-  it("declares per-domain certificate readiness and guarded renew/revoke actions", async () => {
+	it("declares read-only per-domain certificate readiness without manual renew or revoke", async () => {
     const surface = await json(`${root}/contracts/v1/admin-surface.json`);
     const actions = await json(`${root}/contracts/v1/admin-actions.json`);
     const page = surface.pages.find((candidate: any) => candidate.id === "certificates");
@@ -237,23 +269,15 @@ describe("Server plugin-owned Admin Surface v1", () => {
 
     expect(table.dataCapability).toBe("server.certificates.list");
     expect(table.columns).toEqual(expect.arrayContaining(["domain", "source", "readiness", "serial"]));
-    expect(table.actions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ capability: "server.certificates.get", rowInput: { domain: "domain" } }),
-      expect.objectContaining({ capability: "server.certificates.renew", rowInput: { domain: "domain" } }),
-      expect.objectContaining({ capability: "server.certificates.revoke", rowInput: { domain: "domain", serial: "serial" } }),
-    ]));
-    expect(actions.operations["server.certificates.renew"].acceptedHttpStatus).toBe(202);
-    expect(actions.operations["server.certificates.revoke"].acceptedHttpStatus).toBe(202);
-    expect(actions.operations["server.certificates.revoke"].preconditions).toEqual([
-      "certificate-is-caddy-managed",
-      "serial-matches-current-certificate-for-domain",
-      "non-empty-reason",
-    ]);
+		expect(table.actions).toEqual(expect.arrayContaining([
+			expect.objectContaining({ capability: "server.certificates.get", rowInput: { domain: "domain" } }),
+		]));
+		expect(table.actions.map((action: any) => action.capability)).not.toContain("server.certificates.renew");
+		expect(table.actions.map((action: any) => action.capability)).not.toContain("server.certificates.revoke");
+    expect(actions.operations).not.toHaveProperty("server.certificates.renew");
+    expect(actions.operations).not.toHaveProperty("server.certificates.revoke");
     expect(actions.operations["server.certificates.list"].responseSchema.$defs.certificateSummary.properties.readiness.enum)
       .toEqual(["pending", "ready", "failed", "unknown"]);
-    const revokeAction = table.actions.find((action: any) => action.capability === "server.certificates.revoke");
-    expect(revokeAction.inputSchema.required).toEqual(["domain", "serial", "reason"]);
-    expect(revokeAction.inputSchema.properties.reason.minLength).toBe(1);
   });
 
   it("aligns artifact action inputs and archive safety limits with Server-owned contracts", async () => {
@@ -350,7 +374,6 @@ describe("Server plugin-owned Admin Surface v1", () => {
       "admin-publish-rejects-unicode-nfc-collision",
       "admin-publish-rejects-link-entry",
       "admin-publish-reuses-idempotent-operation",
-      "admin-revoke-rejects-custom-certificate",
       "admin-common-settings-live-in-core",
     ]));
   });

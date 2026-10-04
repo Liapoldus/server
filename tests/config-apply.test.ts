@@ -21,6 +21,12 @@ describe("Caddy plugin settings contract", () => {
     expect(validate({ schemaVersion: 1, config: {}, extra: true })).toBe(false);
   });
 
+  it("does not depend on the retired DispatchApply capability registry", () => {
+    const contract = JSON.stringify(schema);
+    expect(contract).not.toContain("DispatchApply");
+    expect(contract).not.toContain("active DispatchApply generation");
+  });
+
   it("acknowledges a valid revision and retains active settings when a candidate is rejected", () => {
     const activeSettings = { schemaVersion: 1, config: { listeners: [], routes: [] } };
     const input = JSON.stringify({
@@ -43,7 +49,7 @@ describe("Caddy plugin settings contract", () => {
     expect(result.calls[2]).toMatchObject({ applied: false, revision: "", code: "FailedPrecondition" });
     expect(result.activeRevision).toBe("revision-1");
     expect(result.activeConfig).toContain('"listeners":[]');
-  });
+  }, 60_000);
 
   it("activates schema-shaped Caddy settings after validation", async () => {
     const port = await freePort();
@@ -56,6 +62,47 @@ describe("Caddy plugin settings contract", () => {
 
     expect(JSON.parse(output)).toEqual({ revision: "revision-1", status: 200, body: "plugin-owned" });
   }, 60_000);
+
+  it("activates automatic TLS before an unreachable test ACME authority issues a certificate", async () => {
+    const port = await freePort();
+    const host = "pending-acme.example.test";
+    const output = execFileSync("go", ["run", "./tests/fixtures/caddy-activation"], {
+      cwd: root,
+      env: { ...process.env, GOWORK: "off" },
+      input: JSON.stringify({
+        port,
+        skipRequest: true,
+        certificateStatusHost: host,
+        settings: {
+          schemaVersion: 1,
+          config: {
+            listeners: [{
+              id: "automatic-tls",
+              kind: "http",
+              address: `127.0.0.1:${port}`,
+              hostnames: [host],
+              protocols: ["http1"],
+              tls: { mode: "automatic" },
+            }],
+            routes: [],
+          },
+        },
+      }),
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+
+    const result = JSON.parse(output);
+    expect(result.revision).toBe("revision-1");
+    expect(result.certificateStatus).toMatchObject({
+      domain: host,
+      source: "acme",
+      readiness: "pending",
+      notBefore: null,
+      notAfter: null,
+      serial: null,
+    });
+  }, 90_000);
 });
 
 async function freePort(): Promise<number> {

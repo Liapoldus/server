@@ -3,7 +3,7 @@ package caddy
 import (
 	"sync"
 
-	"github.com/Liapoldus/pluginprotocol/presentation/peer"
+	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
 )
 
 // Caddy configuration contains only opaque target IDs. Private keys and trust

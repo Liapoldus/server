@@ -2,6 +2,32 @@
   "contract": "contracts/v1/http-dispatch.json",
   "scenarios": [
     {
+      "id": "http-stream-limits-defaults",
+      "expected": {
+        "maxConcurrentPerInstance": 128,
+        "idleTimeoutMillis": 60000,
+        "maxDurationMillis": 3600000,
+        "timeoutIsIndependentFromUnary": true
+      }
+    },
+    {
+      "id": "http-stream-route-concurrency",
+      "routeMaxConcurrency": 1,
+      "expected": { "extraRequestStatus": 503, "targetDispatch": false }
+    },
+    {
+      "id": "http-stream-idle-timeout",
+      "idleTimeoutMillis": 1000,
+      "responseStarted": true,
+      "expected": { "stream": "close-without-replacing-response" }
+    },
+    {
+      "id": "http-stream-max-duration",
+      "maxDurationMillis": 1800,
+      "activityEveryMillis": 70,
+      "expected": { "stream": "close-at-duration-even-while-active", "replaceResponse": false }
+    },
+    {
       "id": "http-stream-chunked-at-limit",
       "mode": "http_stream",
       "transferEncoding": "chunked",
@@ -12,6 +38,18 @@
         "requestEndSent": true,
         "response": "plugin-response"
       }
+    },
+    {
+      "id": "sse-structured-event-serialization",
+      "mode": "sse",
+      "input": { "event": "update", "data": "first\nsecond", "id": "17", "retry": 1000 },
+      "expected": { "contentType": "text/event-stream", "body": "event: update\\ndata: first\\ndata: second\\nid: 17\\nretry: 1000\\n\\n" }
+    },
+    {
+      "id": "sse-invalid-event-after-response-start",
+      "mode": "sse",
+      "input": { "data": "safe", "id": "bad\\nInjected: value" },
+      "expected": { "stream": "close", "replaceResponse": false }
     },
     {
       "id": "http-stream-chunked-over-limit-before-response-start",
@@ -38,6 +76,41 @@
         "replaceResponse": false,
         "cancelStream": true
       }
+    },
+    {
+      "id": "websocket-plugin-accepts-before-upgrade-and-selects-offered-subprotocol",
+      "mode": "websocket",
+      "clientSubprotocols": ["forms.v1", "forms.v2"],
+      "pluginDecision": { "accept": true, "subprotocol": "forms.v1" },
+      "expected": { "status": 101, "subprotocol": "forms.v1" }
+    },
+    {
+      "id": "websocket-plugin-rejects-before-upgrade",
+      "mode": "websocket",
+      "pluginDecision": { "accept": false, "status": 403 },
+      "expected": { "status": 403, "upgraded": false }
+    },
+    {
+      "id": "websocket-unoffered-subprotocol-is-rejected-before-upgrade",
+      "mode": "websocket",
+      "clientSubprotocols": ["forms.v1"],
+      "pluginDecision": { "accept": true, "subprotocol": "forms.private" },
+      "expected": { "status": "invalidResponseStatus", "upgraded": false }
+    },
+    {
+      "id": "websocket-text-binary-message-boundaries",
+      "mode": "websocket",
+      "messages": [
+        { "type": "text", "chunks": ["hel", "lo"] },
+        { "type": "binary", "chunksBase64": ["AAEC", "/w=="] }
+      ],
+      "expected": { "messageTypes": ["text", "binary"], "messageCount": 2, "boundariesPreserved": true }
+    },
+    {
+      "id": "websocket-message-over-limit-closes-with-1009",
+      "mode": "websocket",
+      "messageBytes": "maxMessageBytes+1",
+      "expected": { "closeCode": 1009, "pluginReceivesOversizedMessage": false }
     }
   ]
 }

@@ -2,7 +2,11 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -11,19 +15,29 @@ import (
 	"path/filepath"
 	"time"
 
+	caddycore "github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/certmagic"
 	"liapoldus.local/server-plugin/internal/application"
+	caddymodels "liapoldus.local/server-plugin/internal/domain/models"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type input struct {
-	Port            int               `json:"port"`
-	Settings        json.RawMessage   `json:"settings"`
-	Candidate       json.RawMessage   `json:"candidateSettings"`
-	Candidates      []json.RawMessage `json:"candidates"`
-	Requests        []httpRequest     `json:"requests"`
-	SiteContent     string            `json:"siteContent"`
-	SiteFileContent string            `json:"siteFileContent"`
+	Port                  int               `json:"port"`
+	Settings              json.RawMessage   `json:"settings"`
+	SkipRequest           bool              `json:"skipRequest"`
+	CertificateStatusHost string            `json:"certificateStatusHost"`
+	ACMEDirectory         string            `json:"acmeDirectory"`
+	ACMERootPEM           string            `json:"acmeRootPEM"`
+	ACMETransportRootPEM  string            `json:"acmeTransportRootPEM"`
+	HTTPChallengePort     int               `json:"httpChallengePort"`
+	ForceRenew            bool              `json:"forceRenew"`
+	Candidate             json.RawMessage   `json:"candidateSettings"`
+	Candidates            []json.RawMessage `json:"candidates"`
+	Requests              []httpRequest     `json:"requests"`
+	SiteContent           string            `json:"siteContent"`
+	SiteFileContent       string            `json:"siteFileContent"`
 }
 
 type httpRequest struct {
@@ -43,12 +57,30 @@ func main() {
 	check(err)
 	var request input
 	check(json.Unmarshal(contents, &request))
-	storageDirectory, err := os.MkdirTemp("", "liapoldus-caddy-activation-")
+	_, cleanup, err := shared.IsolateCaddyDataHome()
 	check(err)
-	defer func() { _ = os.RemoveAll(storageDirectory) }()
-	check(os.Setenv("XDG_DATA_HOME", storageDirectory))
+	defer cleanup()
+	var acmeRoots *x509.CertPool
+	if request.ACMEDirectory != "" {
+		acmeRoots = x509.NewCertPool()
+		if !acmeRoots.AppendCertsFromPEM([]byte(request.ACMERootPEM)) || request.HTTPChallengePort < 1 {
+			panic("invalid test ACME authority")
+		}
+		acmeTransportRoots := x509.NewCertPool()
+		if !acmeTransportRoots.AppendCertsFromPEM([]byte(request.ACMETransportRootPEM)) {
+			panic("invalid test ACME transport CA")
+		}
+		certmagic.DefaultACME.CA = request.ACMEDirectory
+		certmagic.DefaultACME.TestCA = request.ACMEDirectory
+		certmagic.DefaultACME.TrustedRoots = acmeTransportRoots
+		certmagic.DefaultACME.Agreed = true
+		certmagic.DefaultACME.AltHTTPPort = request.HTTPChallengePort
+		certmagic.DefaultACME.DisableTLSALPNChallenge = true
+		certmagic.Default.Storage = caddycore.DefaultStorage
+	}
 
 	runtime := caddyruntime.New()
+	check(shared.RegisterSiteDirectoryReader())
 	siteRoot, err := caddyruntime.SiteRoot("frontend")
 	check(err)
 	check(os.MkdirAll(siteRoot, 0o700))
@@ -81,7 +113,11 @@ func main() {
 		check(err)
 	}
 	check(shared.Apply(configuration, settings, "revision-1", nil))
-	defer func() { _ = configuration.Stop() }()
+	defer func() {
+		if configuration != nil {
+			_ = configuration.Stop()
+		}
+	}()
 	candidateCode := ""
 	if len(request.Candidate) > 0 {
 		candidateErr := shared.Apply(configuration, request.Candidate, "revision-2", nil)
@@ -99,7 +135,7 @@ func main() {
 		}
 	}
 	requests := request.Requests
-	if len(requests) == 0 {
+	if len(requests) == 0 && !request.SkipRequest {
 		requests = []httpRequest{{Target: "/"}}
 	}
 	responses := make([]httpResponse, 0, len(requests))
@@ -109,8 +145,10 @@ func main() {
 		check(requestErr)
 		responses = append(responses, response)
 	}
-	output := map[string]any{
-		"revision": configuration.Revision(), "status": responses[0].Status, "body": responses[0].Body,
+	output := map[string]any{"revision": configuration.Revision()}
+	if len(responses) > 0 {
+		output["status"] = responses[0].Status
+		output["body"] = responses[0].Body
 	}
 	if len(request.Candidate) > 0 {
 		output["candidateCode"] = candidateCode
@@ -122,10 +160,89 @@ func main() {
 	}
 	if len(request.Requests) > 0 {
 		output["responses"] = responses
-		delete(output, "status")
-		delete(output, "body")
+		if len(responses) > 0 {
+			delete(output, "status")
+			delete(output, "body")
+		}
+	}
+	if request.ACMEDirectory != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		before := waitForCertificate(ctx, runtime, request.CertificateStatusHost)
+		cancel()
+		output["certificateStatus"] = before
+		if request.ForceRenew {
+			magic := certmagic.NewDefault()
+			check(magic.RenewCertSync(context.Background(), request.CertificateStatusHost, true))
+			check(configuration.Stop())
+			configuration = nil
+			runtime = caddyruntime.New()
+			configuration, err = application.NewConfiguration(runtime)
+			check(err)
+			check(shared.Apply(configuration, settings, "revision-1", nil))
+			ctx, cancel = context.WithTimeout(context.Background(), 90*time.Second)
+			after := waitForCertificate(ctx, runtime, request.CertificateStatusHost)
+			cancel()
+			output["renewal"] = map[string]any{
+				"completed":          true,
+				"changedCertificate": before.Serial != nil && after.Serial != nil && *before.Serial != *after.Serial,
+				"beforeSerial":       before.Serial,
+				"afterSerial":        after.Serial,
+			}
+			output["certificateStatus"] = after
+			response, probeErr := performTLSRequest(request.Port, request.CertificateStatusHost, acmeRoots)
+			check(probeErr)
+			output["tlsProbe"] = map[string]any{
+				"status":     response.Status,
+				"body":       response.Body,
+				"serverName": request.CertificateStatusHost,
+			}
+		}
+	}
+	if request.CertificateStatusHost != "" {
+		status, statusErr := runtime.CertificateStatus(context.Background(), request.CertificateStatusHost)
+		check(statusErr)
+		output["certificateStatus"] = status
 	}
 	check(json.NewEncoder(os.Stdout).Encode(output))
+}
+
+func waitForCertificate(ctx context.Context, runtime *caddyruntime.Runtime, host string) caddymodels.CertificateStatus {
+	if host == "" {
+		panic("certificate status host is required")
+	}
+	for {
+		status, err := runtime.CertificateStatus(ctx, host)
+		check(err)
+		if status.Readiness == "ready" {
+			return status
+		}
+		select {
+		case <-ctx.Done():
+			panic(errors.New("test ACME certificate did not become ready"))
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}
+
+func performTLSRequest(port int, host string, roots *x509.CertPool) (httpResponse, error) {
+	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, ServerName: host}}
+	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
+	defer transport.CloseIdleConnections()
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d/", port), nil)
+	if err != nil {
+		return httpResponse{}, err
+	}
+	request.Host = host
+	response, err := client.Do(request)
+	if err != nil {
+		return httpResponse{}, err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return httpResponse{}, err
+	}
+	return httpResponse{Status: response.StatusCode, Body: string(body)}, nil
 }
 
 func performRequest(client *http.Client, port int, request httpRequest) (httpResponse, error) {

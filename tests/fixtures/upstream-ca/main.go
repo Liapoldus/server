@@ -19,8 +19,6 @@ import (
 	"os"
 	"time"
 
-	caddycore "github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/certmagic"
 	"liapoldus.local/server-plugin/internal/application"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
@@ -40,12 +38,10 @@ type input struct {
 func main() {
 	var request input
 	check(json.NewDecoder(os.Stdin).Decode(&request))
-	storageDirectory, err := os.MkdirTemp("", "server-")
+	storageDirectory, cleanup, err := shared.IsolateCaddyDataHome()
 	check(err)
-	defer func() { _ = os.RemoveAll(storageDirectory) }()
+	defer cleanup()
 	check(os.Setenv("HOME", storageDirectory))
-	check(os.Setenv("XDG_DATA_HOME", storageDirectory))
-	caddycore.DefaultStorage = &certmagic.FileStorage{Path: storageDirectory}
 
 	certificate, caPEM := makeCertificate(request.WrongHostname)
 	var fallbackRequests int
