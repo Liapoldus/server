@@ -13,15 +13,16 @@
 
 Текущий worktree прошёл `GOWORK=off npm test -- --maxWorkers=1`
 (30 файлов / 79 тестов), `GOWORK=off go test ./...`, `go build ./...`,
-`go vet ./...` и `git diff --check`. Это macOS runtime; hosted CI и
-опубликованные docs pins остаются открытыми.
+`go vet ./...` и `git diff --check`. Это macOS runtime; на дату записи hosted
+CI и docs pins оставались открытыми, последующий результат зафиксирован выше
+в проверке публикации 2026-10-05.
 
 Linux-проверка 2026-10-04: в Ubuntu 24.04.5 ARM64 VM под OrbStack прошли
 полный Server suite (30 файлов / 79 тестов), `go test ./...`, `go build ./...`
 и `go vet ./...`; suite включает HTTP/1.1, HTTP/2/3, ACME Pebble, Caddy REST
 child process, site artifacts, WebSocket и SSE. Это Linux VM runtime evidence;
-hosted CI и published docs pins остаются открытыми. Отдельный bare-metal host
-не требуется для v1.
+на дату snapshot-а hosted CI и docs pins оставались открытыми, оба gate прошли
+2026-10-05. Отдельный bare-metal host не требуется для v1.
 
 Дополнение 2026-10-04: `AGENTS.md` теперь различает correlation-only
 `Idempotency-Key` у синхронных JSON actions и operation-level dedup для
