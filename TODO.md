@@ -1,5 +1,14 @@
 # TODO — Server plugin v1
 
+## Проверка публикации — 2026-10-05
+
+Коммит `8e8b653` опубликован в `origin/main`; hosted Ubuntu verify прошёл,
+включая `go build`, `go vet`, `go test` и полный TypeScript suite (30 файлов /
+79 тестов, в том числе Pebble/ACME). Локально `GOWORK=off` build/vet прошли,
+30 файлов / 79 тестов прошли без локального ACME test: OrbStack показывает
+`Running`, но его Docker API socket не отвечает. Server использует SDK
+`v1.0.0` и protocol module `/v2 v2.0.0` без локальных `replace`.
+
 ## Повторная проверка — 2026-10-04
 
 Текущий worktree прошёл `GOWORK=off npm test -- --maxWorkers=1`
