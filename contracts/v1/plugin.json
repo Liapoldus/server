@@ -1,34 +1,34 @@
 {
-  "name": "server",
-  "configuration": {
-    "schemaVersion": 1,
-    "versionField": "schemaVersion",
-    "runtimeConfigField": "config"
+  "adminSurface": {
+    "actions": "contracts/v1/admin-actions.json",
+    "actionsSchema": "contracts/v1/admin-actions.schema.json",
+    "conformanceVectors": "contracts/v1/admin-surface-vectors.json",
+    "descriptor": "contracts/v1/admin-surface.json",
+    "schema": "contracts/v1/admin-surface.schema.json",
+    "version": 1
   },
   "configSchema": {
-    "semantics": "contracts/v1/settings-semantics.json",
     "conformanceVectors": "contracts/v1/settings-vectors.json",
     "fields": [
       {
+        "description": "Public HTTP and HTTPS listeners. Validate the complete settings revision against the plugin-owned settings.schema.json contract.",
         "name": "listeners",
-        "type": "array",
         "required": true,
-        "description": "Public HTTP and HTTPS listeners. Validate the complete settings revision against the plugin-owned settings.schema.json contract."
+        "type": "array"
       },
       {
+        "description": "Ordered terminal HTTP routes. Native Caddy JSON and Caddyfile input are not accepted.",
         "name": "routes",
-        "type": "array",
         "required": true,
-        "description": "Ordered terminal HTTP routes. Native Caddy JSON and Caddyfile input are not accepted."
+        "type": "array"
       }
-    ]
+    ],
+    "semantics": "contracts/v1/settings-semantics.json"
   },
-  "adminSurface": {
-    "version": 1,
-    "descriptor": "contracts/v1/admin-surface.json",
-    "schema": "contracts/v1/admin-surface.schema.json",
-    "actions": "contracts/v1/admin-actions.json",
-    "actionsSchema": "contracts/v1/admin-actions.schema.json",
-    "conformanceVectors": "contracts/v1/admin-surface-vectors.json"
-  }
+  "configuration": {
+    "runtimeConfigField": "config",
+    "schemaVersion": 1,
+    "versionField": "schemaVersion"
+  },
+  "name": "server"
 }

@@ -1,30 +1,58 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://liapoldus.github.io/plugins/server/v1/artifact-metadata.schema.json",
-  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "required": ["version", "artifact", "payload"],
   "properties": {
-    "version": { "const": 1 },
     "artifact": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["mediaType", "byteLength", "sha256"],
       "properties": {
-        "mediaType": { "const": "application/gzip" },
-        "byteLength": { "type": "integer", "minimum": 1, "maximum": 134217728 },
-        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
-      }
+        "byteLength": {
+          "maximum": 134217728,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mediaType": {
+          "const": "application/gzip"
+        },
+        "sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mediaType",
+        "byteLength",
+        "sha256"
+      ],
+      "type": "object"
     },
     "payload": {
-      "description": "Server capability validates its own schema before accepting the artifact.",
-      "type": "object",
       "additionalProperties": false,
-      "required": ["siteId"],
+      "description": "Server capability validates its own schema before accepting the artifact.",
       "properties": {
-          "siteId": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "expectedCurrentRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
-      }
+        "expectedCurrentRevision": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "siteId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "siteId"
+      ],
+      "type": "object"
+    },
+    "version": {
+      "const": 1
     }
-  }
+  },
+  "required": [
+    "version",
+    "artifact",
+    "payload"
+  ],
+  "type": "object"
 }

@@ -1,12 +1,24 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://liapoldus.github.io/plugins/server/v1/artifact-operation-result.schema.json",
-  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "required": ["version", "operationId", "state"],
   "properties": {
-    "version": { "const": 1 },
-    "operationId": { "type": "string", "minLength": 1, "maxLength": 256 },
-    "state": { "const": "accepted" }
-  }
+    "operationId": {
+      "maxLength": 256,
+      "minLength": 1,
+      "type": "string"
+    },
+    "state": {
+      "const": "accepted"
+    },
+    "version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "version",
+    "operationId",
+    "state"
+  ],
+  "type": "object"
 }

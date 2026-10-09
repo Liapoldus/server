@@ -3,10 +3,10 @@ package interfaces
 import (
 	"context"
 
-	"liapoldus.local/server-plugin/internal/domain/models"
+	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
 )
 
 type CertificateInventory interface {
-	ListCertificates(context.Context, string, int, string) (models.CertificatePage, error)
-	CertificateStatus(context.Context, string) (models.CertificateStatus, error)
+	ListCertificates(context.Context, string, int, string) (certificatemodel.CertificatePage, error)
+	CertificateStatus(context.Context, string) (certificatemodel.CertificateStatus, error)
 }

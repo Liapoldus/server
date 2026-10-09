@@ -1,42 +1,57 @@
 {
-  "version": 1,
-  "settingsSchema": "settings.schema.json",
+  "automaticHttpsRedirect": {
+    "automaticTlsListener": "ACME-managed certificates and HTTPS only; it does not create a separate HTTP socket implicitly",
+    "hostCoverage": "the canonical request host must be covered by a hostname declared on the target listener; otherwise return 421 Misdirected Request without Location",
+    "location": "https scheme + canonical request host + canonical request path + original query",
+    "method": "preserved by the 308 response",
+    "sourceListener": "an explicit HTTP listener with tls.mode=disabled, protocols=[http1], redirectToListenerId targeting a TLS-enabled HTTP listener, and no routes",
+    "status": 308
+  },
   "path": {
-    "requestPath": {
-      "source": "HTTP request-target path before the first query delimiter; the query is kept separately",
-      "percentDecode": "strictly once, after splitting the query",
-      "reject": ["malformed-percent-encoding", "NUL", "C0-or-DEL-control", "invalid-UTF-8-after-decoding"],
-      "dotSegments": "remove RFC 3986 dot segments after percent decoding; parent segments above root stay at root",
-      "repeatedSlashes": "collapse to one slash after percent decoding",
-      "trailingSlash": "preserve when the decoded path ends with slash, slash-dot, or slash-dot-dot",
-      "query": "excluded from route matching and preserved unchanged for handlers"
-    },
     "configuredPath": {
       "exactPrefixGlob": {
-        "representation": "already-decoded canonical absolute path text, not a URL or request-target",
         "leadingSlash": "required",
-        "validation": "reject NUL/control, invalid UTF-8, repeated slashes, and literal . or .. path segments; preserve trailing slash",
+        "normalization": "reject non-canonical input instead of rewriting it",
         "percentDecode": "never; percent is an ordinary literal character",
-        "normalization": "reject non-canonical input instead of rewriting it"
+        "representation": "already-decoded canonical absolute path text, not a URL or request-target",
+        "validation": "reject NUL/control, invalid UTF-8, repeated slashes, and literal . or .. path segments; preserve trailing slash"
       },
       "regex": {
         "engine": "Go RE2",
         "input": "regex source is not path-normalized",
-        "validation": "compile during SDK Reload candidate apply; reject invalid UTF-8 and NUL/control",
-        "match": "the regex match must cover the complete canonical request path"
+        "match": "the regex match must cover the complete canonical request path",
+        "validation": "compile during SDK Reload candidate apply; reject invalid UTF-8 and NUL/control"
       }
     },
     "glob": {
+      "match": "the glob must match the complete canonical request path",
+      "tokenization": "scan left to right and choose the longest token; ** is recognized before *; *** is ** followed by *",
       "tokens": {
         "*": "zero or more Unicode code points other than slash",
         "**": "zero or more Unicode code points including slash",
         "?": "exactly one Unicode code point other than slash"
       },
-      "tokenization": "scan left to right and choose the longest token; ** is recognized before *; *** is ** followed by *",
-      "unsupported": ["character classes", "escaping"],
-      "match": "the glob must match the complete canonical request path"
+      "unsupported": [
+        "character classes",
+        "escaping"
+      ]
+    },
+    "requestPath": {
+      "dotSegments": "remove RFC 3986 dot segments after percent decoding; parent segments above root stay at root",
+      "percentDecode": "strictly once, after splitting the query",
+      "query": "excluded from route matching and preserved unchanged for handlers",
+      "reject": [
+        "malformed-percent-encoding",
+        "NUL",
+        "C0-or-DEL-control",
+        "invalid-UTF-8-after-decoding"
+      ],
+      "repeatedSlashes": "collapse to one slash after percent decoding",
+      "source": "HTTP request-target path before the first query delimiter; the query is kept separately",
+      "trailingSlash": "preserve when the decoded path ends with slash, slash-dot, or slash-dot-dot"
     }
   },
+  "settingsSchema": "settings.schema.json",
   "socketAddress": {
     "format": "host:port; IPv6 host must be bracketed",
     "host": "empty wildcard or IP literal only; DNS names are not bind addresses",
@@ -44,25 +59,18 @@
     "ipv6": "validated with Go net/netip ParseAddr; zone identifiers are rejected",
     "port": "ASCII decimal integer 1 through 65535; leading zeroes are rejected"
   },
-  "automaticHttpsRedirect": {
-    "automaticTlsListener": "ACME-managed certificates and HTTPS only; it does not create a separate HTTP socket implicitly",
-    "sourceListener": "an explicit HTTP listener with tls.mode=disabled, protocols=[http1], redirectToListenerId targeting a TLS-enabled HTTP listener, and no routes",
-    "hostCoverage": "the canonical request host must be covered by a hostname declared on the target listener; otherwise return 421 Misdirected Request without Location",
-    "status": 308,
-    "location": "https scheme + canonical request host + canonical request path + original query",
-    "method": "preserved by the 308 response"
-  },
   "upstreamPool": {
+    "activeHealthChecks": false,
+    "eligibilityChange": "reset current weights for all origins in the new eligible set",
+    "noRetryOrExclusion": "TLS handshake/verification failure and any failure after TCP connect",
+    "passiveFailure": "TCP connection refusal or timeout before request bytes; exclude only that origin for 30 seconds",
+    "retry": "at most one next eligible origin, only after TCP connect refusal or timeout before any request byte",
     "scope": "independent smooth-weight state per route",
     "selection": [
       "For each eligible origin, add its configured weight to its current weight.",
       "Select the origin with the greatest current weight; ties use original array order.",
       "Subtract the sum of eligible weights from the selected origin's current weight."
-    ],
-    "eligibilityChange": "reset current weights for all origins in the new eligible set",
-    "passiveFailure": "TCP connection refusal or timeout before request bytes; exclude only that origin for 30 seconds",
-    "retry": "at most one next eligible origin, only after TCP connect refusal or timeout before any request byte",
-    "noRetryOrExclusion": "TLS handshake/verification failure and any failure after TCP connect",
-    "activeHealthChecks": false
-  }
+    ]
+  },
+  "version": 1
 }

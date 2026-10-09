@@ -1,196 +1,922 @@
 {
-  "version": 1,
-  "plugin": "server",
   "archive": {
-    "mediaType": "application/gzip",
-    "minArtifactBytes": 1,
     "artifactBytes": 134217728,
-    "metadataBytes": 65536,
-    "multipartOverheadBytes": 65536,
-    "requestEnvelopeBytes": 134348800,
-  "expandedBytes": 536870912,
-  "maxFiles": 10000,
-  "entryCountSemantics": {
-    "unit": "logical-tar-member-after-extension-processing",
-    "countedKinds": ["regular-file", "directory"],
-    "implicitParentDirectories": "not-counted"
-  },
-  "maxCompressionRatio": 100,
+    "entryCountSemantics": {
+      "countedKinds": [
+        "regular-file",
+        "directory"
+      ],
+      "implicitParentDirectories": "not-counted",
+      "unit": "logical-tar-member-after-extension-processing"
+    },
+    "expandedBytes": 536870912,
     "gzip": {
-      "members": "concatenated-members-allowed",
       "integrity": "drain-all-members-through-eof",
+      "members": "concatenated-members-allowed",
       "trailingCompressedBytes": "reject-unless-part-of-valid-gzip-member"
     },
+    "maxCompressionRatio": 100,
+    "maxFiles": 10000,
+    "mediaType": "application/gzip",
+    "metadataBytes": 65536,
+    "minArtifactBytes": 1,
+    "multipartOverheadBytes": 65536,
+    "rejectedEntries": [
+      "absolute-path",
+      "path-traversal",
+      "symbolic-link",
+      "hard-link",
+      "duplicate-path",
+      "case-collision",
+      "unicode-nfc-collision",
+      "special-file"
+    ],
+    "requestEnvelopeBytes": 134348800,
     "tar": {
       "archiveCount": "one-tar-stream",
-      "terminator": "two-consecutive-512-byte-zero-blocks",
-      "postTerminatorBytes": "zero-padding-only"
+      "postTerminatorBytes": "zero-padding-only",
+      "terminator": "two-consecutive-512-byte-zero-blocks"
     },
-    "validationChecks": ["gzip-integrity", "tar-integrity", "streamed-sha256", "metadata-artifact-descriptor-equality", "aggregate-expanded-byte-limit", "file-count-limit", "compression-ratio-limit"],
-    "rejectedEntries": ["absolute-path", "path-traversal", "symbolic-link", "hard-link", "duplicate-path", "case-collision", "unicode-nfc-collision", "special-file"]
+    "validationChecks": [
+      "gzip-integrity",
+      "tar-integrity",
+      "streamed-sha256",
+      "metadata-artifact-descriptor-equality",
+      "aggregate-expanded-byte-limit",
+      "file-count-limit",
+      "compression-ratio-limit"
+    ]
   },
-  "releaseLifecycle": {
-    "immutableRevisions": true,
-    "storage": "plugin-owned-persistent-filesystem",
-    "currentPrevious": "successful-publish-or-rollback-atomically-swaps-current-and-previous",
-    "staging": "validate-complete-staged-release-before-activation",
-    "activation": "atomic-current-previous-pointer-swap-only-after-successful-terminal-operation",
-    "failure": "keep-current-and-previous-unchanged",
-    "publishStatus": 202
+  "operationStatus": {
+    "coreControlUsesPluginSdkRest": true,
+    "coreResource": "GET /api/operations/{id}",
+    "coreStates": [
+      "pending",
+      "running",
+      "succeeded",
+      "failed",
+      "degraded"
+    ],
+    "pluginStates": [
+      "accepted",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "pluginStatusCapability": "server.operations.get",
+    "stateMapping": {
+      "accepted": "pending",
+      "completed": "succeeded",
+      "failed": "failed",
+      "running": "running"
+    },
+    "workerPollMilliseconds": 100
   },
+  "operations": {
+    "server.certificates.get": {
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "httpStatus": 200,
+      "kind": "action",
+      "ownership": "plugin-admin-surface-action",
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "maxLength": 253,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "maxLength": 253,
+            "minLength": 1,
+            "type": "string"
+          },
+          "lastErrorCode": {
+            "maxLength": 128,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notAfter": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notBefore": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "readiness": {
+            "enum": [
+              "pending",
+              "ready",
+              "failed",
+              "unknown"
+            ]
+          },
+          "serial": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "enum": [
+              "acme",
+              "custom"
+            ]
+          }
+        },
+        "required": [
+          "domain",
+          "source",
+          "readiness",
+          "notBefore",
+          "notAfter",
+          "serial",
+          "lastErrorCode"
+        ],
+        "type": "object"
+      },
+      "surfaceBinding": {
+        "action": "status",
+        "page": "certificates",
+        "section": "domains"
+      }
+    },
+    "server.certificates.list": {
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "httpStatus": 200,
+      "kind": "query",
+      "ownership": "plugin-admin-surface-capability",
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "domain": {
+            "maxLength": 253,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "responseSchema": {
+        "$defs": {
+          "certificateSummary": {
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "maxLength": 253,
+                "minLength": 1,
+                "type": "string"
+              },
+              "notAfter": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "readiness": {
+                "enum": [
+                  "pending",
+                  "ready",
+                  "failed",
+                  "unknown"
+                ]
+              },
+              "serial": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source": {
+                "enum": [
+                  "acme",
+                  "custom"
+                ]
+              }
+            },
+            "required": [
+              "domain",
+              "source",
+              "readiness",
+              "notAfter",
+              "serial"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/certificateSummary"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      }
+    },
+    "server.operations.get": {
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "httpStatus": 200,
+      "kind": "action",
+      "ownership": "plugin-admin-surface-action",
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operationId"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "errorCode": {
+            "maxLength": 128,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "operationId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "progressPercent": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "siteId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "enum": [
+              "accepted",
+              "running",
+              "completed",
+              "failed"
+            ]
+          },
+          "updatedAt": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operationId",
+          "siteId",
+          "kind",
+          "state",
+          "progressPercent",
+          "updatedAt",
+          "errorCode"
+        ],
+        "type": "object"
+      },
+      "surfaceBinding": {
+        "action": "status",
+        "page": "sites",
+        "section": "operations"
+      }
+    },
+    "server.operations.list": {
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "httpStatus": 200,
+      "kind": "query",
+      "ownership": "plugin-admin-surface-capability",
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "accepted",
+              "running",
+              "completed",
+              "failed"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "responseSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "operationId": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "progressPercent": {
+                  "maximum": 100,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "siteId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "accepted",
+                    "running",
+                    "completed",
+                    "failed"
+                  ]
+                },
+                "updatedAt": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "operationId",
+                "siteId",
+                "kind",
+                "state",
+                "progressPercent",
+                "updatedAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      }
+    },
+    "server.sites.list": {
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "httpStatus": 200,
+      "kind": "query",
+      "ownership": "plugin-admin-surface-capability",
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "responseSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "currentRevision": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "previousRevision": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "siteId": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "siteId",
+                "currentRevision",
+                "previousRevision",
+                "updatedAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      }
+    },
+    "server.sites.publish": {
+      "acceptedHttpStatus": 202,
+      "archiveLimits": {
+        "artifactBytes": 134217728,
+        "entryCountSemantics": {
+          "countedKinds": [
+            "regular-file",
+            "directory"
+          ],
+          "implicitParentDirectories": "not-counted",
+          "unit": "logical-tar-member-after-extension-processing"
+        },
+        "expandedBytes": 536870912,
+        "gzip": {
+          "integrity": "drain-all-members-through-eof",
+          "members": "concatenated-members-allowed",
+          "trailingCompressedBytes": "reject-unless-part-of-valid-gzip-member"
+        },
+        "maxCompressionRatio": 100,
+        "maxFiles": 10000,
+        "mediaType": "application/gzip",
+        "metadataBytes": 65536,
+        "minArtifactBytes": 1,
+        "multipartOverheadBytes": 65536,
+        "rejectedEntries": [
+          "absolute-path",
+          "path-traversal",
+          "symbolic-link",
+          "hard-link",
+          "duplicate-path",
+          "case-collision",
+          "unicode-nfc-collision",
+          "special-file"
+        ],
+        "requestEnvelopeBytes": 134348800,
+        "tar": {
+          "archiveCount": "one-tar-stream",
+          "postTerminatorBytes": "zero-padding-only",
+          "terminator": "two-consecutive-512-byte-zero-blocks"
+        },
+        "validationChecks": [
+          "gzip-integrity",
+          "tar-integrity",
+          "streamed-sha256",
+          "metadata-artifact-descriptor-equality",
+          "aggregate-expanded-byte-limit",
+          "file-count-limit",
+          "compression-ratio-limit"
+        ]
+      },
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "operation_failed": {
+          "http": 500,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "idempotency": {
+        "differentInput": "reject-before-acceptance-with-ALREADY_EXISTS",
+        "required": true,
+        "sameInput": "return-existing-operation-without-duplicate-effect",
+        "scope": [
+          "plugin-instance",
+          "capability",
+          "idempotency-key"
+        ]
+      },
+      "kind": "artifact-action",
+      "multipart": {
+        "artifactFilenameForwarded": false,
+        "order": [
+          "metadata",
+          "artifact"
+        ],
+        "parts": [
+          "metadata",
+          "artifact"
+        ]
+      },
+      "ownership": "plugin-admin-surface-action",
+      "receiptSchema": "contracts/v1/artifact-operation-result.schema.json",
+      "revisionPrecondition": "if current exists, expectedCurrentRevision is required and must match; for a new site, expectedCurrentRevision must be omitted",
+      "surfaceBinding": {
+        "action": "publish",
+        "page": "sites",
+        "section": "sites"
+      },
+      "transport": "plugin-sdk.rest.artifact-stream"
+    },
+    "server.sites.releases.list": {
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "httpStatus": 200,
+      "kind": "query",
+      "ownership": "plugin-admin-surface-capability",
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "siteId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "siteId"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "createdAt": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "revisionId": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sha256": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "siteId": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "current",
+                    "previous",
+                    "available"
+                  ]
+                }
+              },
+              "required": [
+                "siteId",
+                "revisionId",
+                "state",
+                "sha256",
+                "createdAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      }
+    },
+    "server.sites.rollback": {
+      "errors": {
+        "conflict": {
+          "http": 409,
+          "retryable": false
+        },
+        "invalid_input": {
+          "http": 400,
+          "retryable": false
+        },
+        "not_found": {
+          "http": 404,
+          "retryable": false
+        },
+        "unavailable": {
+          "http": 503,
+          "retryable": true
+        }
+      },
+      "httpStatus": 200,
+      "idempotency": {
+        "repeat": "invoke-again",
+        "required": true,
+        "scope": [
+          "plugin-instance",
+          "capability",
+          "idempotency-key"
+        ],
+        "semantics": "correlation-only"
+      },
+      "kind": "action",
+      "ownership": "plugin-admin-surface-action",
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "expectedCurrentRevision": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "siteId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "targetRevision": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "siteId",
+          "expectedCurrentRevision",
+          "targetRevision"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "currentRevision": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "previousRevision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "siteId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "siteId",
+          "currentRevision",
+          "previousRevision"
+        ],
+        "type": "object"
+      },
+      "surfaceBinding": {
+        "action": "rollback",
+        "page": "sites",
+        "section": "sites"
+      }
+    }
+  },
+  "plugin": "server",
   "publishOperation": {
     "acceptance": "after-validated-metadata-and-bounded-artifact-bytes-are-durably-stored-and-sha256-matches",
     "archiveValidation": "asynchronous-durable-operation-before-release-activation",
     "archiveValidationFailure": "operation-failed-with-stable-error-code-current-and-previous-unchanged",
     "currentPointer": "changes-only-after-all-archive-and-manifest-validation-succeeds"
   },
-  "operationStatus": {
-    "coreResource": "GET /api/operations/{id}",
-    "workerPollMilliseconds": 100,
-    "pluginStatusCapability": "server.operations.get",
-    "pluginStates": ["accepted", "running", "completed", "failed"],
-    "coreStates": ["pending", "running", "succeeded", "failed", "degraded"],
-    "stateMapping": { "accepted": "pending", "running": "running", "completed": "succeeded", "failed": "failed" },
-    "coreControlUsesPluginSdkRest": true
+  "releaseLifecycle": {
+    "activation": "atomic-current-previous-pointer-swap-only-after-successful-terminal-operation",
+    "currentPrevious": "successful-publish-or-rollback-atomically-swaps-current-and-previous",
+    "failure": "keep-current-and-previous-unchanged",
+    "immutableRevisions": true,
+    "publishStatus": 202,
+    "staging": "validate-complete-staged-release-before-activation",
+    "storage": "plugin-owned-persistent-filesystem"
   },
-  "operations": {
-    "server.sites.list": {
-      "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
-      "requestSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "cursor": { "type": "string", "minLength": 1, "maxLength": 1024 },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
-        },
-        "required": [],
-        "additionalProperties": false
-      },
-      "responseSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "siteId": { "type": "string", "minLength": 1, "maxLength": 128 },
-                "currentRevision": { "type": ["string", "null"] },
-                "previousRevision": { "type": ["string", "null"] },
-                "updatedAt": { "type": "string", "minLength": 1 }
-              },
-              "required": ["siteId", "currentRevision", "previousRevision", "updatedAt"],
-              "additionalProperties": false
-            }
-          },
-          "nextCursor": { "type": ["string", "null"] }
-        },
-        "required": ["items", "nextCursor"],
-        "additionalProperties": false
-      },
-      "httpStatus": 200,
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.sites.releases.list": {
-      "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
-      "requestSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": { "siteId": { "type": "string", "minLength": 1, "maxLength": 128 }, "cursor": { "type": "string", "minLength": 1, "maxLength": 1024 }, "limit": { "type": "integer", "minimum": 1, "maximum": 100 } },
-        "required": ["siteId"],
-        "additionalProperties": false
-      },
-      "responseSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "items": { "type": "array", "items": { "type": "object", "properties": { "siteId": { "type": "string", "minLength": 1 }, "revisionId": { "type": "string", "minLength": 1 }, "state": { "enum": ["current", "previous", "available"] }, "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }, "createdAt": { "type": "string", "minLength": 1 } }, "required": ["siteId", "revisionId", "state", "sha256", "createdAt"], "additionalProperties": false } },
-          "nextCursor": { "type": ["string", "null"] }
-        },
-        "required": ["items", "nextCursor"],
-        "additionalProperties": false
-      },
-      "httpStatus": 200,
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.sites.rollback": {
-      "kind": "action",
-      "ownership": "plugin-admin-surface-action",
-      "surfaceBinding": { "page": "sites", "section": "sites", "action": "rollback" },
-      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "siteId": { "type": "string", "minLength": 1, "maxLength": 128 }, "expectedCurrentRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "targetRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }, "required": ["siteId", "expectedCurrentRevision", "targetRevision"], "additionalProperties": false },
-      "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "siteId": { "type": "string", "minLength": 1 }, "currentRevision": { "type": "string", "minLength": 1 }, "previousRevision": { "type": ["string", "null"] } }, "required": ["siteId", "currentRevision", "previousRevision"], "additionalProperties": false },
-      "httpStatus": 200,
-      "idempotency": { "required": true, "scope": ["plugin-instance", "capability", "idempotency-key"], "semantics": "correlation-only", "repeat": "invoke-again" },
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.sites.publish": {
-      "kind": "artifact-action",
-      "ownership": "plugin-admin-surface-action",
-      "surfaceBinding": { "page": "sites", "section": "sites", "action": "publish" },
-      "transport": "plugin-sdk.rest.artifact-stream",
-      "multipart": { "parts": ["metadata", "artifact"], "order": ["metadata", "artifact"], "artifactFilenameForwarded": false },
-      "acceptedHttpStatus": 202,
-      "receiptSchema": "contracts/v1/artifact-operation-result.schema.json",
-      "archiveLimits": {
-        "mediaType": "application/gzip",
-        "minArtifactBytes": 1,
-        "artifactBytes": 134217728,
-        "metadataBytes": 65536,
-        "multipartOverheadBytes": 65536,
-      "requestEnvelopeBytes": 134348800,
-      "expandedBytes": 536870912,
-      "maxFiles": 10000,
-      "entryCountSemantics": {
-        "unit": "logical-tar-member-after-extension-processing",
-        "countedKinds": ["regular-file", "directory"],
-        "implicitParentDirectories": "not-counted"
-      },
-      "maxCompressionRatio": 100,
-        "gzip": { "members": "concatenated-members-allowed", "integrity": "drain-all-members-through-eof", "trailingCompressedBytes": "reject-unless-part-of-valid-gzip-member" },
-        "tar": { "archiveCount": "one-tar-stream", "terminator": "two-consecutive-512-byte-zero-blocks", "postTerminatorBytes": "zero-padding-only" },
-        "validationChecks": ["gzip-integrity", "tar-integrity", "streamed-sha256", "metadata-artifact-descriptor-equality", "aggregate-expanded-byte-limit", "file-count-limit", "compression-ratio-limit"],
-        "rejectedEntries": ["absolute-path", "path-traversal", "symbolic-link", "hard-link", "duplicate-path", "case-collision", "unicode-nfc-collision", "special-file"]
-      },
-      "revisionPrecondition": "if current exists, expectedCurrentRevision is required and must match; for a new site, expectedCurrentRevision must be omitted",
-      "idempotency": { "required": true, "scope": ["plugin-instance", "capability", "idempotency-key"], "sameInput": "return-existing-operation-without-duplicate-effect", "differentInput": "reject-before-acceptance-with-ALREADY_EXISTS" },
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true }, "operation_failed": { "http": 500, "retryable": false } }
-    },
-    "server.operations.list": {
-      "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
-      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "cursor": { "type": "string", "minLength": 1, "maxLength": 1024 }, "limit": { "type": "integer", "minimum": 1, "maximum": 100 }, "state": { "enum": ["accepted", "running", "completed", "failed"] } }, "required": [], "additionalProperties": false },
-      "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 256 }, "siteId": { "type": ["string", "null"] }, "kind": { "type": "string", "minLength": 1 }, "state": { "enum": ["accepted", "running", "completed", "failed"] }, "progressPercent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 }, "updatedAt": { "type": "string", "minLength": 1 } }, "required": ["operationId", "siteId", "kind", "state", "progressPercent", "updatedAt"], "additionalProperties": false } }, "nextCursor": { "type": ["string", "null"] } }, "required": ["items", "nextCursor"], "additionalProperties": false },
-      "httpStatus": 200,
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.operations.get": {
-      "kind": "action",
-      "ownership": "plugin-admin-surface-action",
-      "surfaceBinding": { "page": "sites", "section": "operations", "action": "status" },
-      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 256 } }, "required": ["operationId"], "additionalProperties": false },
-      "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 256 }, "siteId": { "type": ["string", "null"] }, "kind": { "type": "string", "minLength": 1 }, "state": { "enum": ["accepted", "running", "completed", "failed"] }, "progressPercent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 }, "updatedAt": { "type": "string", "minLength": 1 }, "errorCode": { "type": ["string", "null"], "maxLength": 128 } }, "required": ["operationId", "siteId", "kind", "state", "progressPercent", "updatedAt", "errorCode"], "additionalProperties": false },
-      "httpStatus": 200,
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.certificates.list": {
-      "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
-      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 }, "cursor": { "type": "string", "minLength": 1, "maxLength": 1024 }, "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }, "required": [], "additionalProperties": false },
-      "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "items": { "type": "array", "items": { "$ref": "#/$defs/certificateSummary" } }, "nextCursor": { "type": ["string", "null"] } }, "required": ["items", "nextCursor"], "additionalProperties": false, "$defs": { "certificateSummary": { "type": "object", "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 }, "source": { "enum": ["acme", "custom"] }, "readiness": { "enum": ["pending", "ready", "failed", "unknown"] }, "notAfter": { "type": ["string", "null"] }, "serial": { "type": ["string", "null"] } }, "required": ["domain", "source", "readiness", "notAfter", "serial"], "additionalProperties": false } } },
-      "httpStatus": 200,
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    },
-    "server.certificates.get": {
-      "kind": "action",
-      "ownership": "plugin-admin-surface-action",
-      "surfaceBinding": { "page": "certificates", "section": "domains", "action": "status" },
-      "requestSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 } }, "required": ["domain"], "additionalProperties": false },
-      "responseSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 }, "source": { "enum": ["acme", "custom"] }, "readiness": { "enum": ["pending", "ready", "failed", "unknown"] }, "notBefore": { "type": ["string", "null"] }, "notAfter": { "type": ["string", "null"] }, "serial": { "type": ["string", "null"] }, "lastErrorCode": { "type": ["string", "null"], "maxLength": 128 } }, "required": ["domain", "source", "readiness", "notBefore", "notAfter", "serial", "lastErrorCode"], "additionalProperties": false },
-      "httpStatus": 200,
-      "errors": { "invalid_input": { "http": 400, "retryable": false }, "not_found": { "http": 404, "retryable": false }, "conflict": { "http": 409, "retryable": false }, "unavailable": { "http": 503, "retryable": true } }
-    }
-  }
+  "version": 1
 }

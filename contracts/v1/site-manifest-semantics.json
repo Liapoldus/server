@@ -1,47 +1,63 @@
 {
-  "version": 1,
-  "manifestSchema": "site-manifest.schema.json",
   "archiveEntry": {
-    "path": "site-manifest.json",
-    "location": "exactly-at-tar-root",
     "count": 1,
-    "type": "regular-file",
-    "encoding": "UTF-8 JSON",
     "duplicateObjectKeys": "reject",
+    "encoding": "UTF-8 JSON",
+    "location": "exactly-at-tar-root",
+    "path": "site-manifest.json",
+    "type": "regular-file",
     "unknownFields": "reject"
   },
+  "archiveValidation": {
+    "currentPreviousOnAnyRejection": "unchanged",
+    "manifestAsIndexDocumentWhenDocumentRootIsDot": "reject-with-reserved-manifest-as-index",
+    "manifestSiteIdMismatch": "reject-entire-candidate",
+    "missingDocumentRootOrIndexDocument": "reject-entire-candidate",
+    "missingOrDuplicateManifest": "reject-entire-candidate",
+    "symlinkOrHardlinkUsedForDocumentRootOrIndexDocument": "reject-entire-candidate",
+    "unsupportedSchemaVersion": "reject-entire-candidate"
+  },
   "fields": {
-    "schemaVersion": "must-equal-1",
-    "siteId": "must-equal-the-UTF-8-byte-sequence-of-the-decoded-publish-metadata-payload-siteId-string-without-case-folding-or-Unicode-normalization",
     "documentRoot": {
-      "format": "POSIX relative directory path using forward-slash separators",
       "dot": "the archive root",
-      "reject": ["absolute-path", "backslash", "empty-segment", "dot-segment", "parent-segment", "trailing-slash", "NUL-C0-control-DEL"],
-      "mustResolveTo": "directory-containing-indexDocument-within-the-staged-archive"
+      "format": "POSIX relative directory path using forward-slash separators",
+      "mustResolveTo": "directory-containing-indexDocument-within-the-staged-archive",
+      "reject": [
+        "absolute-path",
+        "backslash",
+        "empty-segment",
+        "dot-segment",
+        "parent-segment",
+        "trailing-slash",
+        "NUL-C0-control-DEL"
+      ]
     },
     "indexDocument": {
       "format": "POSIX relative regular-file path using forward-slash separators, relative to documentRoot",
-      "reject": ["absolute-path", "backslash", "empty-segment", "dot-segment", "parent-segment", "trailing-slash", "NUL-C0-control-DEL"],
-      "mustResolveTo": "regular-file-within-documentRoot"
-    }
+      "mustResolveTo": "regular-file-within-documentRoot",
+      "reject": [
+        "absolute-path",
+        "backslash",
+        "empty-segment",
+        "dot-segment",
+        "parent-segment",
+        "trailing-slash",
+        "NUL-C0-control-DEL"
+      ]
+    },
+    "schemaVersion": "must-equal-1",
+    "siteId": "must-equal-the-UTF-8-byte-sequence-of-the-decoded-publish-metadata-payload-siteId-string-without-case-folding-or-Unicode-normalization"
   },
-  "archiveValidation": {
-    "manifestSiteIdMismatch": "reject-entire-candidate",
-    "missingOrDuplicateManifest": "reject-entire-candidate",
-    "unsupportedSchemaVersion": "reject-entire-candidate",
-    "missingDocumentRootOrIndexDocument": "reject-entire-candidate",
-    "manifestAsIndexDocumentWhenDocumentRootIsDot": "reject-with-reserved-manifest-as-index",
-    "symlinkOrHardlinkUsedForDocumentRootOrIndexDocument": "reject-entire-candidate",
-    "currentPreviousOnAnyRejection": "unchanged"
-  },
-  "staticServing": {
-    "rootRequest": "resolve-documentRoot-then-append-indexDocument",
-    "directoryRequest": "resolve-requested-directory-under-documentRoot-then-append-indexDocument",
-    "missingPath": "404",
-    "spaFallback": false,
-    "publicNamespace": "exclude-the-archive-root-site-manifest.json-before-static-path-resolution",
-    "manifestExposure": "site-manifest.json-is-never-served-as-public-static-content-even-when-documentRoot-is-dot"
-  },
+  "manifestSchema": "site-manifest.schema.json",
   "releaseLifecycle": "successful-publish-or-rollback-atomically-controls-current-previous",
-  "secrets": "manifest-contains-no-secret-values-or-secret-references"
+  "secrets": "manifest-contains-no-secret-values-or-secret-references",
+  "staticServing": {
+    "directoryRequest": "resolve-requested-directory-under-documentRoot-then-append-indexDocument",
+    "manifestExposure": "site-manifest.json-is-never-served-as-public-static-content-even-when-documentRoot-is-dot",
+    "missingPath": "404",
+    "publicNamespace": "exclude-the-archive-root-site-manifest.json-before-static-path-resolution",
+    "rootRequest": "resolve-documentRoot-then-append-indexDocument",
+    "spaFallback": false
+  },
+  "version": 1
 }

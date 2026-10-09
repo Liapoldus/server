@@ -22,7 +22,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
-	"liapoldus.local/server-plugin/internal/application"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
@@ -41,17 +41,17 @@ type input struct {
 type fixtureResult struct {
 	Protocol   string `json:"protocol"`
 	ALPN       string `json:"alpn"`
-	Status     int    `json:"status"`
 	Body       string `json:"body"`
 	TLSVersion string `json:"tlsVersion"`
+	Status     int    `json:"status"`
 }
 
 type fixtureOutput struct {
-	ConfigApplied bool          `json:"configApplied"`
 	HTTP2         fixtureResult `json:"http2"`
 	HTTP3         fixtureResult `json:"http3"`
 	TLS12         fixtureResult `json:"tls12"`
 	TLS13         fixtureResult `json:"tls13"`
+	ConfigApplied bool          `json:"configApplied"`
 	TLS11Rejected bool          `json:"tls11Rejected"`
 }
 
@@ -69,7 +69,7 @@ func main() {
 	check(err)
 	check(os.MkdirAll(siteRoot, 0o700))
 	check(os.WriteFile(filepath.Join(siteRoot, "index.html"), []byte("secure-site"), 0o600))
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	defer func() { _ = configuration.Stop() }()
 	settings := makeSettings(request.HTTPSPort)

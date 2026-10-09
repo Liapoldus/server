@@ -10,8 +10,8 @@ import (
 // roots stay in this process-local registry, scoped to the Runtime that prepared
 // the immutable snapshot; Caddy's JSON config and autosave never carry them.
 var dispatchSecurity = struct {
-	sync.RWMutex
 	sets map[uint64]map[string]DispatchTarget
+	sync.RWMutex
 }{sets: make(map[uint64]map[string]DispatchTarget)}
 
 func registerDispatchSecurity(setID uint64, targets []DispatchTarget) {

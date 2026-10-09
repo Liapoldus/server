@@ -1,18 +1,16 @@
 package contracts
 
 import (
-	"embed"
 	"encoding/json"
 	"io/fs"
+	"liapoldus.local/server-plugin/contracts/definitions"
+	sitedef "liapoldus.local/server-plugin/contracts/definitions/site"
 	"path"
 	"strings"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
-
-//go:embed v1/site-publish-manifest.json v1/site-manifest.schema.json
-var siteManifestFiles embed.FS
 
 var (
 	siteManifestSchemaOnce sync.Once
@@ -61,7 +59,7 @@ func compiledSiteManifestSchema() (*jsonschema.Schema, error) {
 			siteManifestSchemaErr = ErrInvalidAssets
 			return
 		}
-		contents, err := fs.ReadFile(siteManifestFiles, schemaPath)
+		contents, err := definitions.Bytes(strings.TrimPrefix(schemaPath, "v1/"))
 		if err != nil {
 			siteManifestSchemaErr = ErrInvalidAssets
 			return
@@ -93,13 +91,6 @@ func compiledSiteManifestSchema() (*jsonschema.Schema, error) {
 }
 
 func loadSitePublishManifestLink() (sitePublishManifestLink, error) {
-	contents, err := fs.ReadFile(siteManifestFiles, "v1/site-publish-manifest.json")
-	if err != nil {
-		return sitePublishManifestLink{}, ErrInvalidAssets
-	}
-	var link sitePublishManifestLink
-	if err := json.Unmarshal(contents, &link); err != nil || link.ArchiveEntry == "" || link.Schema == "" || link.PublishCapability == "" {
-		return sitePublishManifestLink{}, ErrInvalidAssets
-	}
-	return link, nil
+	v := sitedef.SitePublishManifest()
+	return sitePublishManifestLink{ArchiveEntry: v.ArchiveEntry, Schema: v.Schema, PublishCapability: v.PublishCapability, RollbackCapability: v.RollbackCapability}, nil
 }

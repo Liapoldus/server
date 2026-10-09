@@ -1,18 +1,24 @@
 {
-  "version": 1,
-  "plugin": "server",
-  "defaultLimit": 50,
-  "fallbackCapability": "server.sites.list",
   "actionId": "query",
   "certificateStatusCapability": "server.certificates.get",
+  "defaultLimit": 50,
+  "fallbackCapability": "server.sites.list",
   "pageResources": {
-    "sites": ["sites", "releases", "operations"],
-    "certificates": ["certificates"]
+    "certificates": [
+      "certificates"
+    ],
+    "sites": [
+      "sites",
+      "releases",
+      "operations"
+    ]
   },
+  "plugin": "server",
   "resources": {
-    "sites": "server.sites.list",
-    "releases": "server.sites.releases.list",
+    "certificates": "server.certificates.list",
     "operations": "server.operations.list",
-    "certificates": "server.certificates.list"
-  }
+    "releases": "server.sites.releases.list",
+    "sites": "server.sites.list"
+  },
+  "version": 1
 }

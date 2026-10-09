@@ -1,45 +1,111 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://liapoldus.github.io/plugins/server/contracts/v1/http-response-action.schema.json",
-  "title": "Server plugin HTTP response action",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["status"],
-  "properties": {
-    "status": { "type": "integer", "minimum": 200, "maximum": 599 },
-    "headers": {
-      "type": "object",
-      "propertyNames": { "not": { "const": "Set-Cookie" } },
-      "additionalProperties": { "type": "string", "pattern": "^[^\\r\\n]*$" }
-    },
-    "cookies": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/cookie" }
-    },
-    "body": { "type": "string" }
-  },
   "$defs": {
     "cookie": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["name", "value"],
-      "properties": {
-        "name": { "type": "string", "minLength": 1, "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$" },
-        "value": { "type": "string" },
-        "path": { "type": "string", "pattern": "^/" },
-        "domain": { "type": "string", "minLength": 1 },
-        "expires": { "type": "string", "format": "date-time" },
-        "maxAge": { "type": "integer", "minimum": -1 },
-        "secure": { "type": "boolean" },
-        "httpOnly": { "type": "boolean" },
-        "sameSite": { "enum": ["lax", "strict", "none"] }
-      },
       "allOf": [
         {
-          "if": { "properties": { "sameSite": { "const": "none" } }, "required": ["sameSite"] },
-          "then": { "properties": { "secure": { "const": true } }, "required": ["secure"] }
+          "if": {
+            "properties": {
+              "sameSite": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "sameSite"
+            ]
+          },
+          "then": {
+            "properties": {
+              "secure": {
+                "const": true
+              }
+            },
+            "required": [
+              "secure"
+            ]
+          }
         }
-      ]
+      ],
+      "properties": {
+        "domain": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "expires": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "httpOnly": {
+          "type": "boolean"
+        },
+        "maxAge": {
+          "minimum": -1,
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^/",
+          "type": "string"
+        },
+        "sameSite": {
+          "enum": [
+            "lax",
+            "strict",
+            "none"
+          ]
+        },
+        "secure": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "type": "object"
     }
-  }
+  },
+  "$id": "https://liapoldus.github.io/plugins/server/contracts/v1/http-response-action.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "body": {
+      "type": "string"
+    },
+    "cookies": {
+      "items": {
+        "$ref": "#/$defs/cookie"
+      },
+      "type": "array"
+    },
+    "headers": {
+      "additionalProperties": {
+        "pattern": "^[^\\r\\n]*$",
+        "type": "string"
+      },
+      "propertyNames": {
+        "not": {
+          "const": "Set-Cookie"
+        }
+      },
+      "type": "object"
+    },
+    "status": {
+      "maximum": 599,
+      "minimum": 200,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "Server plugin HTTP response action",
+  "type": "object"
 }

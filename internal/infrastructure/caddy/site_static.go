@@ -12,7 +12,7 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	caddyhttp "github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
 )
 
 const siteFileServerModule = "liapoldus_site_file_server"
@@ -38,7 +38,7 @@ var activeSiteDocumentReader atomic.Pointer[siteDocumentReaderHolder]
 // any configuration containing a static handler is activated.
 func SetSiteDocumentReader(reader SiteDocumentReader) error {
 	if reader == nil {
-		return models.ErrInvalidSitePublisher
+		return sitemodel.ErrInvalidSitePublisher
 	}
 	activeSiteDocumentReader.Store(&siteDocumentReaderHolder{reader: reader})
 	return nil

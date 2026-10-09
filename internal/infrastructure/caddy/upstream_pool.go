@@ -38,28 +38,28 @@ type upstreamPoolConfig struct {
 type upstreamOriginConfig struct {
 	Address  string `json:"address"`
 	Scheme   string `json:"scheme"`
-	Weight   int    `json:"weight"`
 	CABundle []byte `json:"caBundle,omitempty"`
+	Weight   int    `json:"weight"`
 }
 
 type upstreamPoolApp struct {
-	Pools []upstreamPoolConfig `json:"pools,omitempty"`
 	pools map[string]*upstreamPoolState
+	Pools []upstreamPoolConfig `json:"pools,omitempty"`
 }
 
 type upstreamPoolState struct {
-	mu            sync.Mutex
+	originIndexes map[*reverseproxy.Upstream]int
 	config        upstreamPoolConfig
 	currentWeight []int
 	unhealthyTill []time.Time
 	lastEligible  []bool
 	selectedPool  reverseproxy.UpstreamPool
-	originIndexes map[*reverseproxy.Upstream]int
+	mu            sync.Mutex
 }
 
 type smoothWeightedSelection struct {
-	Pool  string `json:"pool"`
 	state *upstreamPoolState
+	Pool  string `json:"pool"`
 }
 
 type upstreamPoolTransport struct {

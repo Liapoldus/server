@@ -1,134 +1,470 @@
 {
-  "version": 1,
   "manifestSchema": "site-manifest.schema.json",
-  "semantics": "site-manifest-semantics.json",
   "scenarios": [
     {
+      "expected": {
+        "accepted": true,
+        "currentPrevious": "activate-atomically-after-operation-success",
+        "publicFiles": [
+          "index.html"
+        ],
+        "resolved": {
+          "/": "index.html"
+        },
+        "responses": {
+          "/": 200,
+          "/site-manifest.json": 404
+        }
+      },
       "id": "site-manifest-valid-archive-root",
       "input": {
-        "payloadSiteId": "docs",
         "entries": [
-          { "path": "site-manifest.json", "type": "regular-file" },
-          { "path": "index.html", "type": "regular-file" }
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          },
+          {
+            "path": "index.html",
+            "type": "regular-file"
+          }
         ],
-        "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": ".", "indexDocument": "index.html" },
-        "requests": ["/", "/site-manifest.json"]
-      },
-      "expected": { "accepted": true, "resolved": { "/": "index.html" }, "responses": { "/": 200, "/site-manifest.json": 404 }, "publicFiles": ["index.html"], "currentPrevious": "activate-atomically-after-operation-success" }
+        "manifest": {
+          "documentRoot": ".",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        },
+        "payloadSiteId": "docs",
+        "requests": [
+          "/",
+          "/site-manifest.json"
+        ]
+      }
     },
     {
+      "expected": {
+        "accepted": true,
+        "resolved": {
+          "/": "dist/index.html",
+          "/docs/": "dist/docs/index.html"
+        }
+      },
       "id": "site-manifest-valid-subdirectory-root",
       "input": {
-        "payloadSiteId": "portal",
         "entries": [
-          { "path": "site-manifest.json", "type": "regular-file" },
-          { "path": "dist/index.html", "type": "regular-file" },
-          { "path": "dist/docs/index.html", "type": "regular-file" }
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          },
+          {
+            "path": "dist/index.html",
+            "type": "regular-file"
+          },
+          {
+            "path": "dist/docs/index.html",
+            "type": "regular-file"
+          }
         ],
-        "manifest": { "schemaVersion": 1, "siteId": "portal", "documentRoot": "dist", "indexDocument": "index.html" },
-        "requests": ["/", "/docs/"]
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "portal"
+        },
+        "payloadSiteId": "portal",
+        "requests": [
+          "/",
+          "/docs/"
+        ]
+      }
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "site-id-mismatch"
       },
-      "expected": { "accepted": true, "resolved": { "/": "dist/index.html", "/docs/": "dist/docs/index.html" } }
-    },
-    {
       "id": "site-manifest-rejects-site-id-mismatch",
-      "input": { "payloadSiteId": "docs", "manifest": { "schemaVersion": 1, "siteId": "Docs", "documentRoot": ".", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "site-id-mismatch", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": ".",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "Docs"
+        },
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "site-id-mismatch"
+      },
       "id": "site-manifest-rejects-site-id-unicode-normalization-mismatch",
-      "input": { "payloadSiteId": "caf\u00e9", "manifest": { "schemaVersion": 1, "siteId": "cafe\u0301", "documentRoot": ".", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "site-id-mismatch", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": ".",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "café"
+        },
+        "payloadSiteId": "café"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "manifest-missing"
+      },
       "id": "site-manifest-rejects-missing-entry",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "index.html", "type": "regular-file" }] },
-      "expected": { "accepted": false, "reason": "manifest-missing", "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "index.html",
+            "type": "regular-file"
+          }
+        ],
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "manifest-missing"
+      },
       "id": "site-manifest-rejects-nested-entry",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "nested/site-manifest.json", "type": "regular-file" }] },
-      "expected": { "accepted": false, "reason": "manifest-missing", "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "nested/site-manifest.json",
+            "type": "regular-file"
+          }
+        ],
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "manifest-duplicate"
+      },
       "id": "site-manifest-rejects-duplicate-entry",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "site-manifest.json", "type": "regular-file" }, { "path": "site-manifest.json", "type": "regular-file" }] },
-      "expected": { "accepted": false, "reason": "manifest-duplicate", "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          },
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          }
+        ],
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsupported-schema-version"
+      },
       "id": "site-manifest-rejects-unsupported-version",
-      "input": { "payloadSiteId": "docs", "manifest": { "schemaVersion": 2, "siteId": "docs", "documentRoot": ".", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "unsupported-schema-version", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": ".",
+          "indexDocument": "index.html",
+          "schemaVersion": 2,
+          "siteId": "docs"
+        },
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "index-document-not-found-as-regular-file"
+      },
       "id": "site-manifest-rejects-missing-index-document",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "site-manifest.json", "type": "regular-file" }], "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": ".", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "index-document-not-found-as-regular-file", "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          }
+        ],
+        "manifest": {
+          "documentRoot": ".",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        },
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-document-root"
+      },
       "id": "site-manifest-rejects-traversal-root",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "../outside", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-document-root", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "../outside",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-document-root"
+      },
       "id": "site-manifest-rejects-absolute-root",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "/srv/site", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-document-root", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "/srv/site",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-document-root"
+      },
       "id": "site-manifest-rejects-backslash-root",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist\\public", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-document-root", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "dist\\public",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-index-document"
+      },
       "id": "site-manifest-rejects-traversal-index",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist", "indexDocument": "../index.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-index-document", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "../index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-index-document"
+      },
       "id": "site-manifest-rejects-absolute-index",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist", "indexDocument": "/index.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-index-document", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "/index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-index-document"
+      },
       "id": "site-manifest-rejects-backslash-index",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist", "indexDocument": "dist\\index.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-index-document", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "dist\\index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-document-root"
+      },
       "id": "site-manifest-rejects-control-root",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist\u0000public", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-document-root", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "dist\u0000public",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-index-document"
+      },
       "id": "site-manifest-rejects-control-index",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist", "indexDocument": "bad\u001findex.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-index-document", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "bad\u001findex.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "unsafe-index-document"
+      },
       "id": "site-manifest-rejects-delete-index",
-      "input": { "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist", "indexDocument": "bad\u007findex.html" } },
-      "expected": { "accepted": false, "reason": "unsafe-index-document", "currentPrevious": "unchanged" }
+      "input": {
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "badindex.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        }
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "reserved-manifest-as-index"
+      },
       "id": "site-manifest-rejects-reserved-index-document",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "site-manifest.json", "type": "regular-file" }], "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": ".", "indexDocument": "site-manifest.json" } },
-      "expected": { "accepted": false, "reason": "reserved-manifest-as-index", "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          }
+        ],
+        "manifest": {
+          "documentRoot": ".",
+          "indexDocument": "site-manifest.json",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        },
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "document-root-resolves-through-link"
+      },
       "id": "site-manifest-rejects-symlink-root",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "site-manifest.json", "type": "regular-file" }, { "path": "dist", "type": "symbolic-link" }], "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "document-root-resolves-through-link", "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          },
+          {
+            "path": "dist",
+            "type": "symbolic-link"
+          }
+        ],
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        },
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": false,
+        "currentPrevious": "unchanged",
+        "reason": "index-document-is-not-regular-file"
+      },
       "id": "site-manifest-rejects-symlink-index",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "site-manifest.json", "type": "regular-file" }, { "path": "dist/index.html", "type": "symbolic-link" }], "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": "dist", "indexDocument": "index.html" } },
-      "expected": { "accepted": false, "reason": "index-document-is-not-regular-file", "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          },
+          {
+            "path": "dist/index.html",
+            "type": "symbolic-link"
+          }
+        ],
+        "manifest": {
+          "documentRoot": "dist",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        },
+        "payloadSiteId": "docs"
+      }
     },
     {
+      "expected": {
+        "accepted": true,
+        "currentPrevious": "unchanged",
+        "httpStatus": 404,
+        "publicFiles": [
+          "index.html"
+        ],
+        "responses": {
+          "/site-manifest.json": 404
+        }
+      },
       "id": "site-manifest-never-served",
-      "input": { "payloadSiteId": "docs", "entries": [{ "path": "site-manifest.json", "type": "regular-file" }, { "path": "index.html", "type": "regular-file" }], "manifest": { "schemaVersion": 1, "siteId": "docs", "documentRoot": ".", "indexDocument": "index.html" }, "requests": ["/site-manifest.json"] },
-      "expected": { "accepted": true, "responses": { "/site-manifest.json": 404 }, "httpStatus": 404, "publicFiles": ["index.html"], "currentPrevious": "unchanged" }
+      "input": {
+        "entries": [
+          {
+            "path": "site-manifest.json",
+            "type": "regular-file"
+          },
+          {
+            "path": "index.html",
+            "type": "regular-file"
+          }
+        ],
+        "manifest": {
+          "documentRoot": ".",
+          "indexDocument": "index.html",
+          "schemaVersion": 1,
+          "siteId": "docs"
+        },
+        "payloadSiteId": "docs",
+        "requests": [
+          "/site-manifest.json"
+        ]
+      }
     }
-  ]
+  ],
+  "semantics": "site-manifest-semantics.json",
+  "version": 1
 }

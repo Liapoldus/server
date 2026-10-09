@@ -1,73 +1,232 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://liapoldus.github.io/spec/server/http-stream.v1.schema.json",
-  "title": "Server plugin HTTP stream envelope contract",
-  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "required": [
-    "version", "kindField", "dataField", "requestField", "statusField",
-    "headersField", "maxChunkBytes", "maxFrameBytes", "requestStartKind",
-    "requestChunkKind", "requestEndKind", "responseStartKind",
-    "responseChunkKind", "responseEndKind", "websocket", "sse"
-  ],
   "properties": {
-    "version": { "const": 1 },
-    "kindField": { "const": "kind" },
-    "dataField": { "const": "data" },
-    "requestField": { "const": "request" },
-    "statusField": { "const": "status" },
-    "headersField": { "const": "headers" },
-    "maxChunkBytes": { "type": "integer", "minimum": 1 },
-    "maxFrameBytes": { "type": "integer", "minimum": 1 },
-    "requestStartKind": { "type": "string", "minLength": 1 },
-    "requestChunkKind": { "type": "string", "minLength": 1 },
-    "requestEndKind": { "type": "string", "minLength": 1 },
-    "responseStartKind": { "type": "string", "minLength": 1 },
-    "responseChunkKind": { "type": "string", "minLength": 1 },
-    "responseEndKind": { "type": "string", "minLength": 1 },
-    "websocket": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["maxMessageBytes", "requestField", "handshakeKind", "acceptField", "subprotocolsField", "subprotocolField", "messageStartKind", "messageChunkKind", "messageEndKind", "messageTypeField", "textMessageType", "binaryMessageType", "closeKind", "codeField", "reasonField", "defaultRejectStatus"],
-      "properties": {
-        "maxMessageBytes": { "type": "integer", "minimum": 1 },
-        "requestField": { "type": "string", "minLength": 1 },
-        "handshakeKind": { "type": "string", "minLength": 1 },
-        "acceptField": { "type": "string", "minLength": 1 },
-        "subprotocolsField": { "type": "string", "minLength": 1 },
-        "subprotocolField": { "type": "string", "minLength": 1 },
-        "messageStartKind": { "type": "string", "minLength": 1 },
-        "messageChunkKind": { "type": "string", "minLength": 1 },
-        "messageEndKind": { "type": "string", "minLength": 1 },
-        "messageTypeField": { "type": "string", "minLength": 1 },
-        "textMessageType": { "type": "string", "minLength": 1 },
-        "binaryMessageType": { "type": "string", "minLength": 1 },
-        "closeKind": { "type": "string", "minLength": 1 },
-        "codeField": { "type": "string", "minLength": 1 },
-        "reasonField": { "type": "string", "minLength": 1 },
-        "defaultRejectStatus": { "type": "integer", "minimum": 400, "maximum": 599 }
-      }
+    "dataField": {
+      "const": "data"
+    },
+    "headersField": {
+      "const": "headers"
+    },
+    "kindField": {
+      "const": "kind"
+    },
+    "maxChunkBytes": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "maxFrameBytes": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "requestChunkKind": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "requestEndKind": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "requestField": {
+      "const": "request"
+    },
+    "requestStartKind": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "responseChunkKind": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "responseEndKind": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "responseStartKind": {
+      "minLength": 1,
+      "type": "string"
     },
     "sse": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["eventKind", "contentType", "contentTypeHeader", "eventField", "dataField", "idField", "retryField", "eventPrefix", "dataPrefix", "idPrefix", "retryPrefix", "lineEnding", "eventTerminator", "maxRetryMillis"],
       "properties": {
-        "eventKind": { "const": "sse_event" },
-        "contentType": { "const": "text/event-stream" },
-        "contentTypeHeader": { "const": "Content-Type" },
-        "eventField": { "const": "event" },
-        "dataField": { "const": "data" },
-        "idField": { "const": "id" },
-        "retryField": { "const": "retry" },
-        "eventPrefix": { "const": "event: " },
-        "dataPrefix": { "const": "data: " },
-        "idPrefix": { "const": "id: " },
-        "retryPrefix": { "const": "retry: " },
-        "lineEnding": { "const": "\n" },
-        "eventTerminator": { "const": "\n" },
-        "maxRetryMillis": { "type": "integer", "minimum": 0, "maximum": 2147483647 }
-      }
+        "contentType": {
+          "const": "text/event-stream"
+        },
+        "contentTypeHeader": {
+          "const": "Content-Type"
+        },
+        "dataField": {
+          "const": "data"
+        },
+        "dataPrefix": {
+          "const": "data: "
+        },
+        "eventField": {
+          "const": "event"
+        },
+        "eventKind": {
+          "const": "sse_event"
+        },
+        "eventPrefix": {
+          "const": "event: "
+        },
+        "eventTerminator": {
+          "const": "\n"
+        },
+        "idField": {
+          "const": "id"
+        },
+        "idPrefix": {
+          "const": "id: "
+        },
+        "lineEnding": {
+          "const": "\n"
+        },
+        "maxRetryMillis": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retryField": {
+          "const": "retry"
+        },
+        "retryPrefix": {
+          "const": "retry: "
+        }
+      },
+      "required": [
+        "eventKind",
+        "contentType",
+        "contentTypeHeader",
+        "eventField",
+        "dataField",
+        "idField",
+        "retryField",
+        "eventPrefix",
+        "dataPrefix",
+        "idPrefix",
+        "retryPrefix",
+        "lineEnding",
+        "eventTerminator",
+        "maxRetryMillis"
+      ],
+      "type": "object"
+    },
+    "statusField": {
+      "const": "status"
+    },
+    "version": {
+      "const": 1
+    },
+    "websocket": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptField": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "binaryMessageType": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "closeKind": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "codeField": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "defaultRejectStatus": {
+          "maximum": 599,
+          "minimum": 400,
+          "type": "integer"
+        },
+        "handshakeKind": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "maxMessageBytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "messageChunkKind": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "messageEndKind": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "messageStartKind": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "messageTypeField": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reasonField": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "requestField": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "subprotocolField": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "subprotocolsField": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "textMessageType": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "maxMessageBytes",
+        "requestField",
+        "handshakeKind",
+        "acceptField",
+        "subprotocolsField",
+        "subprotocolField",
+        "messageStartKind",
+        "messageChunkKind",
+        "messageEndKind",
+        "messageTypeField",
+        "textMessageType",
+        "binaryMessageType",
+        "closeKind",
+        "codeField",
+        "reasonField",
+        "defaultRejectStatus"
+      ],
+      "type": "object"
     }
-  }
+  },
+  "required": [
+    "version",
+    "kindField",
+    "dataField",
+    "requestField",
+    "statusField",
+    "headersField",
+    "maxChunkBytes",
+    "maxFrameBytes",
+    "requestStartKind",
+    "requestChunkKind",
+    "requestEndKind",
+    "responseStartKind",
+    "responseChunkKind",
+    "responseEndKind",
+    "websocket",
+    "sse"
+  ],
+  "title": "Server plugin HTTP stream envelope contract",
+  "type": "object"
 }

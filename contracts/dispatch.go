@@ -1,34 +1,33 @@
 package contracts
 
 import (
-	"encoding/json"
 	"errors"
-	"io/fs"
+	httpdef "liapoldus.local/server-plugin/contracts/definitions/http"
 )
 
 type HTTPDispatch struct {
 	Module                          string              `json:"module"`
 	App                             string              `json:"app"`
-	DefaultTimeoutMillis            int                 `json:"defaultTimeoutMillis"`
-	MaxStreamConcurrencyPerInstance int                 `json:"maxStreamConcurrencyPerInstance"`
-	DefaultStreamIdleTimeoutMillis  int                 `json:"defaultStreamIdleTimeoutMillis"`
-	DefaultStreamMaxDurationMillis  int                 `json:"defaultStreamMaxDurationMillis"`
-	MaxRequestBytes                 int64               `json:"maxRequestBytes"`
-	MaxRequestHeaderBytes           int                 `json:"maxRequestHeaderBytes"`
+	SetCookieHeader                 string              `json:"setCookieHeader"`
+	CookieHeader                    string              `json:"cookieHeader"`
+	RequestIDHeader                 string              `json:"requestIDHeader"`
 	RequestHeaderByteSemantics      string              `json:"requestHeaderByteSemantics"`
 	HeaderLimitModule               string              `json:"headerLimitModule"`
+	Stream                          HTTPStream          `json:"-"`
+	BlockedHeaders                  []string            `json:"blockedHeaders"`
+	ResponseCookies                 HTTPResponseCookies `json:"responseCookies"`
 	RequestHeaderTooLargeStatus     int                 `json:"requestHeaderTooLargeStatus"`
 	UnavailableStatus               int                 `json:"unavailableStatus"`
 	InvalidResponseStatus           int                 `json:"invalidResponseStatus"`
 	RequestTooLargeStatus           int                 `json:"requestTooLargeStatus"`
 	StreamTimeoutStatus             int                 `json:"streamTimeoutStatus"`
 	InvalidRequestStatus            int                 `json:"invalidRequestStatus"`
-	RequestIDHeader                 string              `json:"requestIDHeader"`
-	CookieHeader                    string              `json:"cookieHeader"`
-	SetCookieHeader                 string              `json:"setCookieHeader"`
-	ResponseCookies                 HTTPResponseCookies `json:"responseCookies"`
-	BlockedHeaders                  []string            `json:"blockedHeaders"`
-	Stream                          HTTPStream          `json:"-"`
+	MaxRequestHeaderBytes           int                 `json:"maxRequestHeaderBytes"`
+	MaxRequestBytes                 int64               `json:"maxRequestBytes"`
+	DefaultStreamMaxDurationMillis  int                 `json:"defaultStreamMaxDurationMillis"`
+	DefaultStreamIdleTimeoutMillis  int                 `json:"defaultStreamIdleTimeoutMillis"`
+	MaxStreamConcurrencyPerInstance int                 `json:"maxStreamConcurrencyPerInstance"`
+	DefaultTimeoutMillis            int                 `json:"defaultTimeoutMillis"`
 }
 
 type HTTPResponseCookies struct {
@@ -41,40 +40,40 @@ type HTTPResponseCookies struct {
 }
 
 type HTTPStream struct {
-	Version           int                 `json:"version"`
-	KindField         string              `json:"kindField"`
+	RequestStartKind  string              `json:"requestStartKind"`
+	RequestChunkKind  string              `json:"requestChunkKind"`
 	DataField         string              `json:"dataField"`
 	RequestField      string              `json:"requestField"`
 	StatusField       string              `json:"statusField"`
 	HeadersField      string              `json:"headersField"`
-	MaxChunkBytes     int                 `json:"maxChunkBytes"`
-	MaxFrameBytes     int                 `json:"maxFrameBytes"`
-	RequestStartKind  string              `json:"requestStartKind"`
-	RequestChunkKind  string              `json:"requestChunkKind"`
-	RequestEndKind    string              `json:"requestEndKind"`
-	ResponseStartKind string              `json:"responseStartKind"`
-	ResponseChunkKind string              `json:"responseChunkKind"`
+	KindField         string              `json:"kindField"`
 	ResponseEndKind   string              `json:"responseEndKind"`
+	ResponseChunkKind string              `json:"responseChunkKind"`
+	ResponseStartKind string              `json:"responseStartKind"`
+	RequestEndKind    string              `json:"requestEndKind"`
 	WebSocket         HTTPStreamWebSocket `json:"websocket"`
 	SSE               HTTPStreamSSE       `json:"sse"`
+	MaxFrameBytes     int                 `json:"maxFrameBytes"`
+	Version           int                 `json:"version"`
+	MaxChunkBytes     int                 `json:"maxChunkBytes"`
 }
 
 type HTTPStreamWebSocket struct {
-	MaxMessageBytes     int64  `json:"maxMessageBytes"`
-	RequestField        string `json:"requestField"`
+	MessageEndKind      string `json:"messageEndKind"`
+	MessageTypeField    string `json:"messageTypeField"`
 	HandshakeKind       string `json:"handshakeKind"`
 	AcceptField         string `json:"acceptField"`
 	SubprotocolsField   string `json:"subprotocolsField"`
 	SubprotocolField    string `json:"subprotocolField"`
+	RequestField        string `json:"requestField"`
 	MessageStartKind    string `json:"messageStartKind"`
+	ReasonField         string `json:"reasonField"`
 	MessageChunkKind    string `json:"messageChunkKind"`
-	MessageEndKind      string `json:"messageEndKind"`
-	MessageTypeField    string `json:"messageTypeField"`
 	TextMessageType     string `json:"textMessageType"`
 	BinaryMessageType   string `json:"binaryMessageType"`
 	CloseKind           string `json:"closeKind"`
 	CodeField           string `json:"codeField"`
-	ReasonField         string `json:"reasonField"`
+	MaxMessageBytes     int64  `json:"maxMessageBytes"`
 	DefaultRejectStatus int    `json:"defaultRejectStatus"`
 }
 
@@ -98,30 +97,82 @@ type HTTPStreamSSE struct {
 var ErrInvalidDispatchAssets = errors.New("")
 
 func LoadHTTPDispatch() (HTTPDispatch, error) {
-	contents, err := fs.ReadFile(files, "v1/http-dispatch.json")
-	if err != nil {
-		return HTTPDispatch{}, ErrInvalidDispatchAssets
-	}
-	var contract HTTPDispatch
-	if err := json.Unmarshal(contents, &contract); err != nil || contract.Module == "" || contract.App == "" || contract.DefaultTimeoutMillis < 1 || contract.MaxStreamConcurrencyPerInstance < 1 || contract.DefaultStreamIdleTimeoutMillis < 1 || contract.DefaultStreamMaxDurationMillis < 1 || contract.MaxRequestBytes < 1 || contract.MaxRequestHeaderBytes < 1 || contract.RequestHeaderByteSemantics == "" || contract.HeaderLimitModule == "" || contract.RequestHeaderTooLargeStatus != 431 || contract.UnavailableStatus < 100 || contract.InvalidResponseStatus < 100 || contract.RequestTooLargeStatus < 100 || contract.StreamTimeoutStatus < 100 || contract.InvalidRequestStatus < 100 || len(contract.BlockedHeaders) == 0 || contract.CookieHeader == "" || contract.SetCookieHeader == "" || contract.ResponseCookies.Field != "cookies" || contract.ResponseCookies.Schema == "" || len(contract.ResponseCookies.SameSiteValues) != 3 || contract.ResponseCookies.MaxAgeMinimum != -1 || !contract.ResponseCookies.SameSiteNoneRequiresSecure || !contract.ResponseCookies.ValidateAllBeforeHeaders {
-		return HTTPDispatch{}, ErrInvalidDispatchAssets
-	}
+	v := httpdef.HTTPDispatch()
 	stream, err := LoadHTTPStream()
 	if err != nil {
 		return HTTPDispatch{}, err
 	}
-	contract.Stream = stream
-	return contract, nil
+	return HTTPDispatch{Module: v.Module,
+		App:                             v.App,
+		DefaultTimeoutMillis:            v.DefaultTimeoutMillis,
+		MaxStreamConcurrencyPerInstance: v.MaxStreamConcurrencyPerInstance,
+		DefaultStreamIdleTimeoutMillis:  v.DefaultStreamIdleTimeoutMillis,
+		DefaultStreamMaxDurationMillis:  v.DefaultStreamMaxDurationMillis,
+		MaxRequestBytes:                 int64(v.MaxRequestBytes),
+		MaxRequestHeaderBytes:           v.MaxRequestHeaderBytes,
+		RequestHeaderByteSemantics:      v.RequestHeaderByteSemantics,
+		HeaderLimitModule:               v.HeaderLimitModule,
+		RequestHeaderTooLargeStatus:     v.RequestHeaderTooLargeStatus,
+		UnavailableStatus:               v.UnavailableStatus,
+		InvalidResponseStatus:           v.InvalidResponseStatus,
+		RequestTooLargeStatus:           v.RequestTooLargeStatus,
+		StreamTimeoutStatus:             v.StreamTimeoutStatus,
+		InvalidRequestStatus:            v.InvalidRequestStatus,
+		RequestIDHeader:                 v.RequestIDHeader,
+		CookieHeader:                    v.CookieHeader,
+		SetCookieHeader:                 v.SetCookieHeader,
+		ResponseCookies: HTTPResponseCookies{Field: v.ResponseCookies.Field,
+			Schema:                     v.ResponseCookies.Schema,
+			MaxAgeMinimum:              v.ResponseCookies.MaxAgeMinimum,
+			SameSiteNoneRequiresSecure: v.ResponseCookies.SameSiteNoneRequiresSecure,
+			ValidateAllBeforeHeaders:   v.ResponseCookies.ValidateAllBeforeHeaders, SameSiteValues: v.ResponseCookies.SameSiteValues},
+		BlockedHeaders: v.BlockedHeaders, Stream: stream}, nil
 }
 
 func LoadHTTPStream() (HTTPStream, error) {
-	contents, err := fs.ReadFile(files, "v1/http-stream.json")
-	if err != nil {
-		return HTTPStream{}, ErrInvalidDispatchAssets
-	}
-	var contract HTTPStream
-	if err := json.Unmarshal(contents, &contract); err != nil || contract.Version != 1 || contract.KindField == "" || contract.DataField == "" || contract.RequestField == "" || contract.StatusField == "" || contract.HeadersField == "" || contract.MaxChunkBytes < 1 || contract.MaxFrameBytes < contract.MaxChunkBytes || contract.RequestStartKind == "" || contract.RequestChunkKind == "" || contract.RequestEndKind == "" || contract.ResponseStartKind == "" || contract.ResponseChunkKind == "" || contract.ResponseEndKind == "" || contract.WebSocket.MaxMessageBytes < 1 || contract.WebSocket.RequestField == "" || contract.WebSocket.HandshakeKind == "" || contract.WebSocket.AcceptField == "" || contract.WebSocket.SubprotocolsField == "" || contract.WebSocket.SubprotocolField == "" || contract.WebSocket.MessageStartKind == "" || contract.WebSocket.MessageChunkKind == "" || contract.WebSocket.MessageEndKind == "" || contract.WebSocket.MessageTypeField == "" || contract.WebSocket.TextMessageType == "" || contract.WebSocket.BinaryMessageType == "" || contract.WebSocket.CloseKind == "" || contract.WebSocket.CodeField == "" || contract.WebSocket.ReasonField == "" || contract.WebSocket.DefaultRejectStatus < 400 || contract.WebSocket.DefaultRejectStatus > 599 || contract.SSE.EventKind == "" || contract.SSE.ContentType == "" || contract.SSE.ContentTypeHeader == "" || contract.SSE.EventField == "" || contract.SSE.DataField == "" || contract.SSE.IDField == "" || contract.SSE.RetryField == "" || contract.SSE.EventPrefix == "" || contract.SSE.DataPrefix == "" || contract.SSE.IDPrefix == "" || contract.SSE.RetryPrefix == "" || contract.SSE.LineEnding == "" || contract.SSE.EventTerminator == "" || contract.SSE.MaxRetryMillis < 0 {
-		return HTTPStream{}, ErrInvalidDispatchAssets
-	}
-	return contract, nil
+	v := httpdef.HTTPStream()
+	return HTTPStream{Version: v.Version,
+		KindField:         v.KindField,
+		DataField:         v.DataField,
+		RequestField:      v.RequestField,
+		StatusField:       v.StatusField,
+		HeadersField:      v.HeadersField,
+		MaxChunkBytes:     v.MaxChunkBytes,
+		MaxFrameBytes:     v.MaxFrameBytes,
+		RequestStartKind:  v.RequestStartKind,
+		RequestChunkKind:  v.RequestChunkKind,
+		RequestEndKind:    v.RequestEndKind,
+		ResponseStartKind: v.ResponseStartKind,
+		ResponseChunkKind: v.ResponseChunkKind,
+		ResponseEndKind:   v.ResponseEndKind,
+		WebSocket: HTTPStreamWebSocket{MaxMessageBytes: int64(v.Websocket.MaxMessageBytes),
+			RequestField:        v.Websocket.RequestField,
+			HandshakeKind:       v.Websocket.HandshakeKind,
+			AcceptField:         v.Websocket.AcceptField,
+			SubprotocolsField:   v.Websocket.SubprotocolsField,
+			SubprotocolField:    v.Websocket.SubprotocolField,
+			MessageStartKind:    v.Websocket.MessageStartKind,
+			MessageChunkKind:    v.Websocket.MessageChunkKind,
+			MessageEndKind:      v.Websocket.MessageEndKind,
+			MessageTypeField:    v.Websocket.MessageTypeField,
+			TextMessageType:     v.Websocket.TextMessageType,
+			BinaryMessageType:   v.Websocket.BinaryMessageType,
+			CloseKind:           v.Websocket.CloseKind,
+			CodeField:           v.Websocket.CodeField,
+			ReasonField:         v.Websocket.ReasonField,
+			DefaultRejectStatus: v.Websocket.DefaultRejectStatus},
+		SSE: HTTPStreamSSE{EventKind: v.Sse.EventKind,
+			ContentType:       v.Sse.ContentType,
+			ContentTypeHeader: v.Sse.ContentTypeHeader,
+			EventField:        v.Sse.EventField,
+			DataField:         v.Sse.DataField,
+			IDField:           v.Sse.IdField,
+			RetryField:        v.Sse.RetryField,
+			EventPrefix:       v.Sse.EventPrefix,
+			DataPrefix:        v.Sse.DataPrefix,
+			IDPrefix:          v.Sse.IdPrefix,
+			RetryPrefix:       v.Sse.RetryPrefix,
+			LineEnding:        v.Sse.LineEnding,
+			EventTerminator:   v.Sse.EventTerminator,
+			MaxRetryMillis:    int64(v.Sse.MaxRetryMillis)}}, nil
 }

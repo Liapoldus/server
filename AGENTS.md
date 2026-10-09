@@ -16,6 +16,21 @@ reverse proxy, WebSocket/SSE и согласованный plugin dispatch.
 - Оператор сам устанавливает и запускает Core и Server plugin. Core не имеет
   права устанавливать, стартовать, останавливать, рестартовать, масштабировать
   или удалять Server process/container.
+- В v2 Core также не управляет workload или replica count, но `plugins/server/`
+  не входит в активную v2 разработку. Текущая Server v1 реализация остаётся
+  regression baseline; generic Core/SDK rollout проверяется на fixtures.
+- В v3 возобновляется весь будущий Server scope: replica integration,
+  multi-replica storage/ACME и conformance, Caddy-L4/public TCP/UDP.
+  Установка и плановые обновления во всех версиях принадлежат оператору;
+  Core не получает provider API.
+- Явно запрошенная техническая миграция внутренних settings definitions
+  разрешена с сохранением всех v1 semantics; это не разморозка product scope.
+  Envelope constants принадлежат `internal/domain/models/settings_definition.go`.
+  Grant-purpose constants принадлежат
+  `internal/presentation/restplugin/settings_secret_purposes.go`; SDK получает
+  их точные string values, а не результат загрузки внутреннего JSON asset.
+  Public settings schemas/semantics, Admin descriptors и site artifacts в этот
+  срез не входят; runtime не извлекает имена полей envelope из manifest-файла.
 - Core↔plugin lifecycle/config — только Plugin SDK REST + per-replica mTLS:
   `Reload(generation)`, plugin pull точных bytes, локальная validate/apply и
   ACK. Нельзя поддерживать product lifecycle через `pluginprotocol`.
@@ -63,8 +78,11 @@ reverse proxy, WebSocket/SSE и согласованный plugin dispatch.
 
 - Перед работой снять `git status --short`, branch/HEAD/remotes; посмотреть diff
   пересекающихся dirty/untracked файлов. Не очищать WIP другого агента.
-- Тесты/fixtures держать под `tests/`; не добавлять тесты/fixtures в production
-  пакеты. Использовать штатные Vitest и Go test workflow этого репозитория.
+- Детерминированные native Go unit/regression tests держать рядом с кодом в
+  `*_test.go`; TypeScript child-process/E2E tests и fixtures — под `tests/`.
+  Перед удалением file parser зафиксировать точные значения и существующие
+  error messages/semantics native regression tests. Использовать штатные Vitest
+  и Go test workflow этого репозитория.
 - Для lifecycle/security assertions использовать настоящий child process и
   mTLS, а не только unit mock. Тестировать реальный HTTP client/data plane.
 - Перед handoff выполнить полный `npx vitest run tests`, `go test ./...` (если

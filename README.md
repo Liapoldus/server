@@ -28,8 +28,10 @@ peer target: `--peer-target-id`, `--peer-endpoint`, `--peer-identity`,
 
 v1 включает HTTP/HTTPS, TLS/ACME, HTTP/2/3, статические сайты и reverse proxy.
 Публичный TCP/UDP relay и Caddy-L4 исключены из binary и settings schema и
-отложены до v2. Также в v2 отложены CAPTCHA, Identity/OIDC/OAuth, TUF/install
-через Core и управление процессами или контейнерами.
+отложены до v3. CAPTCHA и Identity/OIDC/OAuth также относятся к v3 и
+заморожены. Установку и плановые обновления Core и Server выполняет оператор
+выбранными средствами; Core не управляет процессами
+или контейнерами ни в одной версии.
 
 Полные границы и acceptance см. в
 [целевой архитектуре Core](../../liapoldus.github.io/core/architecture/target)

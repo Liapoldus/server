@@ -1,5 +1,203 @@
 {
-  "version": 1,
+  "pages": [
+    {
+      "capability": "server.sites.list",
+      "id": "sites",
+      "permissions": [
+        "plugins.server.read"
+      ],
+      "sections": [
+        {
+          "actions": [
+            {
+              "artifactInput": {
+                "maxBytes": 134217728,
+                "maxMetadataBytes": 65536,
+                "maxMultipartOverheadBytes": 65536,
+                "mediaTypes": [
+                  "application/gzip"
+                ]
+              },
+              "capability": "server.sites.publish",
+              "confirmation": "Проверить архив и опубликовать новую неизменяемую ревизию сайта?",
+              "id": "publish",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "expectedCurrentRevision": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "siteId": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "siteId"
+                ],
+                "type": "object"
+              },
+              "rowInput": {
+                "siteId": "siteId"
+              },
+              "title": "Опубликовать .tar.gz"
+            },
+            {
+              "capability": "server.sites.rollback",
+              "confirmation": "Атомарно переключить current и previous на выбранную неизменяемую ревизию?",
+              "dangerous": true,
+              "id": "rollback",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "expectedCurrentRevision": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "siteId": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "targetRevision": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "siteId",
+                  "expectedCurrentRevision",
+                  "targetRevision"
+                ],
+                "type": "object"
+              },
+              "rowInput": {
+                "expectedCurrentRevision": "currentRevision",
+                "siteId": "siteId",
+                "targetRevision": "previousRevision"
+              },
+              "title": "Откатить релиз"
+            }
+          ],
+          "columns": [
+            "siteId",
+            "currentRevision",
+            "previousRevision",
+            "updatedAt"
+          ],
+          "dataCapability": "server.sites.list",
+          "id": "sites",
+          "kind": "table",
+          "title": "Сайты"
+        },
+        {
+          "actions": [],
+          "columns": [
+            "siteId",
+            "revisionId",
+            "state",
+            "sha256",
+            "createdAt"
+          ],
+          "dataCapability": "server.sites.releases.list",
+          "id": "releases",
+          "kind": "table",
+          "title": "Неизменяемые ревизии"
+        },
+        {
+          "actions": [
+            {
+              "capability": "server.operations.get",
+              "id": "status",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "operationId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "operationId"
+                ],
+                "type": "object"
+              },
+              "rowInput": {
+                "operationId": "operationId"
+              },
+              "title": "Обновить состояние"
+            }
+          ],
+          "columns": [
+            "operationId",
+            "siteId",
+            "kind",
+            "state",
+            "progressPercent",
+            "updatedAt"
+          ],
+          "dataCapability": "server.operations.list",
+          "id": "operations",
+          "kind": "table",
+          "title": "Операции публикации"
+        }
+      ],
+      "title": "Сайты и релизы"
+    },
+    {
+      "capability": "server.certificates.list",
+      "id": "certificates",
+      "permissions": [
+        "plugins.server.tls.read"
+      ],
+      "sections": [
+        {
+          "actions": [
+            {
+              "capability": "server.certificates.get",
+              "id": "status",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "domain": {
+                    "maxLength": 253,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "domain"
+                ],
+                "type": "object"
+              },
+              "rowInput": {
+                "domain": "domain"
+              },
+              "title": "Проверить домен"
+            }
+          ],
+          "columns": [
+            "domain",
+            "source",
+            "readiness",
+            "notAfter",
+            "serial"
+          ],
+          "dataCapability": "server.certificates.list",
+          "id": "domains",
+          "kind": "table",
+          "title": "Домены и готовность TLS"
+        }
+      ],
+      "title": "Сертификаты"
+    }
+  ],
   "plugin": "server",
   "requiredCapabilities": [
     "admin.surface.get",
@@ -12,125 +210,5 @@
     "server.certificates.list",
     "server.certificates.get"
   ],
-  "pages": [
-    {
-      "id": "sites",
-      "title": "Сайты и релизы",
-      "capability": "server.sites.list",
-      "permissions": ["plugins.server.read"],
-      "sections": [
-        {
-          "id": "sites",
-          "kind": "table",
-          "title": "Сайты",
-          "dataCapability": "server.sites.list",
-          "columns": ["siteId", "currentRevision", "previousRevision", "updatedAt"],
-          "actions": [
-            {
-              "id": "publish",
-              "title": "Опубликовать .tar.gz",
-              "capability": "server.sites.publish",
-              "confirmation": "Проверить архив и опубликовать новую неизменяемую ревизию сайта?",
-              "inputSchema": {
-                "type": "object",
-                "properties": {
-                  "siteId": { "type": "string", "minLength": 1, "maxLength": 128 },
-                  "expectedCurrentRevision": { "type": "string", "minLength": 1, "maxLength": 256 }
-                },
-                "required": ["siteId"],
-                "additionalProperties": false
-              },
-              "artifactInput": {
-                "mediaTypes": ["application/gzip"],
-                "maxBytes": 134217728,
-                "maxMetadataBytes": 65536,
-                "maxMultipartOverheadBytes": 65536
-              },
-              "rowInput": { "siteId": "siteId" }
-            },
-            {
-              "id": "rollback",
-              "title": "Откатить релиз",
-              "capability": "server.sites.rollback",
-              "confirmation": "Атомарно переключить current и previous на выбранную неизменяемую ревизию?",
-              "dangerous": true,
-              "inputSchema": {
-                "type": "object",
-                "properties": {
-                  "siteId": { "type": "string", "minLength": 1, "maxLength": 128 },
-                  "expectedCurrentRevision": { "type": "string", "minLength": 1, "maxLength": 256 },
-                  "targetRevision": { "type": "string", "minLength": 1, "maxLength": 256 }
-                },
-                "required": ["siteId", "expectedCurrentRevision", "targetRevision"],
-                "additionalProperties": false
-              },
-              "rowInput": {
-                "siteId": "siteId",
-                "expectedCurrentRevision": "currentRevision",
-                "targetRevision": "previousRevision"
-              }
-            }
-          ]
-        },
-        {
-          "id": "releases",
-          "kind": "table",
-          "title": "Неизменяемые ревизии",
-          "dataCapability": "server.sites.releases.list",
-          "columns": ["siteId", "revisionId", "state", "sha256", "createdAt"],
-          "actions": []
-        },
-        {
-          "id": "operations",
-          "kind": "table",
-          "title": "Операции публикации",
-          "dataCapability": "server.operations.list",
-          "columns": ["operationId", "siteId", "kind", "state", "progressPercent", "updatedAt"],
-          "actions": [
-            {
-              "id": "status",
-              "title": "Обновить состояние",
-              "capability": "server.operations.get",
-              "inputSchema": {
-                "type": "object",
-                "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 256 } },
-                "required": ["operationId"],
-                "additionalProperties": false
-              },
-              "rowInput": { "operationId": "operationId" }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "certificates",
-      "title": "Сертификаты",
-      "capability": "server.certificates.list",
-      "permissions": ["plugins.server.tls.read"],
-      "sections": [
-        {
-          "id": "domains",
-          "kind": "table",
-          "title": "Домены и готовность TLS",
-          "dataCapability": "server.certificates.list",
-          "columns": ["domain", "source", "readiness", "notAfter", "serial"],
-          "actions": [
-            {
-              "id": "status",
-              "title": "Проверить домен",
-              "capability": "server.certificates.get",
-              "inputSchema": {
-                "type": "object",
-                "properties": { "domain": { "type": "string", "minLength": 1, "maxLength": 253 } },
-                "required": ["domain"],
-                "additionalProperties": false
-              },
-              "rowInput": { "domain": "domain" }
-            }
-          ]
-        }
-      ]
-    }
-  ]
+  "version": 1
 }

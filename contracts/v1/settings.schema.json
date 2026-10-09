@@ -1,286 +1,566 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://liapoldus.github.io/plugins/server/settings/v1/schema.json",
-  "title": "Server plugin settings v1",
-  "description": "Strict Liapoldus configuration compiled privately into the Caddy runtime. Native Caddy JSON and Caddyfile input are not accepted.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "config"],
-  "properties": {
-    "schemaVersion": { "const": 1 },
-    "config": { "$ref": "#/$defs/config" }
-  },
   "$defs": {
-    "nonEmptyString": {
-      "type": "string",
-      "minLength": 1
-    },
-    "socketAddress": {
-      "type": "string",
-      "description": "An HTTP listener bind address in host:port form. Host is empty wildcard, IPv4 literal, or bracketed IPv6 literal; port is ASCII decimal 1 through 65535 without leading zero. Reload additionally validates IP literals with netip.ParseAddr and rejects IPv6 zone identifiers.",
-      "pattern": "^(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|\\[[0-9A-Fa-f:.]+\\]:(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))$"
+    "config": {
+      "additionalProperties": false,
+      "description": "Strict Liapoldus desired settings, not native Caddy JSON or Caddyfile. Before compiling a candidate runtime configuration, SDK Reload candidate apply rejects duplicate IDs/binds, unresolved listener/site references, route/listener kind mismatches, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and mode values outside the Server-supported enum. It does not preflight product methods on remote peers.",
+      "properties": {
+        "listeners": {
+          "items": {
+            "$ref": "#/$defs/listener"
+          },
+          "type": "array"
+        },
+        "routes": {
+          "items": {
+            "$ref": "#/$defs/route"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "listeners",
+        "routes"
+      ],
+      "type": "object"
     },
     "hostname": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 255,
       "description": "DNS hostname or a leftmost wildcard. Reload canonicalizes IDNA to a lowercase A-label without a port; a wildcard matches exactly one DNS label and never the apex.",
-      "pattern": "^(?:\\*\\.)?[^.*:/?#\\s]+(?:\\.[^.*:/?#\\s]+)*$"
+      "maxLength": 255,
+      "minLength": 1,
+      "pattern": "^(?:\\*\\.)?[^.*:/?#\\s]+(?:\\.[^.*:/?#\\s]+)*$",
+      "type": "string"
     },
-    "httpProtocol": {
-      "type": "string",
-      "enum": ["http1", "http2", "http3"]
-    },
-    "tlsAutomatic": {
-      "type": "object",
-      "description": "Uses Caddy-managed ACME certificates for declared hostnames. HTTP redirects to HTTPS only through a separately declared plaintext redirect-only listener; no HTTP socket is opened implicitly. Effective TLS bounds are TLS 1.2 minimum and TLS 1.3 maximum; HTTP/3 is available only over TLS. HTTP-01 and TLS-ALPN-01 use built modules; DNS-01 is available only for provider modules compiled into this binary. The provider list is a build concern, not a settings field.",
-      "additionalProperties": false,
-      "required": ["mode"],
-      "properties": {
-        "mode": { "const": "automatic" }
-      }
-    },
-    "tlsCustom": {
-      "type": "object",
-      "description": "Uses the referenced certificate/key pair. The plugin resolves references only through the scoped secret-grant boundary and validates the pair before activation. Effective TLS bounds are TLS 1.2 minimum and TLS 1.3 maximum.",
-      "additionalProperties": false,
-      "required": ["mode", "certificateRef", "privateKeyRef"],
-      "properties": {
-        "mode": { "const": "custom" },
-        "certificateRef": { "$ref": "#/$defs/nonEmptyString", "description": "Opaque Core-generated secret reference; never PEM bytes or a path." },
-        "privateKeyRef": { "$ref": "#/$defs/nonEmptyString", "description": "Opaque Core-generated secret reference; never PEM bytes or a path." }
-      }
-    },
-    "tlsDisabled": {
-      "type": "object",
-      "description": "Explicit HTTP/1.1 plaintext listener. It cannot declare hostnames, routes with host matchers, or ACME behavior.",
-      "additionalProperties": false,
-      "required": ["mode"],
-      "properties": {
-        "mode": { "const": "disabled" }
-      }
-    },
-    "tls": {
+    "httpHandler": {
       "oneOf": [
-        { "$ref": "#/$defs/tlsAutomatic" },
-        { "$ref": "#/$defs/tlsCustom" },
-        { "$ref": "#/$defs/tlsDisabled" }
+        {
+          "$ref": "#/$defs/staticHandler"
+        },
+        {
+          "$ref": "#/$defs/reverseProxyHandler"
+        },
+        {
+          "$ref": "#/$defs/pluginHandler"
+        }
       ]
     },
     "httpListener": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "address", "hostnames", "protocols", "tls"],
-      "properties": {
-        "id": { "$ref": "#/$defs/nonEmptyString" },
-        "kind": { "const": "http" },
-        "address": { "$ref": "#/$defs/socketAddress" },
-        "hostnames": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/hostname" },
-          "description": "Explicit hostnames owned by this listener. IDNA/case-equivalent duplicates are rejected during SDK Reload candidate apply."
-        },
-        "protocols": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/httpProtocol" },
-          "description": "Explicitly enabled protocols; HTTP/3 is permitted only for automatic or custom TLS. No protocol is enabled implicitly."
-        },
-        "tls": { "$ref": "#/$defs/tls" },
-        "redirectToListenerId": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional explicit redirect-only listener target. The target must be a TLS-enabled HTTP listener with declared hostname coverage; the source listener must have no routes. The redirect source never binds implicitly."
-        }
-      },
       "allOf": [
         {
-          "if": {
-            "type": "object",
-            "properties": { "tls": { "type": "object", "properties": { "mode": { "const": "disabled" } } } }
-          },
-          "then": {
+          "else": {
             "properties": {
-              "hostnames": { "type": "array", "maxItems": 0 },
-              "protocols": { "const": ["http1"] }
+              "hostnames": {
+                "minItems": 1,
+                "type": "array"
+              }
             }
           },
-          "else": { "properties": { "hostnames": { "type": "array", "minItems": 1 } } }
-        },
-        {
-          "if": { "type": "object", "required": ["redirectToListenerId"] },
+          "if": {
+            "properties": {
+              "tls": {
+                "properties": {
+                  "mode": {
+                    "const": "disabled"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
           "then": {
             "properties": {
-              "tls": { "type": "object", "properties": { "mode": { "const": "disabled" } } },
-              "protocols": { "const": ["http1"] }
+              "hostnames": {
+                "maxItems": 0,
+                "type": "array"
+              },
+              "protocols": {
+                "const": [
+                  "http1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "redirectToListenerId"
+            ],
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "protocols": {
+                "const": [
+                  "http1"
+                ]
+              },
+              "tls": {
+                "properties": {
+                  "mode": {
+                    "const": "disabled"
+                  }
+                },
+                "type": "object"
+              }
             }
           }
         }
-      ]
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/socketAddress"
+        },
+        "hostnames": {
+          "description": "Explicit hostnames owned by this listener. IDNA/case-equivalent duplicates are rejected during SDK Reload candidate apply.",
+          "items": {
+            "$ref": "#/$defs/hostname"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "kind": {
+          "const": "http"
+        },
+        "protocols": {
+          "description": "Explicitly enabled protocols; HTTP/3 is permitted only for automatic or custom TLS. No protocol is enabled implicitly.",
+          "items": {
+            "$ref": "#/$defs/httpProtocol"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "redirectToListenerId": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional explicit redirect-only listener target. The target must be a TLS-enabled HTTP listener with declared hostname coverage; the source listener must have no routes. The redirect source never binds implicitly."
+        },
+        "tls": {
+          "$ref": "#/$defs/tls"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "address",
+        "hostnames",
+        "protocols",
+        "tls"
+      ],
+      "type": "object"
+    },
+    "httpMatch": {
+      "additionalProperties": false,
+      "description": "All supplied predicates are combined with AND; omitted predicates are wildcards. An absent match object matches every request for the listener. Hosts are exact or a leftmost one-label wildcard, canonicalized during SDK Reload candidate apply as lowercase IDNA A-labels without ports; methods are exact case-sensitive HTTP method tokens.",
+      "properties": {
+        "hosts": {
+          "items": {
+            "$ref": "#/$defs/hostname"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "methods": {
+          "items": {
+            "$ref": "#/$defs/method"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "path": {
+          "$ref": "#/$defs/pathMatcher"
+        }
+      },
+      "type": "object"
+    },
+    "httpProtocol": {
+      "enum": [
+        "http1",
+        "http2",
+        "http3"
+      ],
+      "type": "string"
+    },
+    "httpRoute": {
+      "additionalProperties": false,
+      "description": "Routes are evaluated in array order for their listener; the first matching route is terminal and executes exactly one handler. Supplied matcher predicates are ANDed. SDK Reload candidate apply rejects unresolved listener references, duplicate IDs/binds, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and mode values outside the Server-supported enum before activation. Target peer method availability is checked only when invoked.",
+      "properties": {
+        "handler": {
+          "$ref": "#/$defs/httpHandler"
+        },
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "listenerId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "match": {
+          "$ref": "#/$defs/httpMatch"
+        }
+      },
+      "required": [
+        "id",
+        "listenerId",
+        "handler"
+      ],
+      "type": "object"
     },
     "listener": {
       "$ref": "#/$defs/httpListener"
+    },
+    "method": {
+      "minLength": 1,
+      "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+      "type": "string"
+    },
+    "nonEmptyString": {
+      "minLength": 1,
+      "type": "string"
     },
     "pathMatcher": {
       "description": "Exactly one path mode compares against the canonical request path without query. Before matching, the request path rejects malformed percent-encoding, NUL/control and invalid UTF-8, percent-decodes exactly once, removes dot segments, collapses repeated slashes and preserves a trailing slash (including paths ending in /. or /..). exact is equality and prefix is case-sensitive prefix matching; glob and regex are full-match. exact/prefix/glob configured values are already-decoded canonical absolute paths: Reload rejects repeated slashes and literal dot segments and never percent-decodes settings. Glob tokens are read left-to-right using the longest token (** before *), so *** means ** followed by *; * matches any number of non-slash characters, ** any characters including slash, and ? exactly one non-slash character; character classes and escaping are not supported. Regex uses Go RE2 full-match over the canonical request path; its source is compiled but not path-normalized. Reload validates configured paths and compiles regex before activation.",
       "oneOf": [
         {
-          "type": "object",
           "additionalProperties": false,
-          "required": ["type", "value"],
-          "properties": { "type": { "const": "exact" }, "value": { "$ref": "#/$defs/nonEmptyString" } }
+          "properties": {
+            "type": {
+              "const": "exact"
+            },
+            "value": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
         },
         {
-          "type": "object",
           "additionalProperties": false,
-          "required": ["type", "value"],
-          "properties": { "type": { "const": "prefix" }, "value": { "$ref": "#/$defs/nonEmptyString" } }
+          "properties": {
+            "type": {
+              "const": "prefix"
+            },
+            "value": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
         },
         {
-          "type": "object",
           "additionalProperties": false,
-          "required": ["type", "value"],
-          "properties": { "type": { "const": "glob" }, "value": { "$ref": "#/$defs/nonEmptyString" } },
           "allOf": [
             {
-              "properties": { "value": { "not": { "type": "string", "pattern": "\\[|\\]|\\\\" } } }
+              "properties": {
+                "value": {
+                  "not": {
+                    "pattern": "\\[|\\]|\\\\",
+                    "type": "string"
+                  }
+                }
+              }
             }
-          ]
+          ],
+          "properties": {
+            "type": {
+              "const": "glob"
+            },
+            "value": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
         },
         {
-          "type": "object",
           "additionalProperties": false,
-          "required": ["type", "value"],
-          "properties": { "type": { "const": "regex" }, "value": { "$ref": "#/$defs/nonEmptyString" } }
+          "properties": {
+            "type": {
+              "const": "regex"
+            },
+            "value": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
         }
       ]
-    },
-    "method": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
-    },
-    "httpMatch": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "All supplied predicates are combined with AND; omitted predicates are wildcards. An absent match object matches every request for the listener. Hosts are exact or a leftmost one-label wildcard, canonicalized during SDK Reload candidate apply as lowercase IDNA A-labels without ports; methods are exact case-sensitive HTTP method tokens.",
-      "properties": {
-        "hosts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/hostname" } },
-        "methods": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/method" } },
-        "path": { "$ref": "#/$defs/pathMatcher" }
-      }
-    },
-    "staticHandler": {
-      "type": "object",
-      "description": "Serves the active current release for siteId. A route cannot pin an immutable release or select previous; publishing or rollback changes the current pointer without changing the route.",
-      "additionalProperties": false,
-      "required": ["type", "siteId"],
-      "properties": { "type": { "const": "static" }, "siteId": { "$ref": "#/$defs/nonEmptyString" } }
-    },
-    "upstream": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["origin"],
-      "properties": {
-        "origin": {
-          "type": "string",
-          "pattern": "^https?://[^/@?#\\s]+$",
-          "description": "HTTP(S) origin authority only: no userinfo, path, query, or fragment. Full URL and port parsing is checked during SDK Reload candidate apply."
-        },
-        "weight": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100,
-          "default": 1,
-          "description": "Smooth weighted round-robin weight. An omitted value is interpreted as 1."
-        },
-        "caRef": { "$ref": "#/$defs/nonEmptyString", "description": "Optional opaque private-CA secret reference; accepted only for HTTPS origins. It extends the system trust chain and never disables hostname verification." }
-      },
-      "allOf": [
-        {
-          "if": { "type": "object", "properties": { "origin": { "type": "string", "pattern": "^http://" } }, "required": ["origin"] },
-          "then": { "not": { "required": ["caRef"] } }
-        }
-      ]
-    },
-    "reverseProxyHandler": {
-      "type": "object",
-      "description": "Uses per-route smooth weighted round-robin with 1–32 origins and weights 1–100 (default 1): add each eligible weight to its current weight, choose the largest (ties use array order), then subtract the eligible-weight sum from the selected origin. If the eligible set changes, current weights reset for that set. Only TCP refusal/timeout before request bytes passively excludes an origin for 30 seconds and permits at most one next-origin retry. TLS handshake/verification failure and failures after TCP connect are terminal and neither retried nor passively excluded; active health probes are not used. Once request bytes are sent, the request is never replayed.",
-      "additionalProperties": false,
-      "required": ["type", "upstreams"],
-      "properties": {
-        "type": { "const": "reverseProxy" },
-        "upstreams": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/upstream" } }
-      }
     },
     "pluginHandler": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["type", "instanceId", "capability", "mode"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "call"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "streamLimits"
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
-        "type": { "const": "plugin" },
-        "instanceId": { "$ref": "#/$defs/nonEmptyString" },
-        "capability": { "$ref": "#/$defs/nonEmptyString" },
-        "requestCookieNames": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1, "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$" },
-          "description": "Only these request Cookie names are included in the plugin request context; all other cookies are omitted."
+        "capability": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "instanceId": {
+          "$ref": "#/$defs/nonEmptyString"
         },
         "mode": {
-          "enum": ["call", "http_stream", "websocket", "sse"],
-          "description": "Selects a Server-supported invocation mode. Target method availability is determined by the generic peer call at invocation time; Core does not inspect product capabilities."
+          "description": "Selects a Server-supported invocation mode. Target method availability is determined by the generic peer call at invocation time; Core does not inspect product capabilities.",
+          "enum": [
+            "call",
+            "http_stream",
+            "websocket",
+            "sse"
+          ]
+        },
+        "requestCookieNames": {
+          "description": "Only these request Cookie names are included in the plugin request context; all other cookies are omitted.",
+          "items": {
+            "minLength": 1,
+            "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
         },
         "streamLimits": {
-          "type": "object",
           "additionalProperties": false,
           "description": "Optional per-route bounds for long-lived streaming modes; all limits remain subject to the per-instance ceiling. Omitted values use the versioned defaults: concurrency 128 per route and instance, idle 60000 ms, maximum duration 3600000 ms.",
           "properties": {
-            "maxConcurrency": { "type": "integer", "minimum": 1, "maximum": 128 },
-            "idleTimeoutMillis": { "type": "integer", "minimum": 1000, "maximum": 60000 },
-            "maxDurationMillis": { "type": "integer", "minimum": 1000, "maximum": 3600000 }
-          }
+            "idleTimeoutMillis": {
+              "maximum": 60000,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            "maxConcurrency": {
+              "maximum": 128,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxDurationMillis": {
+              "maximum": 3600000,
+              "minimum": 1000,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "plugin"
         }
       },
-      "allOf": [
-        {
-          "if": { "properties": { "mode": { "const": "call" } }, "required": ["mode"] },
-          "then": { "not": { "required": ["streamLimits"] } }
-        }
-      ]
+      "required": [
+        "type",
+        "instanceId",
+        "capability",
+        "mode"
+      ],
+      "type": "object"
     },
-    "httpHandler": {
-      "oneOf": [
-        { "$ref": "#/$defs/staticHandler" },
-        { "$ref": "#/$defs/reverseProxyHandler" },
-        { "$ref": "#/$defs/pluginHandler" }
-      ]
-    },
-    "httpRoute": {
-      "type": "object",
+    "reverseProxyHandler": {
       "additionalProperties": false,
-      "description": "Routes are evaluated in array order for their listener; the first matching route is terminal and executes exactly one handler. Supplied matcher predicates are ANDed. SDK Reload candidate apply rejects unresolved listener references, duplicate IDs/binds, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and mode values outside the Server-supported enum before activation. Target peer method availability is checked only when invoked.",
-      "required": ["id", "listenerId", "handler"],
+      "description": "Uses per-route smooth weighted round-robin with 1–32 origins and weights 1–100 (default 1): add each eligible weight to its current weight, choose the largest (ties use array order), then subtract the eligible-weight sum from the selected origin. If the eligible set changes, current weights reset for that set. Only TCP refusal/timeout before request bytes passively excludes an origin for 30 seconds and permits at most one next-origin retry. TLS handshake/verification failure and failures after TCP connect are terminal and neither retried nor passively excluded; active health probes are not used. Once request bytes are sent, the request is never replayed.",
       "properties": {
-        "id": { "$ref": "#/$defs/nonEmptyString" },
-        "listenerId": { "$ref": "#/$defs/nonEmptyString" },
-        "match": { "$ref": "#/$defs/httpMatch" },
-        "handler": { "$ref": "#/$defs/httpHandler" }
-      }
+        "type": {
+          "const": "reverseProxy"
+        },
+        "upstreams": {
+          "items": {
+            "$ref": "#/$defs/upstream"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "upstreams"
+      ],
+      "type": "object"
     },
     "route": {
       "$ref": "#/$defs/httpRoute"
     },
-    "config": {
-      "type": "object",
+    "socketAddress": {
+      "description": "An HTTP listener bind address in host:port form. Host is empty wildcard, IPv4 literal, or bracketed IPv6 literal; port is ASCII decimal 1 through 65535 without leading zero. Reload additionally validates IP literals with netip.ParseAddr and rejects IPv6 zone identifiers.",
+      "pattern": "^(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|\\[[0-9A-Fa-f:.]+\\]:(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))$",
+      "type": "string"
+    },
+    "staticHandler": {
       "additionalProperties": false,
-      "description": "Strict Liapoldus desired settings, not native Caddy JSON or Caddyfile. Before compiling a candidate runtime configuration, SDK Reload candidate apply rejects duplicate IDs/binds, unresolved listener/site references, route/listener kind mismatches, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and mode values outside the Server-supported enum. It does not preflight product methods on remote peers.",
-      "required": ["listeners", "routes"],
+      "description": "Serves the active current release for siteId. A route cannot pin an immutable release or select previous; publishing or rollback changes the current pointer without changing the route.",
       "properties": {
-        "listeners": { "type": "array", "items": { "$ref": "#/$defs/listener" } },
-        "routes": { "type": "array", "items": { "$ref": "#/$defs/route" } }
-      }
+        "siteId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "type": {
+          "const": "static"
+        }
+      },
+      "required": [
+        "type",
+        "siteId"
+      ],
+      "type": "object"
+    },
+    "tls": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/tlsAutomatic"
+        },
+        {
+          "$ref": "#/$defs/tlsCustom"
+        },
+        {
+          "$ref": "#/$defs/tlsDisabled"
+        }
+      ]
+    },
+    "tlsAutomatic": {
+      "additionalProperties": false,
+      "description": "Uses Caddy-managed ACME certificates for declared hostnames. HTTP redirects to HTTPS only through a separately declared plaintext redirect-only listener; no HTTP socket is opened implicitly. Effective TLS bounds are TLS 1.2 minimum and TLS 1.3 maximum; HTTP/3 is available only over TLS. HTTP-01 and TLS-ALPN-01 use built modules; DNS-01 is available only for provider modules compiled into this binary. The provider list is a build concern, not a settings field.",
+      "properties": {
+        "mode": {
+          "const": "automatic"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "tlsCustom": {
+      "additionalProperties": false,
+      "description": "Uses the referenced certificate/key pair. The plugin resolves references only through the scoped secret-grant boundary and validates the pair before activation. Effective TLS bounds are TLS 1.2 minimum and TLS 1.3 maximum.",
+      "properties": {
+        "certificateRef": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Opaque Core-generated secret reference; never PEM bytes or a path."
+        },
+        "mode": {
+          "const": "custom"
+        },
+        "privateKeyRef": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Opaque Core-generated secret reference; never PEM bytes or a path."
+        }
+      },
+      "required": [
+        "mode",
+        "certificateRef",
+        "privateKeyRef"
+      ],
+      "type": "object"
+    },
+    "tlsDisabled": {
+      "additionalProperties": false,
+      "description": "Explicit HTTP/1.1 plaintext listener. It cannot declare hostnames, routes with host matchers, or ACME behavior.",
+      "properties": {
+        "mode": {
+          "const": "disabled"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "upstream": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "pattern": "^http://",
+                "type": "string"
+              }
+            },
+            "required": [
+              "origin"
+            ],
+            "type": "object"
+          },
+          "then": {
+            "not": {
+              "required": [
+                "caRef"
+              ]
+            }
+          }
+        }
+      ],
+      "properties": {
+        "caRef": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional opaque private-CA secret reference; accepted only for HTTPS origins. It extends the system trust chain and never disables hostname verification."
+        },
+        "origin": {
+          "description": "HTTP(S) origin authority only: no userinfo, path, query, or fragment. Full URL and port parsing is checked during SDK Reload candidate apply.",
+          "pattern": "^https?://[^/@?#\\s]+$",
+          "type": "string"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Smooth weighted round-robin weight. An omitted value is interpreted as 1.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "origin"
+      ],
+      "type": "object"
     }
-  }
+  },
+  "$id": "https://liapoldus.github.io/plugins/server/settings/v1/schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Strict Liapoldus configuration compiled privately into the Caddy runtime. Native Caddy JSON and Caddyfile input are not accepted.",
+  "properties": {
+    "config": {
+      "$ref": "#/$defs/config"
+    },
+    "schemaVersion": {
+      "const": 1
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "config"
+  ],
+  "title": "Server plugin settings v1",
+  "type": "object"
 }

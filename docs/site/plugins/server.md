@@ -27,6 +27,18 @@ Admin API не публикуется и не является интерфей�
 
 ## HTTP configuration v1
 
+Внутренний decoder settings использует typed Go-константы из
+`internal/domain/models/settings_definition.go`: version `1`, поле версии
+`schemaVersion` и поле runtime config `config`. Runtime не читает эти значения
+из `plugin.json`; native regression tests проверяют их точное соответствие
+опубликованному manifest, исходные config bytes и settings error messages.
+Три неизменяемых grant purposes для certificate, private key и upstream CA
+определены типом `SettingsSecretPurpose` в REST adapter; прежний внутренний
+`secret-purposes.json` и его loader удалены после проверки всех потребителей.
+Public settings schema/semantics, Admin descriptors и site artifacts сохраняют
+своих текущих владельцев. Этот технический срез не завершает общую миграцию
+контрактов в code-first и не расширяет v1 возможности.
+
 Server plugin принимает только собственный versioned JSON contract, не raw Caddy
 JSON и не Caddyfile. Настройки задают public HTTP/HTTPS listeners и ordered
 routes. Matcher v1 поддерживает hostname/method и ровно один path режим
@@ -139,16 +151,58 @@ plugin перезапустился, текущий вызов завершае�
 автоматически переигрывать неизвестный результат изменяющей операции. Core не
 перезапускает удалённые plugin processes и не проксирует peer traffic.
 
-## Явно вне v1 — v2
+## Версионные границы
 
-- Caddy-L4 и public TCP/UDP listeners/relay.
-- CAPTCHA и Identity (OIDC/OAuth) plugins.
-- TUF catalog, проверка и установка plugin releases через Core.
-- Core-managed local process supervision и Docker/Compose/Swarm/Kubernetes.
+- V2: общие Core/Plugin SDK registration, leases и rollout без изменения
+  Server repository. Проверяй эту платформенную работу на generic fixtures;
+  существующий Server v1 используется только как неизменённый regression target.
+- V3: Server-specific replica registration/compatibility, rollout, scaling и
+  shared storage/ACME conformance.
+- V3: Caddy-L4 и public TCP/UDP listeners/relay; Identity/CAPTCHA integrations
+  только после отдельной разморозки соответствующих plugin owners.
+- Во всех версиях оператор отвечает за проверку immutable release artifact,
+  установку и плановое обновление Server.
+  Core не получает API установки или управления workloads.
 
 Эти возможности не входят в v1 binary, API, SQLite state, documentation gates
 или tests. Полная граница версий находится в
 [целевой архитектуре Core](../core/architecture/target).
+
+## Масштабируемый Server в v3 — отложенный проектный контракт
+
+В отличие от однорепличного v1, будущий v3 допускает несколько Server replicas одного
+instance. Каждая должна регистрироваться через Plugin SDK с уникальной mTLS identity,
+SemVer/digest, placement и applied generation. Одновременно могут обслуживать
+две совместимые когорты `(release digest, config generation)`; Core назначает
+когорты и проверяет ACK, а внешний ingress применяет и подтверждает публичные
+веса. HTTP affinity во время canary принадлежит ingress. Незавершённые streams
+доживают или завершаются при bounded drain без replay.
+
+Все Server replicas, обслуживающие один сайт, используют общий RWX filesystem
+для immutable site releases, `current`/`previous` и CertMagic storage. Публикация
+release требует single-writer coordination, атомарного переключения указателей
+и восстановления после сбоя; локальные каталоги replicas не являются общим
+источником истины. CertMagic storage должен корректно выполнять атомарные
+операции и распределённые блокировки для ACME. Конкретный RWX filesystem
+объявляется поддерживаемым только после conformance на concurrent issuance,
+locking, publish/rollback, crash recovery и повреждение/недоступность тома.
+Простой RWX mount без этих проверок не доказывает готовность к эксплуатации.
+
+Текущие child-process проверки подтверждают сериализацию конкурирующей
+публикации, recovery принятой durable operation после принудительного
+завершения принимающего процесса и одновременный recovery двумя независимыми
+Server-процессами на локальной файловой системе. Оба восстановителя должны
+наблюдать одну completed operation и один активный revision. Это не
+подтверждает семантику блокировок, crash recovery или ACME coordination для
+NFS/другого RWX volume; поддерживаемый multi-host storage profile пока не
+выбран и не заявляется.
+
+Rollout двух версий допускается только если Server Manifest объявляет
+совместимость shared storage layout, site release format и peer/HTTP contracts.
+Несовместимые версии требуют отдельного maintenance rollout без совместного
+доступа к state. Caddy-L4 и public TCP/UDP relay также относятся к v3, но
+проверяются отдельными Server-owned gates. Каноническая модель регистрации и размещения приведена в
+[документации Core](../core/architecture/plugin-deployment).
 
 ## Ручной запуск v1
 

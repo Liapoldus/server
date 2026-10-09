@@ -16,10 +16,10 @@ import (
 var ErrInvalidManifest = errors.New("invalid site manifest")
 
 type Manifest struct {
-	SchemaVersion int    `json:"schemaVersion"`
 	SiteID        string `json:"siteId"`
 	DocumentRoot  string `json:"documentRoot"`
 	IndexDocument string `json:"indexDocument"`
+	SchemaVersion int    `json:"schemaVersion"`
 }
 
 // ValidateStagedManifest validates the root manifest and its document-root/index

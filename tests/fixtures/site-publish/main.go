@@ -14,8 +14,9 @@ import (
 	"strconv"
 
 	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	siteapp "liapoldus.local/server-plugin/internal/application/site"
+	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/internal/infrastructure/site"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
@@ -34,49 +35,49 @@ type request struct {
 }
 
 type outcome struct {
-	Accepted         bool    `json:"accepted"`
+	PreviousRevision *string `json:"previousRevision"`
 	OperationID      string  `json:"operationId,omitempty"`
 	State            string  `json:"state,omitempty"`
 	Code             string  `json:"code,omitempty"`
 	CurrentRevision  string  `json:"currentRevision,omitempty"`
-	PreviousRevision *string `json:"previousRevision"`
 	RootDocument     string  `json:"rootDocument,omitempty"`
+	Accepted         bool    `json:"accepted"`
 }
 
 type report struct {
-	First                         outcome    `json:"first"`
-	AfterRestart                  outcome    `json:"afterRestart"`
-	CurrentRevision               string     `json:"currentRevision,omitempty"`
 	PreviousRevision              *string    `json:"previousRevision"`
+	AfterSecondPublish            outcome    `json:"afterSecondPublish"`
+	BadDigest                     outcome    `json:"badDigest"`
+	AfterRestart                  outcome    `json:"afterRestart"`
 	Duplicate                     outcome    `json:"duplicate"`
-	DuplicateEffectCount          int        `json:"duplicateEffectCount"`
+	First                         outcome    `json:"first"`
 	IdempotencyConflict           outcome    `json:"idempotencyConflict"`
 	Second                        outcome    `json:"second"`
-	AfterSecondPublish            outcome    `json:"afterSecondPublish"`
-	StaleCAS                      outcome    `json:"staleCAS"`
-	BadDigest                     outcome    `json:"badDigest"`
+	RollbackRepeat                outcome    `json:"rollbackRepeat"`
+	Rollback                      outcome    `json:"rollback"`
 	DuplicateMetadata             outcome    `json:"duplicateMetadata"`
+	StaleCAS                      outcome    `json:"staleCAS"`
 	InvalidArchiveAccepted        outcome    `json:"invalidArchiveAccepted"`
 	InvalidArchiveAfterProcessing outcome    `json:"invalidArchiveAfterProcessing"`
-	StateAfterInvalidArchive      string     `json:"stateAfterInvalidArchive"`
-	OrphanStagingRemoved          bool       `json:"orphanStagingRemoved"`
 	PostSwitchRecovery            outcome    `json:"postSwitchRecovery"`
-	Rollback                      outcome    `json:"rollback"`
-	RollbackRepeat                outcome    `json:"rollbackRepeat"`
+	StateAfterInvalidArchive      string     `json:"stateAfterInvalidArchive"`
+	CurrentRevision               string     `json:"currentRevision,omitempty"`
 	FinalState                    finalState `json:"finalState"`
+	DuplicateEffectCount          int        `json:"duplicateEffectCount"`
+	OrphanStagingRemoved          bool       `json:"orphanStagingRemoved"`
 }
 
 type finalState struct {
-	CurrentRevision     string  `json:"currentRevision"`
 	PreviousRevision    *string `json:"previousRevision"`
+	CurrentRevision     string  `json:"currentRevision"`
 	RootDocument        string  `json:"rootDocument"`
 	NestedAsset         string  `json:"nestedAsset"`
 	DirectoryIndex      string  `json:"directoryIndex"`
-	ManifestPublic      bool    `json:"manifestPublic"`
 	CaddyRootDocument   string  `json:"caddyRootDocument"`
 	CaddyNestedAsset    string  `json:"caddyNestedAsset"`
 	CaddyDirectoryIndex string  `json:"caddyDirectoryIndex"`
 	CaddyManifestStatus int     `json:"caddyManifestStatus"`
+	ManifestPublic      bool    `json:"manifestPublic"`
 }
 
 func main() {
@@ -98,7 +99,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	publisher, err := application.NewSitePublisher(store)
+	publisher, err := siteapp.NewSitePublisher(store)
 	if err != nil {
 		panic(err)
 	}
@@ -124,7 +125,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	publisher, err = application.NewSitePublisher(store)
+	publisher, err = siteapp.NewSitePublisher(store)
 	if err != nil {
 		panic(err)
 	}
@@ -166,7 +167,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	publisher, err = application.NewSitePublisher(store)
+	publisher, err = siteapp.NewSitePublisher(store)
 	if err != nil || publisher.ProcessPending(context.Background()) != nil {
 		panic("post-pointer crash recovery failed")
 	}
@@ -212,7 +213,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		publisher, err = application.NewSitePublisher(store)
+		publisher, err = siteapp.NewSitePublisher(store)
 		if err != nil {
 			panic(err)
 		}
@@ -246,11 +247,11 @@ func main() {
 	}
 	_, err = publisher.OpenSiteDocument(context.Background(), "docs", "/site-manifest.json")
 	output.FinalState.ManifestPublic = err == nil
-	if !errors.Is(err, application.ErrDocumentNotFound) {
+	if !errors.Is(err, siteapp.ErrDocumentNotFound) {
 		panic("manifest was not hidden using the product not-found result")
 	}
 	output.FinalState.CaddyRootDocument, output.FinalState.CaddyNestedAsset, output.FinalState.CaddyDirectoryIndex, output.FinalState.CaddyManifestStatus = servePublishedSite(root, request.Port)
-	rollbackOperation, err := publisher.Rollback(context.Background(), models.SiteRollbackInput{
+	rollbackOperation, err := publisher.Rollback(context.Background(), sitemodel.SiteRollbackInput{
 		SiteID: "docs", ExpectedCurrentRevision: secondRevision, TargetRevision: firstRevision,
 		IdempotencyKey: "rollback-one", Capability: contract.RollbackCapability,
 	})
@@ -270,11 +271,11 @@ func main() {
 		panic(err)
 	}
 	output.Rollback = outcome{Accepted: rollbackOperation.State == contract.CompletedState, OperationID: rollbackOperation.OperationID, State: string(rollbackOperation.State), CurrentRevision: rollbackState.CurrentRevision, PreviousRevision: rollbackState.PreviousRevision, RootDocument: rollbackDocument}
-	_, repeatErr := publisher.Rollback(context.Background(), models.SiteRollbackInput{
+	_, repeatErr := publisher.Rollback(context.Background(), sitemodel.SiteRollbackInput{
 		SiteID: "docs", ExpectedCurrentRevision: secondRevision, TargetRevision: firstRevision,
 		IdempotencyKey: "rollback-one", Capability: contract.RollbackCapability,
 	})
-	if errors.Is(repeatErr, models.ErrSiteConflict) {
+	if errors.Is(repeatErr, sitemodel.ErrSiteConflict) {
 		output.RollbackRepeat = outcome{Code: "conflict"}
 	} else if repeatErr == nil {
 		output.RollbackRepeat = outcome{Code: "unexpected_success"}
@@ -298,7 +299,7 @@ func servePublishedSite(root string, port int) (string, string, string, int) {
 		panic(err)
 	}
 	runtime := caddyruntime.New()
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	if err != nil {
 		panic(err)
 	}
@@ -337,22 +338,22 @@ func servePublishedSite(root string, port int) (string, string, string, int) {
 	return rootBody, assetBody, directoryIndex, manifestStatus
 }
 
-func accept(publisher *application.SitePublisher, request request) outcome {
+func accept(publisher *siteapp.SitePublisher, request request) outcome {
 	artifact, err := base64.StdEncoding.DecodeString(request.Artifact)
 	if err != nil {
 		panic(err)
 	}
-	operation, err := publisher.Accept(context.Background(), application.SitePublishInput{
+	operation, err := publisher.Accept(context.Background(), siteapp.SitePublishInput{
 		Metadata: []byte(request.Metadata), ContentType: request.ContentType,
 		IdempotencyKey: request.IdempotencyKey, Body: bytes.NewReader(artifact),
 	})
 	if err != nil {
-		return outcome{Code: application.ErrorCode(err)}
+		return outcome{Code: siteapp.ErrorCode(err)}
 	}
 	return outcome{Accepted: true, OperationID: operation.OperationID, State: string(operation.State)}
 }
 
-func readDocument(publisher *application.SitePublisher, siteID, requestPath string) (string, error) {
+func readDocument(publisher *siteapp.SitePublisher, siteID, requestPath string) (string, error) {
 	document, err := publisher.OpenSiteDocument(context.Background(), siteID, requestPath)
 	if err != nil {
 		return "", err

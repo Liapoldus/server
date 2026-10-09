@@ -21,8 +21,8 @@ import (
 
 	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
 	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
@@ -132,7 +132,7 @@ func main() {
 	check(runtime.SetDispatchTargets([]caddyruntime.DispatchTarget{{
 		ID: "fixture", Endpoint: peerAddress, TimeoutMillis: 5000, Security: clientSecurity,
 	}}))
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	defer func() { _ = configuration.Stop() }()
 	settings, err := json.Marshal(map[string]any{
@@ -159,7 +159,7 @@ func main() {
 		},
 	})
 	check(err)
-	decoded, err := models.DecodeSettings(settings, "schemaVersion", "config", 1)
+	decoded, err := settingsmodel.DecodeSettings(settings)
 	check(err)
 	check(configuration.Apply(decoded, "revision-1"))
 

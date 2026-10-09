@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/fs"
+	"liapoldus.local/server-plugin/contracts/definitions"
+	admindef "liapoldus.local/server-plugin/contracts/definitions/admin"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -15,98 +16,28 @@ type AdminQuery struct {
 	Payload    []byte
 }
 
-func AdminQueryDefaultLimit() (int, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-query.json")
-	if err != nil {
-		return 0, ErrInvalidAssets
-	}
-	var catalog struct {
-		DefaultLimit int `json:"defaultLimit"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil || catalog.DefaultLimit < 1 || catalog.DefaultLimit > 100 {
-		return 0, ErrInvalidAssets
-	}
-	return catalog.DefaultLimit, nil
-}
+func AdminQueryDefaultLimit() (int, error) { return admindef.AdminQuery().DefaultLimit, nil }
 
 func AdminQueryFallbackCapability() (string, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-query.json")
-	if err != nil {
-		return "", ErrInvalidAssets
-	}
-	var catalog struct {
-		FallbackCapability string `json:"fallbackCapability"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil || catalog.FallbackCapability == "" {
-		return "", ErrInvalidAssets
-	}
-	return catalog.FallbackCapability, nil
+	return admindef.AdminQuery().FallbackCapability, nil
 }
 
-func AdminQueryActionID() (string, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-query.json")
-	if err != nil {
-		return "", ErrInvalidAssets
-	}
-	var catalog struct {
-		ActionID string `json:"actionId"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil || catalog.ActionID == "" {
-		return "", ErrInvalidAssets
-	}
-	return catalog.ActionID, nil
-}
+func AdminQueryActionID() (string, error) { return admindef.AdminQuery().ActionID, nil }
 
 func CertificateStatusCapability() (string, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-query.json")
-	if err != nil {
-		return "", ErrInvalidAssets
-	}
-	var catalog struct {
-		Capability string `json:"certificateStatusCapability"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil || catalog.Capability == "" {
-		return "", ErrInvalidAssets
-	}
-	return catalog.Capability, nil
+	return admindef.AdminQuery().CertificateStatusCapability, nil
 }
 
 func AdminActionSuccessStatus(capability string) (int, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-actions.json")
-	if err != nil {
+	operation, exists := admindef.AdminActions().Operations[capability]
+	if !exists || operation.HTTPStatus == nil || *operation.HTTPStatus < 200 || *operation.HTTPStatus > 299 {
 		return 0, ErrInvalidAssets
 	}
-	var catalog struct {
-		Operations map[string]struct {
-			HTTPStatus int `json:"httpStatus"`
-		} `json:"operations"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil {
-		return 0, ErrInvalidAssets
-	}
-	operation, exists := catalog.Operations[capability]
-	if !exists || operation.HTTPStatus < 200 || operation.HTTPStatus > 299 {
-		return 0, ErrInvalidAssets
-	}
-	return operation.HTTPStatus, nil
+	return *operation.HTTPStatus, nil
 }
 
 func AdminProblem(capability, category string) (int, string, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-actions.json")
-	if err != nil {
-		return 0, "", ErrInvalidAssets
-	}
-	var catalog struct {
-		Operations map[string]struct {
-			Errors map[string]struct {
-				HTTP int `json:"http"`
-			} `json:"errors"`
-		} `json:"operations"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil {
-		return 0, "", ErrInvalidAssets
-	}
-	operation, exists := catalog.Operations[capability]
+	operation, exists := admindef.AdminActions().Operations[capability]
 	if !exists {
 		return 0, "", ErrInvalidAssets
 	}
@@ -136,21 +67,11 @@ func ResolveAdminQuery(pageID string, contents []byte) (AdminQuery, error) {
 	if json.Unmarshal(resourceRaw, &resource) != nil || resource == "" {
 		return AdminQuery{}, ErrInvalidAssets
 	}
-	querySchema, err := fs.ReadFile(files, "v1/admin-query.schema.json")
+	querySchema, err := definitions.Bytes("admin-query.schema.json")
 	if err != nil || validateAgainstSchema(querySchema, contents, "admin-query") != nil {
 		return AdminQuery{}, ErrInvalidAssets
 	}
-	queryCatalog, err := fs.ReadFile(files, "v1/admin-query.json")
-	if err != nil {
-		return AdminQuery{}, ErrInvalidAssets
-	}
-	var catalog struct {
-		Resources     map[string]string   `json:"resources"`
-		PageResources map[string][]string `json:"pageResources"`
-	}
-	if json.Unmarshal(queryCatalog, &catalog) != nil {
-		return AdminQuery{}, ErrInvalidAssets
-	}
+	catalog := admindef.AdminQuery()
 	capability, exists := catalog.Resources[resource]
 	if !exists || capability == "" {
 		return AdminQuery{}, ErrInvalidAssets
@@ -177,23 +98,8 @@ func containsResource(resources []string, target string) bool {
 }
 
 func AdminActionCapability(pageID, actionID string) (string, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-actions.json")
-	if err != nil {
-		return "", ErrInvalidAssets
-	}
-	var catalog struct {
-		Operations map[string]struct {
-			SurfaceBinding struct {
-				PageID   string `json:"page"`
-				ActionID string `json:"action"`
-			} `json:"surfaceBinding"`
-		} `json:"operations"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil {
-		return "", ErrInvalidAssets
-	}
-	for capability, operation := range catalog.Operations {
-		if operation.SurfaceBinding.PageID == pageID && operation.SurfaceBinding.ActionID == actionID {
+	for capability, operation := range admindef.AdminActions().Operations {
+		if operation.SurfaceBinding != nil && operation.SurfaceBinding.PageID == pageID && operation.SurfaceBinding.ActionID == actionID {
 			return capability, nil
 		}
 	}
@@ -208,43 +114,19 @@ func ValidateAdminRequest(capability string, contents []byte) error {
 }
 
 func validAdminQueryPayload(capability string, payload []byte) bool {
-	contents, err := fs.ReadFile(files, "v1/admin-actions.json")
-	if err != nil {
-		return false
-	}
-	var catalog struct {
-		Operations map[string]struct {
-			RequestSchema json.RawMessage `json:"requestSchema"`
-		} `json:"operations"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil {
-		return false
-	}
-	operation, exists := catalog.Operations[capability]
-	if !exists || len(operation.RequestSchema) == 0 {
-		return false
-	}
-	return validateAgainstSchema(operation.RequestSchema, payload, capability) == nil
+	return validateCapabilityRequest(capability, payload) == nil
 }
 
 func validateCapabilityRequest(capability string, payload []byte) error {
-	contents, err := fs.ReadFile(files, "v1/admin-actions.json")
+	operation, exists := admindef.AdminActions().Operations[capability]
+	if !exists || operation.RequestSchema == nil {
+		return ErrInvalidAssets
+	}
+	schema, err := json.Marshal(operation.RequestSchema)
 	if err != nil {
 		return ErrInvalidAssets
 	}
-	var catalog struct {
-		Operations map[string]struct {
-			RequestSchema json.RawMessage `json:"requestSchema"`
-		} `json:"operations"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil {
-		return ErrInvalidAssets
-	}
-	operation, exists := catalog.Operations[capability]
-	if !exists || len(operation.RequestSchema) == 0 {
-		return ErrInvalidAssets
-	}
-	return validateAgainstSchema(operation.RequestSchema, payload, capability)
+	return validateAgainstSchema(schema, payload, capability)
 }
 
 func validateAgainstSchema(schemaContents, value []byte, name string) error {

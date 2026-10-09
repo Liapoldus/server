@@ -25,53 +25,53 @@ import (
 type dispatchInstance struct {
 	ID            string   `json:"id"`
 	Endpoint      string   `json:"endpoint"`
-	TimeoutMillis int      `json:"timeoutMillis,omitempty"`
 	Methods       []string `json:"methods"`
+	TimeoutMillis int      `json:"timeoutMillis,omitempty"`
 }
 
 type dispatchApp struct {
-	Instances   []dispatchInstance `json:"instances,omitempty"`
-	TargetSetID uint64             `json:"targetSetId,omitempty"`
 	bindings    map[string]*dispatchBinding
 	contract    contracts.HTTPDispatch
+	Instances   []dispatchInstance `json:"instances,omitempty"`
+	TargetSetID uint64             `json:"targetSetId,omitempty"`
 }
 
 type dispatchBinding struct {
-	mu       sync.Mutex
 	client   peer.Client
-	endpoint string
-	security peer.SecurityConfig
 	handler  peer.Handler
-	timeout  time.Duration
 	calls    map[string]struct{}
 	streams  chan struct{}
+	endpoint string
+	security peer.SecurityConfig
+	timeout  time.Duration
+	mu       sync.Mutex
 }
 
 type httpDispatchHandler struct {
-	Instance              string   `json:"instance,omitempty"`
-	Capability            string   `json:"capability,omitempty"`
-	Mode                  string   `json:"mode,omitempty"`
-	RequestCookieNames    []string `json:"requestCookieNames,omitempty"`
-	MaxConcurrentStreams  int      `json:"maxConcurrentStreams,omitempty"`
-	IdleTimeoutMillis     int      `json:"idleTimeoutMillis,omitempty"`
-	MaxDurationMillis     int      `json:"maxDurationMillis,omitempty"`
 	binding               *dispatchBinding
-	allowedRequestCookies map[string]struct{}
-	contract              contracts.HTTPDispatch
 	streams               chan struct{}
+	allowedRequestCookies map[string]struct{}
+	Capability            string `json:"capability,omitempty"`
+	Mode                  string `json:"mode,omitempty"`
+	Instance              string `json:"instance,omitempty"`
+	contract              contracts.HTTPDispatch
+	RequestCookieNames    []string `json:"requestCookieNames,omitempty"`
+	MaxDurationMillis     int      `json:"maxDurationMillis,omitempty"`
+	IdleTimeoutMillis     int      `json:"idleTimeoutMillis,omitempty"`
+	MaxConcurrentStreams  int      `json:"maxConcurrentStreams,omitempty"`
 	idleTimeout           time.Duration
 	maxDuration           time.Duration
 }
 
 type httpRequestPayload struct {
+	Headers    map[string]string `json:"headers,omitempty"`
 	Method     string            `json:"method"`
 	Path       string            `json:"path"`
 	Query      string            `json:"query,omitempty"`
-	Headers    map[string]string `json:"headers,omitempty"`
-	Cookies    []cookiePair      `json:"cookies,omitempty"`
-	Body       []byte            `json:"body,omitempty"`
 	RequestID  string            `json:"requestId"`
 	RemoteAddr string            `json:"remoteAddr,omitempty"`
+	Cookies    []cookiePair      `json:"cookies,omitempty"`
+	Body       []byte            `json:"body,omitempty"`
 }
 
 type cookiePair struct {
@@ -80,22 +80,22 @@ type cookiePair struct {
 }
 
 type httpResponseAction struct {
-	Status  int                `json:"status"`
 	Headers map[string]string  `json:"headers,omitempty"`
-	Cookies []httpCookieAction `json:"cookies,omitempty"`
 	Body    *string            `json:"body,omitempty"`
+	Cookies []httpCookieAction `json:"cookies,omitempty"`
+	Status  int                `json:"status"`
 }
 
 type httpCookieAction struct {
+	Expires  *time.Time `json:"expires,omitempty"`
 	Name     string     `json:"name"`
 	Value    string     `json:"value"`
 	Path     string     `json:"path,omitempty"`
 	Domain   string     `json:"domain,omitempty"`
-	Expires  *time.Time `json:"expires,omitempty"`
+	SameSite string     `json:"sameSite,omitempty"`
 	MaxAge   int        `json:"maxAge,omitempty"`
 	Secure   bool       `json:"secure,omitempty"`
 	HTTPOnly bool       `json:"httpOnly,omitempty"`
-	SameSite string     `json:"sameSite,omitempty"`
 }
 
 var errHTTPStreamRequestTooLarge = errors.New("")
@@ -362,8 +362,8 @@ func (handler *httpDispatchHandler) serveWebSocket(writer http.ResponseWriter, r
 		return nil
 	}
 	type received struct {
-		message peer.Message
 		err     error
+		message peer.Message
 	}
 	handshakeResult := make(chan received, 1)
 	go func() {
@@ -470,8 +470,8 @@ func (handler *httpDispatchHandler) serveWebSocket(writer http.ResponseWriter, r
 		readResult <- relayWebSocketRequest(connection, stream, contract, ws, activity)
 	}()
 	type streamReceive struct {
-		message peer.Message
 		err     error
+		message peer.Message
 	}
 	receiveResult := make(chan streamReceive, 1)
 	go func() {
@@ -609,7 +609,8 @@ func relayWebSocketRequest(connection *websocket.Conn, stream peer.Stream, contr
 	for {
 		messageType, data, err := connection.ReadMessage()
 		if err != nil {
-			if closeErr, ok := err.(*websocket.CloseError); ok {
+			closeErr := &websocket.CloseError{}
+			if errors.As(err, &closeErr) {
 				frame, _ := json.Marshal(map[string]any{contract.KindField: ws.CloseKind, ws.CodeField: closeErr.Code, ws.ReasonField: closeErr.Text})
 				_ = sendPeerMessage(stream, peer.Message{Payload: frame})
 			}
@@ -697,8 +698,8 @@ func (handler *httpDispatchHandler) serveStream(writer http.ResponseWriter, requ
 		})
 	}()
 	type received struct {
-		message peer.Message
 		err     error
+		message peer.Message
 	}
 	receiveResult := make(chan received, 1)
 	go func() {
@@ -806,7 +807,7 @@ func (handler *httpDispatchHandler) serveStream(writer http.ResponseWriter, requ
 				var responseHeaders map[string]string
 				var responseCookies []httpCookieAction
 				cookieRaw, hasCookies := frame[handler.contract.ResponseCookies.Field]
-				if len(frame) != 3 && !(len(frame) == 4 && hasCookies) || len(frame[contract.HeadersField]) == 0 || string(frame[contract.HeadersField]) == "null" || json.Unmarshal(frame[contract.StatusField], &status) != nil || json.Unmarshal(frame[contract.HeadersField], &responseHeaders) != nil || status < 200 || status > 599 || !validStreamHeaders(responseHeaders) {
+				if len(frame) != 3 && (len(frame) != 4 || !hasCookies) || len(frame[contract.HeadersField]) == 0 || string(frame[contract.HeadersField]) == "null" || json.Unmarshal(frame[contract.StatusField], &status) != nil || json.Unmarshal(frame[contract.HeadersField], &responseHeaders) != nil || status < 200 || status > 599 || !validStreamHeaders(responseHeaders) {
 					writer.WriteHeader(handler.contract.InvalidResponseStatus)
 					return nil
 				}

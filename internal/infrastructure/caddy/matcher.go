@@ -25,9 +25,9 @@ var errInvalidRequestPath = errors.New("")
 type requestPathContextKey struct{}
 
 type settingsRouteMatch struct {
+	Path    *pathMatcher `json:"path"`
 	Hosts   []string     `json:"hosts"`
 	Methods []string     `json:"methods"`
-	Path    *pathMatcher `json:"path"`
 }
 
 type pathMatcher struct {
@@ -36,13 +36,12 @@ type pathMatcher struct {
 }
 
 type caddyRouteMatcher struct {
-	Hosts   []string     `json:"hosts,omitempty"`
-	Methods []string     `json:"methods,omitempty"`
-	Path    *pathMatcher `json:"path,omitempty"`
-
-	compiledHosts   []compiledHost
+	Path            *pathMatcher `json:"path,omitempty"`
 	compiledMethods map[string]struct{}
 	compiledPath    *compiledPath
+	Hosts           []string `json:"hosts,omitempty"`
+	Methods         []string `json:"methods,omitempty"`
+	compiledHosts   []compiledHost
 }
 
 type compiledHost struct {
@@ -51,9 +50,9 @@ type compiledHost struct {
 }
 
 type compiledPath struct {
+	pattern *regexp.Regexp
 	mode    string
 	value   string
-	pattern *regexp.Regexp
 }
 
 func init() {
@@ -169,9 +168,9 @@ func canonicalMatcher(source *settingsRouteMatch) (*caddyRouteMatcher, string, e
 	sort.Strings(result.Hosts)
 	sort.Strings(result.Methods)
 	identity := struct {
+		Path    *pathMatcher `json:"path,omitempty"`
 		Hosts   []string     `json:"hosts,omitempty"`
 		Methods []string     `json:"methods,omitempty"`
-		Path    *pathMatcher `json:"path,omitempty"`
 	}{Hosts: result.Hosts, Methods: result.Methods, Path: result.Path}
 	encoded, err := json.Marshal(identity)
 	if err != nil {

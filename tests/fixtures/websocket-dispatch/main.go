@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"net/http"
@@ -20,8 +21,8 @@ import (
 
 	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
 	"github.com/gorilla/websocket"
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
@@ -126,7 +127,7 @@ func main() {
 	check(publicListener.Close())
 	runtime := caddyruntime.New()
 	check(runtime.SetDispatchTargets([]caddyruntime.DispatchTarget{{ID: "forms", Endpoint: peerServer.Addr(), TimeoutMillis: 1000, Security: clientSecurity}}))
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	defer configuration.Stop()
 	settings, err := json.Marshal(map[string]any{
@@ -143,7 +144,7 @@ func main() {
 		},
 	})
 	check(err)
-	decoded, err := models.DecodeSettings(settings, "schemaVersion", "config", 1)
+	decoded, err := settingsmodel.DecodeSettings(settings)
 	check(err)
 	check(runtime.Validate(decoded.RuntimeConfig))
 	check(configuration.Apply(decoded, "websocket-test"))
@@ -197,7 +198,8 @@ func main() {
 	}
 	check(oversizedConnection.WriteMessage(websocket.BinaryMessage, make([]byte, 1_048_577)))
 	_, _, oversizedReadErr := oversizedConnection.ReadMessage()
-	oversizedCloseErr, isCloseErr := oversizedReadErr.(*websocket.CloseError)
+	oversizedCloseErr := &websocket.CloseError{}
+	isCloseErr := errors.As(oversizedReadErr, &oversizedCloseErr)
 	if !isCloseErr || oversizedCloseErr.Code != websocket.CloseMessageTooBig {
 		panic("oversized websocket message was not closed with the bounded-message status")
 	}

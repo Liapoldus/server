@@ -34,7 +34,7 @@ func main() {
 				"automatic_https": map[string]any{"disable": true, "disable_redirects": true},
 				"routes": []any{
 					map[string]any{
-						"handle": []any{map[string]any{"handler": "liapoldus_request_header_limit", "maxBytes": contract.MaxRequestHeaderBytes, "status": contract.RequestHeaderTooLargeStatus}},
+						"handle":   []any{map[string]any{"handler": "liapoldus_request_header_limit", "maxBytes": contract.MaxRequestHeaderBytes, "status": contract.RequestHeaderTooLargeStatus}},
 						"terminal": false,
 					},
 					map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 200, "body": "ok"}}, "terminal": true},

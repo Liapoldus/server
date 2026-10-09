@@ -8,20 +8,20 @@ import (
 	"strconv"
 	"time"
 
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type fixtureInput struct {
-	Mode     string          `json:"mode"`
-	Settings json.RawMessage `json:"settings"`
-	Request  struct {
+	Request struct {
 		Method string `json:"method"`
 		Host   string `json:"host"`
 		Target string `json:"target"`
 	} `json:"request"`
-	Port int `json:"port"`
+	Mode     string          `json:"mode"`
+	Settings json.RawMessage `json:"settings"`
+	Port     int             `json:"port"`
 }
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 	check(err)
 	var input fixtureInput
 	check(json.Unmarshal(contents, &input))
-	settings, err := models.DecodeSettings(input.Settings, "schemaVersion", "config", 1)
+	settings, err := settingsmodel.DecodeSettings(input.Settings)
 	check(err)
 	runtime := caddyruntime.New()
 	if input.Mode == "validate" {

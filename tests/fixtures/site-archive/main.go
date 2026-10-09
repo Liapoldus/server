@@ -22,13 +22,13 @@ type testCase struct {
 	Preexisting []string `json:"preexisting"`
 }
 type testOutput struct {
+	Manifest        any      `json:"manifest,omitempty"`
 	Name            string   `json:"name"`
-	Accepted        bool     `json:"accepted"`
-	Files           []string `json:"files"`
 	Digest          string   `json:"digest,omitempty"`
+	Files           []string `json:"files"`
 	CompressedBytes int64    `json:"compressedBytes,omitempty"`
 	ExpandedBytes   int64    `json:"expandedBytes,omitempty"`
-	Manifest        any      `json:"manifest,omitempty"`
+	Accepted        bool     `json:"accepted"`
 }
 
 func main() {

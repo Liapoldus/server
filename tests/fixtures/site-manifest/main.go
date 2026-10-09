@@ -30,9 +30,9 @@ type request struct {
 }
 
 type result struct {
+	Manifest *site.Manifest `json:"manifest,omitempty"`
 	Name     string         `json:"name"`
 	Accepted bool           `json:"accepted"`
-	Manifest *site.Manifest `json:"manifest,omitempty"`
 }
 
 func main() {

@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
@@ -20,7 +20,7 @@ func (*fakeRuntime) Validate(contents []byte) error {
 		} `json:"listeners"`
 	}
 	if json.Unmarshal(contents, &config) != nil {
-		return models.ErrInvalidSettings
+		return settingsmodel.ErrInvalidSettings
 	}
 	if len(config.Listeners) > 0 && config.Listeners[0].ID == "reject" {
 		return errors.New("runtime rejected candidate")
@@ -39,8 +39,8 @@ func (runtime *fakeRuntime) Activate(contents []byte) error {
 func (*fakeRuntime) Stop() error { return nil }
 
 type call struct {
-	Revision string         `json:"revision"`
 	Settings map[string]any `json:"settings"`
+	Revision string         `json:"revision"`
 }
 
 type request struct {
@@ -48,9 +48,9 @@ type request struct {
 }
 
 type result struct {
-	Applied  bool   `json:"applied"`
 	Revision string `json:"revision"`
 	Code     string `json:"code"`
+	Applied  bool   `json:"applied"`
 }
 
 func main() {
@@ -63,7 +63,7 @@ func main() {
 		panic(err)
 	}
 	runtime := &fakeRuntime{}
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +76,7 @@ func main() {
 		err = shared.Apply(configuration, payload, item.Revision, nil)
 		if err != nil {
 			code := "InvalidArgument"
-			if errors.Is(err, application.ErrRevisionConflict) || errors.Is(err, application.ErrInvalidRevision) {
+			if errors.Is(err, settingsapp.ErrRevisionConflict) || errors.Is(err, settingsapp.ErrInvalidRevision) {
 				code = "FailedPrecondition"
 			}
 			results = append(results, result{Code: code})

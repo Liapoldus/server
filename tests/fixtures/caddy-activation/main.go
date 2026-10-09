@@ -17,27 +17,27 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/certmagic"
-	"liapoldus.local/server-plugin/internal/application"
-	caddymodels "liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	caddycertificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type input struct {
-	Port                  int               `json:"port"`
-	Settings              json.RawMessage   `json:"settings"`
-	SkipRequest           bool              `json:"skipRequest"`
+	ACMETransportRootPEM  string            `json:"acmeTransportRootPEM"`
+	SiteContent           string            `json:"siteContent"`
+	SiteFileContent       string            `json:"siteFileContent"`
 	CertificateStatusHost string            `json:"certificateStatusHost"`
 	ACMEDirectory         string            `json:"acmeDirectory"`
 	ACMERootPEM           string            `json:"acmeRootPEM"`
-	ACMETransportRootPEM  string            `json:"acmeTransportRootPEM"`
-	HTTPChallengePort     int               `json:"httpChallengePort"`
-	ForceRenew            bool              `json:"forceRenew"`
+	Settings              json.RawMessage   `json:"settings"`
 	Candidate             json.RawMessage   `json:"candidateSettings"`
 	Candidates            []json.RawMessage `json:"candidates"`
 	Requests              []httpRequest     `json:"requests"`
-	SiteContent           string            `json:"siteContent"`
-	SiteFileContent       string            `json:"siteFileContent"`
+	Port                  int               `json:"port"`
+	HTTPChallengePort     int               `json:"httpChallengePort"`
+	ForceRenew            bool              `json:"forceRenew"`
+	SkipRequest           bool              `json:"skipRequest"`
 }
 
 type httpRequest struct {
@@ -48,8 +48,8 @@ type httpRequest struct {
 }
 
 type httpResponse struct {
-	Status int    `json:"status"`
 	Body   string `json:"body"`
+	Status int    `json:"status"`
 }
 
 func main() {
@@ -94,7 +94,7 @@ func main() {
 	siteFile := filepath.Join(siteRoot, "docs", "file.txt")
 	check(os.MkdirAll(filepath.Dir(siteFile), 0o700))
 	check(os.WriteFile(siteFile, []byte(request.SiteFileContent), 0o600))
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	settings := request.Settings
 	if len(settings) == 0 {
@@ -176,7 +176,7 @@ func main() {
 			check(configuration.Stop())
 			configuration = nil
 			runtime = caddyruntime.New()
-			configuration, err = application.NewConfiguration(runtime)
+			configuration, err = settingsapp.NewConfiguration(runtime)
 			check(err)
 			check(shared.Apply(configuration, settings, "revision-1", nil))
 			ctx, cancel = context.WithTimeout(context.Background(), 90*time.Second)
@@ -206,7 +206,7 @@ func main() {
 	check(json.NewEncoder(os.Stdout).Encode(output))
 }
 
-func waitForCertificate(ctx context.Context, runtime *caddyruntime.Runtime, host string) caddymodels.CertificateStatus {
+func waitForCertificate(ctx context.Context, runtime *caddyruntime.Runtime, host string) caddycertificatemodel.CertificateStatus {
 	if host == "" {
 		panic("certificate status host is required")
 	}

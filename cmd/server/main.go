@@ -19,7 +19,8 @@ import (
 	pluginsdk "github.com/Liapoldus/plugin-sdk/infrastructure"
 	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
 	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/application"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	siteapp "liapoldus.local/server-plugin/internal/application/site"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/internal/infrastructure/site"
 	pluginadapter "liapoldus.local/server-plugin/internal/presentation/restplugin"
@@ -148,7 +149,7 @@ func run(args []string) (runErr error) {
 			return err
 		}
 	}
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	if err != nil {
 		return err
 	}
@@ -158,7 +159,7 @@ func run(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	publisher, err := application.NewSitePublisher(releaseStore)
+	publisher, err := siteapp.NewSitePublisher(releaseStore)
 	if err != nil {
 		return err
 	}

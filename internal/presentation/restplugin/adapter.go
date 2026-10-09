@@ -14,8 +14,9 @@ import (
 	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
 	sdkpresentation "github.com/Liapoldus/plugin-sdk/presentation"
 	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	siteapp "liapoldus.local/server-plugin/internal/application/site"
+	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 )
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
@@ -24,9 +25,8 @@ var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration co
 // The Plugin SDK sees settings as opaque bytes until this adapter validates and
 // applies them through the Server's own contracts and runtime.
 type Adapter struct {
-	configuration *application.Configuration
-	publisher     *application.SitePublisher
-	contract      contracts.Plugin
+	configuration *settingsapp.Configuration
+	publisher     *siteapp.SitePublisher
 	secrets       SecretProvider
 }
 
@@ -40,20 +40,19 @@ type SecretProvider interface {
 type LifecycleOptions struct {
 	Source      sdkinterfaces.ConfigurationSource
 	Broker      sdkinterfaces.SecretBroker
-	Identity    sdkmodels.ReplicaIdentity
 	Credentials sdkinfra.CredentialsProvider
-	CorePeer    sdkmodels.PeerIdentity
 	Revocation  sdkinterfaces.RevocationSource
-	ErrorLog    *log.Logger
 	LogOutput   io.Writer
+	ErrorLog    *log.Logger
+	Identity    sdkmodels.ReplicaIdentity
+	CorePeer    sdkmodels.PeerIdentity
 }
 
-func New(configuration *application.Configuration, publisher *application.SitePublisher) (*Adapter, error) {
-	contract, err := contracts.Load()
-	if err != nil || configuration == nil || publisher == nil {
+func New(configuration *settingsapp.Configuration, publisher *siteapp.SitePublisher) (*Adapter, error) {
+	if configuration == nil || publisher == nil {
 		return nil, contracts.ErrInvalidAssets
 	}
-	return &Adapter{configuration: configuration, publisher: publisher, contract: contract}, nil
+	return &Adapter{configuration: configuration, publisher: publisher}, nil
 }
 
 func (adapter *Adapter) Manifest(context.Context) ([]byte, error) {
@@ -72,24 +71,19 @@ func (adapter *Adapter) ConfigurationSchema(context.Context) ([]byte, error) {
 
 func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configuration) error {
 	if adapter == nil || adapter.configuration == nil || ctx.Err() != nil || incoming.Validate() != nil {
-		return models.ErrInvalidSettings
+		return settingsmodel.ErrInvalidSettings
 	}
 	contents := incoming.Bytes()
 	if err := contracts.ValidateSettings(contents); err != nil {
-		return models.ErrInvalidSettings
+		return settingsmodel.ErrInvalidSettings
 	}
-	settings, err := models.DecodeSettings(
-		contents,
-		adapter.contract.Configuration.VersionField,
-		adapter.contract.Configuration.RuntimeConfigField,
-		adapter.contract.Configuration.SchemaVersion,
-	)
+	settings, err := settingsmodel.DecodeSettings(contents)
 	if err != nil {
-		return models.ErrInvalidSettings
+		return settingsmodel.ErrInvalidSettings
 	}
 	references, err := settings.ConfigSecretReferences()
 	if err != nil {
-		return models.ErrInvalidSettings
+		return settingsmodel.ErrInvalidSettings
 	}
 	if len(references) != 0 {
 		return adapter.applyWithSecrets(ctx, settings, incoming.Generation)
@@ -103,17 +97,13 @@ func (adapter *Adapter) SetSecretProvider(provider SecretProvider) {
 	}
 }
 
-func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings models.Settings, generation string) error {
+func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings settingsmodel.Settings, generation string) error {
 	if adapter.secrets == nil {
 		return ErrSecretReferencesRequireCoreGrantAPI
 	}
 	kinds, err := settings.ConfigSecretReferenceKinds()
 	if err != nil {
-		return models.ErrInvalidSettings
-	}
-	purposes, err := contracts.LoadSecretPurposes()
-	if err != nil {
-		return models.ErrInvalidSettings
+		return settingsmodel.ErrInvalidSettings
 	}
 	values := make(map[string][]byte, len(kinds))
 	defer func() {
@@ -122,20 +112,20 @@ func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings models.Se
 		}
 	}()
 	for reference, kind := range kinds {
-		purpose := ""
+		var purpose SettingsSecretPurpose
 		switch kind {
-		case models.SecretReferenceCertificate:
-			purpose = purposes.ServerCertificate
-		case models.SecretReferencePrivateKey:
-			purpose = purposes.ServerPrivateKey
-		case models.SecretReferenceUpstreamCA:
-			purpose = purposes.UpstreamCA
+		case settingsmodel.SecretReferenceCertificate:
+			purpose = SettingsCertificatePurpose
+		case settingsmodel.SecretReferencePrivateKey:
+			purpose = SettingsPrivateKeyPurpose
+		case settingsmodel.SecretReferenceUpstreamCA:
+			purpose = SettingsUpstreamCAPurpose
 		default:
-			return models.ErrInvalidSettings
+			return settingsmodel.ErrInvalidSettings
 		}
-		value, err := adapter.secrets.SecretProvider(ctx, reference, purpose)
+		value, err := adapter.secrets.SecretProvider(ctx, reference, string(purpose))
 		if err != nil {
-			return models.ErrInvalidSettings
+			return settingsmodel.ErrInvalidSettings
 		}
 		values[reference] = value.Bytes()
 		value.Destroy()
@@ -147,8 +137,8 @@ func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings models.Se
 // It does not bind a socket or infer transport identity; callers must inject
 // those separately through the SDK's transport constructors.
 func NewHandler(
-	configuration *application.Configuration,
-	publisher *application.SitePublisher,
+	configuration *settingsapp.Configuration,
+	publisher *siteapp.SitePublisher,
 	options LifecycleOptions,
 ) (http.Handler, *sdkapp.Lifecycle, *sdkinfra.ObserverPrometheusCollector, error) {
 	adapter, err := New(configuration, publisher)
@@ -255,8 +245,8 @@ func (sink collectorMetricsSink) SetReady(ready bool) {
 // identity, credential provider and revocation source are required inputs and
 // are never discovered from request data or product settings.
 func NewMutualTLSServer(
-	configuration *application.Configuration,
-	publisher *application.SitePublisher,
+	configuration *settingsapp.Configuration,
+	publisher *siteapp.SitePublisher,
 	options LifecycleOptions,
 ) (*sdkinfra.MutualTLSServer, *sdkapp.Lifecycle, error) {
 	handler, lifecycle, _, err := NewHandler(configuration, publisher, options)

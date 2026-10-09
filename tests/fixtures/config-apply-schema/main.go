@@ -5,16 +5,16 @@ import (
 	"io"
 	"os"
 
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
 
 type observingRuntime struct {
-	validateCalls int
-	activateCalls int
 	active        json.RawMessage
 	lastValidated json.RawMessage
+	validateCalls int
+	activateCalls int
 }
 
 func (runtime *observingRuntime) Validate(contents []byte) error {
@@ -32,8 +32,8 @@ func (runtime *observingRuntime) Activate(contents []byte) error {
 func (*observingRuntime) Stop() error { return nil }
 
 type call struct {
-	Revision string         `json:"revision"`
 	Settings map[string]any `json:"settings"`
+	Revision string         `json:"revision"`
 }
 
 type request struct {
@@ -41,9 +41,9 @@ type request struct {
 }
 
 type callResult struct {
-	Applied  bool   `json:"applied"`
 	Revision string `json:"revision"`
 	Code     string `json:"code"`
+	Applied  bool   `json:"applied"`
 }
 
 func main() {
@@ -53,7 +53,7 @@ func main() {
 	check(json.Unmarshal(contents, &input))
 
 	runtime := &observingRuntime{}
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 
 	results := make([]callResult, 0, len(input.Calls))
@@ -92,6 +92,6 @@ func main() {
 
 func check(err error) {
 	if err != nil {
-		panic(models.ErrInvalidSettings)
+		panic(settingsmodel.ErrInvalidSettings)
 	}
 }

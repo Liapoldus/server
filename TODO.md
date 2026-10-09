@@ -1,5 +1,49 @@
 # TODO — Server plugin v1
 
+## Технический settings slice — 2026-10-09
+
+По явному разрешению пользователя выполнена ограниченная миграция внутренних
+settings definitions с сохранением v1 behavior, без разморозки product scope.
+Typed Go constants в `internal/domain/models/settings_definition.go` задают
+точные значения envelope: `1`, `schemaVersion`, `config`. Все шесть production/
+fixture consumers используют один `DecodeSettings(contents)`; runtime не
+извлекает эти значения из public manifest. Удалены `contracts.Load()`, типы
+`contracts.Plugin`/`ConfigField`, поле `Adapter.contract` и три параметра
+decoder, которые каждый consumer всегда задавал одинаково.
+
+Тип `SettingsSecretPurpose` и константы REST adapter сохраняют точные значения
+`server.tls.certificate`, `server.tls.private-key`, `server.upstream.ca`.
+SDK получает те же строки; settings adapter и два SDK/Caddy fixtures
+мигрированы. После consumer audit удалены только
+`contracts/secret_purposes.go` (тип `SecretPurposes` и `LoadSecretPurposes()`)
+и внутренний `contracts/v1/secret-purposes.json`. Значения сохраняются в Go;
+tracked исходники также восстанавливаются из Git history.
+
+Native regressions прошли сначала против старых parsers, затем против новых
+definitions до удаления. Семь Go tests (включая 15 decoder subtests) фиксируют
+шесть точных constants, raw config bytes, error messages/sentinels, revision
+replay/conflict, candidate/activation failure и доставку всех трёх grant
+purposes. Внутренние settings error messages уже были source-owned в Go и
+сохранили строки и identity. Public settings schema/semantics, manifest,
+Admin descriptors и site artifacts не менялись; embedded loaders для них
+сохранены. Общая миграция contracts в code-first этим срезом не завершена.
+Owner AGENTS/docs обновлены только для этого settings/test slice.
+
+`GOWORK=off go test ./... -count=1`, `go build ./...`, `go vet ./...` и
+`git diff --check` — PASS. Focused settings/schema/compiler/config/reload
+Vitest — 6 файлов / 27 тестов PASS; после миграции grant purposes дополнительный
+focused SDK/Caddy/upstream набор — 3 файла / 7 тестов PASS. Пропущенный import
+в мигрированном Caddy fixture исправлен; повтор полного Go gate прошёл.
+Первый полный Vitest: 32 файла / 81 тест PASS, один standalone build test
+завершился timeout 120 s (весь suite: 33 файла / 82 теста). Это не PASS
+полного suite; финальный повтор с `GOWORK=off GOFLAGS=-p=1
+npm test -- --maxWorkers=1` после освобождения Go build cache прошёл:
+33 файла / 82 теста PASS, включая standalone build. Повторная независимая
+`GOWORK=off GOFLAGS=-p=1 go build ./...` также прошла. Strict pinned
+golangci-lint и typed ESLint не выполнялись: gate OPEN, `go vet` их не заменяет.
+Ни другие репозитории, ни исходный site-publication WIP, ни commits/push
+не затронуты. Product/v3 задачи ниже остаются вне этого среза.
+
 ## Проверка публикации — 2026-10-05
 
 Коммит `8e8b653` опубликован в `origin/main`; hosted Ubuntu verify прошёл,
@@ -91,7 +135,7 @@ root.
 Нормативная цель: [Core target](https://liapoldus.github.io/core/architecture/target),
 [v1 acceptance](https://liapoldus.github.io/core/configuration/acceptance) и
 [Server contract](https://liapoldus.github.io/plugins/server). Агентное задание:
-[`tasks/CORE_V1_CODEX_SOL.md`](../../tasks/CORE_V1_CODEX_SOL.md).
+[задачи по субъектам v2](../../tasks/README.md).
 Этот репозиторий — отдельный HTTP Server plugin; `server` — его product/API
 identity, Caddy — реализация внутри binary.
 
@@ -103,7 +147,7 @@ identity, Caddy — реализация внутри binary.
 - Public v1 surface: HTTP/1.1, HTTP/2, HTTP/3, TLS/ACME, static sites,
   reverse proxy, SSE и plugin dispatch; WebSocket поддерживает RFC 6455 over
   HTTP/1.1. Caddy-L4/public TCP/UDP
-  listeners/relay/P2P/NAT traversal — v2, не binary/schema/API/conformance v1.
+  listeners/relay/P2P/NAT traversal — v3, не binary/schema/API/conformance v1.
 - HTTP/3 остаётся HTTP. Core содержит только Management/control plane и не
   содержит Caddy runtime/data plane.
 - Core↔plugin lifecycle/config — Plugin SDK REST + unique per-replica mTLS:
@@ -355,8 +399,52 @@ identity, Caddy — реализация внутри binary.
   фоновой storage-cleanup работы Caddy; fixtures не пишут в пользовательский
   `Application Support/Caddy` и не оставляют свои temp roots.
 
-## Отложено до v2
+## V3 — весь дальнейший Server development
 
-Caddy-L4, public TCP/UDP relay, P2P/NAT traversal, CAPTCHA, Identity/OIDC/OAuth,
-TUF/install, Core-managed process/container lifecycle, Docker/Compose/Swarm/
-Kubernetes. Не добавлять v2 API/dependencies в v1 binary или v1 test matrix.
+Server не является активным v2 субъектом. Текущая v1 реализация остаётся
+неизменённым regression baseline; generic Core/SDK v2 lifecycle и rollout
+проверяются на fixtures. Нижеследующие ранее записанные v2 задачи перенесены в
+v3 и не являются текущими v2 обязательствами.
+
+Повторная проверка текущего worktree 2026-10-06: реальные child-process
+publish/recovery сценарии выше прошли 2/2 на macOS. Полный `GOWORK=off
+GOTOOLCHAIN=go1.26.0 npm test -- --maxWorkers=1` прошёл (33 файла / 82 теста),
+`go test ./...`, `go build ./...`, `go vet ./...` и `git diff --check` прошли.
+Это не закрывает отложенный v3 gate: тесты используют общую локальную FS и
+не устанавливают поддержку какого-либо RWX/network filesystem для нескольких
+host-ов.
+
+- [x] Сериализовать durable site-release mutations между независимыми Server
+  process через named lock `certmagic.FileStorage`: publish, recovery worker и
+  rollback используют один coordination lock, поэтому pending-operation check,
+  orphan-staging cleanup и `current`/`previous` switch не расходятся между
+  process-local mutex-ами. Проверено отдельным TypeScript-driven test, который
+  запускает два child process на общем локальном каталоге одновременно и
+  требует ровно один accepted publish плюс один conflict:
+  `npx vitest run tests/site-publish-cross-process.test.ts --maxWorkers=1`.
+  Отдельный child-process test принудительно завершает принимающий процесс
+  сразу после durable acceptance, затем одновременно запускает recovery в двух
+  независимых Server-процессах на том же storage. Оба процесса завершаются без
+  ошибки и наблюдают одну completed operation, одинаковый active revision и
+  одинаковый served document:
+  `npx vitest run tests/site-publish-cross-process-recovery.test.ts --maxWorkers=1`.
+  Это доказывает только межпроцессную координацию на тестовой локальной FS; ни
+  один RWX/network filesystem profile ещё не объявлен поддерживаемым.
+- [ ] Саморегистрация каждой replica через Plugin SDK; SemVer/digest и
+  совместимость shared state/HTTP/peer contracts. Gate: Core restart, lease
+  expiry, two-cohort rolling/canary, ingress sticky и bounded stream drain.
+- [ ] Multi-replica site/ACME storage на общем RWX filesystem. Зафиксировать
+  конкретный поддерживаемый profile только после conformance atomic locking,
+  concurrent ACME, immutable publish/rollback, failure и crash recovery.
+  Несовместимые storage layouts не допускать к смешанному rollout.
+
+### Дополнительные Server возможности v3
+
+- [ ] Caddy-L4 и public TCP/UDP relay за Server-owned контрактами и отдельным
+  real-runtime conformance. P2P/NAT traversal не подразумевается обычным relay.
+- [ ] CAPTCHA/Identity integration — только после явной разморозки владельцев,
+  без специальных Core/product методов в SDK или `pluginprotocol`.
+Установку и плановые обновления Server выполняет оператор выбранными средствами; Core никогда не управляет workloads или числом
+replicas. Delivery/provider API не является задачей Server/Core v3.
+
+Не добавлять v2/v3 API/dependencies в v1 binary или v1 test matrix.

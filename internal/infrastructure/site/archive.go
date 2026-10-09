@@ -14,9 +14,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"liapoldus.local/server-plugin/contracts"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
+	"liapoldus.local/server-plugin/contracts"
 )
 
 var ErrInvalidArchive = errors.New("invalid site archive")
@@ -160,7 +160,7 @@ func ExtractAndValidateArchive(source io.Reader, stagingRoot, expectedSiteID str
 				return ArchiveResult{}, ErrInvalidArchive
 			}
 		}
-		if readErr == io.EOF {
+		if errors.Is(readErr, io.EOF) {
 			break
 		}
 		if readErr != nil {

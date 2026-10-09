@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/fs"
+	"liapoldus.local/server-plugin/contracts/definitions"
+	admindef "liapoldus.local/server-plugin/contracts/definitions/admin"
+	sitedef "liapoldus.local/server-plugin/contracts/definitions/site"
 	"sync"
 	"time"
 
@@ -27,29 +29,7 @@ func SitePublishProblem(category string) (int, string, error) {
 }
 
 func sitePublishProblem(code string) (int, string, error) {
-	contents, readErr := fs.ReadFile(files, "v1/admin-actions.json")
-	if readErr != nil {
-		return 0, "", ErrInvalidAssets
-	}
-	var catalog struct {
-		Operations map[string]struct {
-			Errors map[string]struct {
-				HTTP int `json:"http"`
-			} `json:"errors"`
-		} `json:"operations"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil {
-		return 0, "", ErrInvalidAssets
-	}
-	operation, exists := catalog.Operations["server.sites.publish"]
-	if !exists {
-		return 0, "", ErrInvalidAssets
-	}
-	problem, exists := operation.Errors[code]
-	if !exists || problem.HTTP < 400 || problem.HTTP > 599 {
-		return 0, "", ErrInvalidAssets
-	}
-	return problem.HTTP, code, nil
+	return AdminProblem(sitedef.SitePublishManifest().PublishCapability, code)
 }
 
 type SiteOperationContract struct {
@@ -77,38 +57,17 @@ func LoadSiteOperationContract() (SiteOperationContract, error) {
 	if err != nil || manifest.PublishCapability == "" || manifest.RollbackCapability == "" {
 		return SiteOperationContract{}, ErrInvalidAssets
 	}
-	contents, err := fs.ReadFile(files, "v1/admin-actions.json")
-	if err != nil {
-		return SiteOperationContract{}, ErrInvalidAssets
-	}
-	var document struct {
-		Operations map[string]struct {
-			SurfaceBinding struct {
-				PageID    string `json:"page"`
-				SectionID string `json:"section"`
-				ActionID  string `json:"action"`
-			} `json:"surfaceBinding"`
-		} `json:"operations"`
-		OperationStatus struct {
-			PluginStatusCapability string   `json:"pluginStatusCapability"`
-			PluginStates           []string `json:"pluginStates"`
-			WorkerPollMilliseconds int      `json:"workerPollMilliseconds"`
-		} `json:"operationStatus"`
-	}
-	if json.Unmarshal(contents, &document) != nil || len(document.OperationStatus.PluginStates) != 4 ||
-		document.OperationStatus.WorkerPollMilliseconds < 25 || document.OperationStatus.WorkerPollMilliseconds > 60000 {
-		return SiteOperationContract{}, ErrInvalidAssets
-	}
+	document := admindef.AdminActions()
 	operation, exists := document.Operations[manifest.PublishCapability]
-	if !exists || operation.SurfaceBinding.PageID == "" || operation.SurfaceBinding.SectionID == "" || operation.SurfaceBinding.ActionID == "" {
+	if !exists || operation.SurfaceBinding == nil || operation.SurfaceBinding.PageID == "" || operation.SurfaceBinding.SectionID == "" || operation.SurfaceBinding.ActionID == "" {
 		return SiteOperationContract{}, ErrInvalidAssets
 	}
 	statusOperation, exists := document.Operations[document.OperationStatus.PluginStatusCapability]
-	if !exists || statusOperation.SurfaceBinding.PageID == "" || statusOperation.SurfaceBinding.ActionID == "" {
+	if !exists || statusOperation.SurfaceBinding == nil || statusOperation.SurfaceBinding.PageID == "" || statusOperation.SurfaceBinding.ActionID == "" {
 		return SiteOperationContract{}, ErrInvalidAssets
 	}
 	rollbackOperation, exists := document.Operations[manifest.RollbackCapability]
-	if !exists || rollbackOperation.SurfaceBinding.PageID == "" || rollbackOperation.SurfaceBinding.ActionID == "" {
+	if !exists || rollbackOperation.SurfaceBinding == nil || rollbackOperation.SurfaceBinding.PageID == "" || rollbackOperation.SurfaceBinding.ActionID == "" {
 		return SiteOperationContract{}, ErrInvalidAssets
 	}
 	states := document.OperationStatus.PluginStates
@@ -116,48 +75,24 @@ func LoadSiteOperationContract() (SiteOperationContract, error) {
 		PageID: operation.SurfaceBinding.PageID, SectionID: operation.SurfaceBinding.SectionID, ActionID: operation.SurfaceBinding.ActionID,
 		StatusCapability: document.OperationStatus.PluginStatusCapability,
 		StatusPageID:     statusOperation.SurfaceBinding.PageID, StatusActionID: statusOperation.SurfaceBinding.ActionID,
-		RollbackActionID: rollbackOperation.SurfaceBinding.ActionID,
+		RollbackActionID:   rollbackOperation.SurfaceBinding.ActionID,
 		WorkerPollInterval: time.Duration(document.OperationStatus.WorkerPollMilliseconds) * time.Millisecond,
-		AcceptedState:    states[0], RunningState: states[1], CompletedState: states[2], FailedState: states[3]}, nil
+		AcceptedState:      states[0], RunningState: states[1], CompletedState: states[2], FailedState: states[3]}, nil
 }
 
 // AdminActionProblem finds the operation bound to one page/action and resolves
 // its declared error status. Unknown bindings fail closed.
 func AdminActionProblem(pageID, actionID, category string) (int, string, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-actions.json")
+	capability, err := AdminActionCapability(pageID, actionID)
 	if err != nil {
-		return 0, "", ErrInvalidAssets
+		return 0, "", err
 	}
-	var catalog struct {
-		Operations map[string]struct {
-			SurfaceBinding struct {
-				PageID   string `json:"page"`
-				ActionID string `json:"action"`
-			} `json:"surfaceBinding"`
-			Errors map[string]struct {
-				HTTP int `json:"http"`
-			} `json:"errors"`
-		} `json:"operations"`
-	}
-	if json.Unmarshal(contents, &catalog) != nil {
-		return 0, "", ErrInvalidAssets
-	}
-	for _, operation := range catalog.Operations {
-		if operation.SurfaceBinding.PageID != pageID || operation.SurfaceBinding.ActionID != actionID {
-			continue
-		}
-		problem, exists := operation.Errors[category]
-		if !exists || problem.HTTP < 400 || problem.HTTP > 599 {
-			return 0, "", ErrInvalidAssets
-		}
-		return problem.HTTP, category, nil
-	}
-	return 0, "", ErrInvalidAssets
+	return AdminProblem(capability, category)
 }
 
 // AdminSurface returns the plugin-owned action descriptor exactly as versioned.
 func AdminSurface() ([]byte, error) {
-	contents, err := fs.ReadFile(files, "v1/admin-surface.json")
+	contents, err := definitions.Bytes("admin-surface.json")
 	if err != nil || !ValidJSONNoDuplicateKeys(contents) {
 		return nil, ErrInvalidAssets
 	}
@@ -272,7 +207,7 @@ func consumeUniqueJSONValue(decoder *json.Decoder) error {
 
 func compiledArtifactSchema() (*jsonschema.Schema, error) {
 	artifactSchemaOnce.Do(func() {
-		contents, err := fs.ReadFile(files, "v1/artifact-metadata.schema.json")
+		contents, err := definitions.Bytes("artifact-metadata.schema.json")
 		if err != nil {
 			artifactSchemaErr = ErrInvalidAssets
 			return

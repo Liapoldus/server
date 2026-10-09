@@ -9,14 +9,15 @@ import (
 
 	sdkpresentation "github.com/Liapoldus/plugin-sdk/presentation"
 	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	siteapp "liapoldus.local/server-plugin/internal/application/site"
+	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
+	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
 )
 
 type artifactReceipt struct {
-	Version     int    `json:"version"`
 	OperationID string `json:"operationId"`
 	State       string `json:"state"`
+	Version     int    `json:"version"`
 }
 
 type actionProblem struct {
@@ -47,13 +48,13 @@ type certificateStatusRequest struct {
 }
 
 type operationStatusResponse struct {
-	OperationID     string  `json:"operationId"`
 	SiteID          *string `json:"siteId"`
+	ProgressPercent *int    `json:"progressPercent"`
+	ErrorCode       *string `json:"errorCode"`
+	OperationID     string  `json:"operationId"`
 	Kind            string  `json:"kind"`
 	State           string  `json:"state"`
-	ProgressPercent *int    `json:"progressPercent"`
 	UpdatedAt       string  `json:"updatedAt"`
-	ErrorCode       *string `json:"errorCode"`
 }
 
 func (adapter *Adapter) AcceptArtifact(ctx context.Context, input sdkpresentation.ArtifactInput) (sdkpresentation.ArtifactResponse, error) {
@@ -68,7 +69,7 @@ func (adapter *Adapter) AcceptArtifact(ctx context.Context, input sdkpresentatio
 	if err != nil || (input.Invocation.IfMatch != "" && (metadata.Payload.ExpectedCurrentRevision == nil || *metadata.Payload.ExpectedCurrentRevision != input.Invocation.IfMatch)) {
 		return adapter.artifactProblem("invalid_input")
 	}
-	operation, err := adapter.publisher.Accept(ctx, application.SitePublishInput{
+	operation, err := adapter.publisher.Accept(ctx, siteapp.SitePublishInput{
 		Metadata: input.Metadata, ContentType: input.ContentType,
 		IdempotencyKey: input.Invocation.IdempotencyKey, Body: input.Body,
 	})
@@ -83,7 +84,7 @@ func (adapter *Adapter) AcceptArtifact(ctx context.Context, input sdkpresentatio
 }
 
 func (adapter *Adapter) artifactFailure(err error) (sdkpresentation.ArtifactResponse, error) {
-	status, code := application.ErrorStatusAndCode(err)
+	status, code := siteapp.ErrorStatusAndCode(err)
 	if status < 400 || code == "" {
 		return sdkpresentation.ArtifactResponse{}, errors.New("invalid artifact error contract")
 	}
@@ -264,9 +265,9 @@ func (adapter *Adapter) certificateStatus(ctx context.Context, capability string
 
 func certificateErrorCategory(err error) string {
 	switch {
-	case errors.Is(err, models.ErrInvalidCertificateQuery):
+	case errors.Is(err, certificatemodel.ErrInvalidCertificateQuery):
 		return "invalid_input"
-	case errors.Is(err, models.ErrCertificateNotFound):
+	case errors.Is(err, certificatemodel.ErrCertificateNotFound):
 		return "not_found"
 	default:
 		return "unavailable"
@@ -284,7 +285,7 @@ func (adapter *Adapter) rollback(ctx context.Context, capability string, input s
 		input.Invocation.IfMatch == "" || input.Invocation.IfMatch != request.ExpectedCurrentRevision {
 		return adminActionProblem(capability, "invalid_input")
 	}
-	operation, err := adapter.publisher.Rollback(ctx, models.SiteRollbackInput{
+	operation, err := adapter.publisher.Rollback(ctx, sitemodel.SiteRollbackInput{
 		SiteID: request.SiteID, ExpectedCurrentRevision: request.ExpectedCurrentRevision,
 		TargetRevision: request.TargetRevision, IdempotencyKey: input.Invocation.IdempotencyKey,
 		Capability: capability,
@@ -301,9 +302,9 @@ func (adapter *Adapter) rollback(ctx context.Context, capability string, input s
 		previous = &value
 	}
 	response, err := json.Marshal(struct {
+		PreviousRevision *string `json:"previousRevision"`
 		SiteID           string  `json:"siteId"`
 		CurrentRevision  string  `json:"currentRevision"`
-		PreviousRevision *string `json:"previousRevision"`
 	}{SiteID: operation.SiteID, CurrentRevision: operation.RevisionID, PreviousRevision: previous})
 	if err != nil {
 		return sdkpresentation.AdminActionResponse{}, errors.New("invalid Server rollback response")
@@ -317,13 +318,13 @@ func (adapter *Adapter) rollback(ctx context.Context, capability string, input s
 
 func siteErrorCategory(err error) string {
 	switch {
-	case errors.Is(err, application.ErrInvalidSitePublish):
+	case errors.Is(err, siteapp.ErrInvalidSitePublish):
 		return "invalid_input"
-	case errors.Is(err, models.ErrInvalidCertificateQuery):
+	case errors.Is(err, certificatemodel.ErrInvalidCertificateQuery):
 		return "invalid_input"
-	case errors.Is(err, application.ErrSiteNotFound), errors.Is(err, application.ErrOperationNotFound):
+	case errors.Is(err, siteapp.ErrSiteNotFound), errors.Is(err, siteapp.ErrOperationNotFound):
 		return "not_found"
-	case errors.Is(err, application.ErrSiteConflict):
+	case errors.Is(err, siteapp.ErrSiteConflict):
 		return "conflict"
 	default:
 		return "unavailable"

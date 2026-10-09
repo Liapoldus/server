@@ -1,13 +1,8 @@
 package contracts
 
 import (
-	"embed"
-	"encoding/json"
-	"io/fs"
+	admindef "liapoldus.local/server-plugin/contracts/definitions/admin"
 )
-
-//go:embed v1/admin-actions.json
-var siteArchiveFiles embed.FS
 
 type SiteArchiveLimits struct {
 	MinArtifactBytes    int64 `json:"minArtifactBytes"`
@@ -20,19 +15,6 @@ type SiteArchiveLimits struct {
 }
 
 func LoadSiteArchiveLimits() (SiteArchiveLimits, error) {
-	contents, err := fs.ReadFile(siteArchiveFiles, "v1/admin-actions.json")
-	if err != nil {
-		return SiteArchiveLimits{}, ErrInvalidAssets
-	}
-	var catalog struct {
-		Archive SiteArchiveLimits `json:"archive"`
-	}
-	if err := json.Unmarshal(contents, &catalog); err != nil {
-		return SiteArchiveLimits{}, ErrInvalidAssets
-	}
-	limits := catalog.Archive
-	if limits.MinArtifactBytes < 1 || limits.ArtifactBytes < limits.MinArtifactBytes || limits.MetadataBytes < 1 || limits.MultipartOverhead < 0 || limits.ExpandedBytes < 1 || limits.MaxEntries < 1 || limits.MaxCompressionRatio < 1 {
-		return SiteArchiveLimits{}, ErrInvalidAssets
-	}
-	return limits, nil
+	v := admindef.AdminActions().Archive
+	return SiteArchiveLimits{MinArtifactBytes: int64(v.MinArtifactBytes), ArtifactBytes: int64(v.ArtifactBytes), MetadataBytes: int64(v.MetadataBytes), MultipartOverhead: int64(v.MultipartOverheadBytes), ExpandedBytes: int64(v.ExpandedBytes), MaxEntries: int64(v.MaxFiles), MaxCompressionRatio: int64(v.MaxCompressionRatio)}, nil
 }

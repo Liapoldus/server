@@ -36,17 +36,17 @@ type settingsConfig struct {
 }
 
 type settingsListener struct {
-	ID        string   `json:"id"`
-	Kind      string   `json:"kind"`
-	Address   string   `json:"address"`
-	Hostnames []string `json:"hostnames"`
-	Protocols []string `json:"protocols"`
-	TLS       struct {
+	TLS struct {
 		Mode           string `json:"mode"`
 		CertificateRef string `json:"certificateRef"`
 		PrivateKeyRef  string `json:"privateKeyRef"`
 	} `json:"tls"`
-	RedirectToListenerID string `json:"redirectToListenerId"`
+	ID                   string   `json:"id"`
+	Kind                 string   `json:"kind"`
+	Address              string   `json:"address"`
+	RedirectToListenerID string   `json:"redirectToListenerId"`
+	Hostnames            []string `json:"hostnames"`
+	Protocols            []string `json:"protocols"`
 }
 
 type settingsRoute struct {
@@ -57,31 +57,31 @@ type settingsRoute struct {
 }
 
 type settingsHandler struct {
-	Type               string   `json:"type"`
-	SiteID             string   `json:"siteId"`
-	InstanceID         string   `json:"instanceId"`
-	Capability         string   `json:"capability"`
-	Mode               string   `json:"mode"`
-	RequestCookieNames []string `json:"requestCookieNames,omitempty"`
+	Type               string     `json:"type"`
+	SiteID             string     `json:"siteId"`
+	InstanceID         string     `json:"instanceId"`
+	Capability         string     `json:"capability"`
+	Mode               string     `json:"mode"`
+	RequestCookieNames []string   `json:"requestCookieNames,omitempty"`
+	Upstreams          []upstream `json:"upstreams"`
 	StreamLimits       struct {
 		MaxConcurrency    int `json:"maxConcurrency"`
 		IdleTimeoutMillis int `json:"idleTimeoutMillis"`
 		MaxDurationMillis int `json:"maxDurationMillis"`
 	} `json:"streamLimits,omitempty"`
-	Upstreams []upstream `json:"upstreams"`
 }
 
 type upstream struct {
 	Origin string `json:"origin"`
-	Weight int    `json:"weight"`
 	CARef  string `json:"caRef"`
+	Weight int    `json:"weight"`
 }
 
 type DispatchTarget struct {
 	ID            string
 	Endpoint      string
-	TimeoutMillis int
 	Security      peer.SecurityConfig
+	TimeoutMillis int
 }
 
 func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint64, secrets map[string][]byte) ([]byte, error) {
@@ -115,11 +115,12 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 		if err != nil || listener.ID == "" || listener.Kind != "http" || validateSocketAddress(listener.Address) != nil {
 			return nil, errUnsupportedSettings
 		}
-		if listener.TLS.Mode == "disabled" {
+		switch listener.TLS.Mode {
+		case "disabled":
 			if len(listener.Hostnames) != 0 || len(listener.Protocols) != 1 || protocols[0] != "h1" || (listener.RedirectToListenerID != "" && len(listener.Hostnames) != 0) {
 				return nil, errUnsupportedSettings
 			}
-		} else if listener.TLS.Mode == "custom" {
+		case "custom":
 			if len(listener.Hostnames) == 0 || listener.TLS.CertificateRef == "" || listener.TLS.PrivateKeyRef == "" {
 				return nil, errUnsupportedSettings
 			}
@@ -137,11 +138,11 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 			})
 			usedSecretReferences[listener.TLS.CertificateRef] = struct{}{}
 			usedSecretReferences[listener.TLS.PrivateKeyRef] = struct{}{}
-		} else if listener.TLS.Mode == "automatic" {
+		case "automatic":
 			if len(listener.Hostnames) == 0 {
 				return nil, errUnsupportedSettings
 			}
-		} else {
+		default:
 			return nil, errUnsupportedSettings
 		}
 		for _, hostname := range listener.Hostnames {

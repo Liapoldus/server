@@ -1,14 +1,5 @@
 package contracts
 
-import (
-	"encoding/json"
-	"io/fs"
-)
+import "liapoldus.local/server-plugin/contracts/definitions"
 
-func PluginManifest() ([]byte, error) {
-	contents, err := fs.ReadFile(files, "v1/plugin.json")
-	if err != nil || !json.Valid(contents) {
-		return nil, ErrInvalidAssets
-	}
-	return contents, nil
-}
+func PluginManifest() ([]byte, error) { return definitions.Bytes("plugin.json") }

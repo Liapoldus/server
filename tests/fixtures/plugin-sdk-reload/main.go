@@ -28,7 +28,8 @@ import (
 	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
 	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
 	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/application"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	siteapp "liapoldus.local/server-plugin/internal/application/site"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/internal/infrastructure/site"
 	"liapoldus.local/server-plugin/internal/presentation/restplugin"
@@ -40,30 +41,30 @@ type input struct {
 }
 
 type output struct {
-	Acknowledgement          map[string]any `json:"acknowledgement"`
-	ExpectedDigest           string         `json:"expectedDigest"`
+	FirstResponse            map[string]any `json:"firstResponse"`
+	ResponseAfterReject      map[string]any `json:"responseAfterReject"`
 	ReadyAfterApply          map[string]any `json:"readyAfterApply"`
 	Registration             map[string]any `json:"registration"`
+	Acknowledgement          map[string]any `json:"acknowledgement"`
+	ReadyAfterReject         map[string]any `json:"readyAfterReject"`
 	ManifestName             string         `json:"manifestName"`
-	ConfigurationSchemaValid bool           `json:"configurationSchemaValid"`
-	MetricsHasReadinessGauge bool           `json:"metricsHasReadinessGauge"`
-	FirstResponse            map[string]any `json:"firstResponse"`
-	RejectedCandidate        bool           `json:"rejectedCandidate"`
 	CandidateFailureStage    string         `json:"candidateFailureStage"`
 	RevisionAfterReject      string         `json:"revisionAfterReject"`
-	ReadyAfterReject         map[string]any `json:"readyAfterReject"`
-	ResponseAfterReject      map[string]any `json:"responseAfterReject"`
+	ExpectedDigest           string         `json:"expectedDigest"`
 	SecretsRedeemed          int            `json:"secretsRedeemed"`
+	MetricsHasReadinessGauge bool           `json:"metricsHasReadinessGauge"`
+	RejectedCandidate        bool           `json:"rejectedCandidate"`
+	ConfigurationSchemaValid bool           `json:"configurationSchemaValid"`
 	SecretPurposesValidated  bool           `json:"secretPurposesValidated"`
 	RedactionPassed          bool           `json:"redactionPassed"`
 }
 
 type fixtureSecretBroker struct {
-	mu          sync.Mutex
 	values      map[string][]byte
 	permissions map[string]string
 	grants      map[string][]byte
 	issued      int
+	mu          sync.Mutex
 }
 
 func (broker *fixtureSecretBroker) IssueGrant(_ context.Context, request sdkmodels.SecretGrantRequest) (sdkmodels.SecretGrant, error) {
@@ -123,7 +124,7 @@ func main() {
 	check(shared.RegisterSiteDirectoryReader())
 	runtime := caddyruntime.New()
 	activationProbe := &activationProbe{runtime: runtime}
-	configuration, err := application.NewConfiguration(activationProbe)
+	configuration, err := settingsapp.NewConfiguration(activationProbe)
 	check(err)
 	defer func() { _ = configuration.Stop() }()
 	siteRoot, err := caddyruntime.SiteRoot("frontend")
@@ -200,15 +201,13 @@ func main() {
 	check(err)
 	releaseStore, err := site.NewReleaseStore(filepath.Join(storageDirectory, "server-actions"))
 	check(err)
-	publisher, err := application.NewSitePublisher(releaseStore)
-	check(err)
-	secretPurposes, err := contracts.LoadSecretPurposes()
+	publisher, err := siteapp.NewSitePublisher(releaseStore)
 	check(err)
 	secretBroker := &fixtureSecretBroker{
 		values: map[string][]byte{"fixture-certificate": ids.pluginServer.certificatePEM, "fixture-private-key": ids.pluginServer.privateKeyPEM},
 		permissions: map[string]string{
-			"fixture-certificate": secretPurposes.ServerCertificate,
-			"fixture-private-key": secretPurposes.ServerPrivateKey,
+			"fixture-certificate": string(restplugin.SettingsCertificatePurpose),
+			"fixture-private-key": string(restplugin.SettingsPrivateKeyPurpose),
 		},
 		grants: make(map[string][]byte),
 	}
@@ -316,7 +315,7 @@ func ephemeralPort() int {
 }
 
 type activationProbe struct {
-	runtime application.Runtime
+	runtime settingsapp.Runtime
 	failed  atomic.Bool
 }
 
@@ -333,17 +332,17 @@ func (probe *activationProbe) Activate(configuration []byte) error {
 }
 
 func (probe *activationProbe) ValidateWithSecrets(configuration []byte, secrets map[string][]byte) error {
-	runtime, ok := probe.runtime.(application.SecretAwareRuntime)
+	runtime, ok := probe.runtime.(settingsapp.SecretAwareRuntime)
 	if !ok {
-		return application.ErrCandidateRejected
+		return settingsapp.ErrCandidateRejected
 	}
 	return runtime.ValidateWithSecrets(configuration, secrets)
 }
 
 func (probe *activationProbe) ActivateWithSecrets(configuration []byte, secrets map[string][]byte) error {
-	runtime, ok := probe.runtime.(application.SecretAwareRuntime)
+	runtime, ok := probe.runtime.(settingsapp.SecretAwareRuntime)
 	if !ok {
-		return application.ErrCandidateRejected
+		return settingsapp.ErrCandidateRejected
 	}
 	if err := runtime.ActivateWithSecrets(configuration, secrets); err != nil {
 		probe.failed.Store(true)

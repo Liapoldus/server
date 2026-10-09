@@ -23,7 +23,8 @@ import (
 	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
 	sdkpresentation "github.com/Liapoldus/plugin-sdk/presentation"
 	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/application"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	siteapp "liapoldus.local/server-plugin/internal/application/site"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/internal/infrastructure/site"
 	"liapoldus.local/server-plugin/internal/presentation/restplugin"
@@ -45,31 +46,31 @@ type input struct {
 }
 
 type fixtureOutput struct {
-	InitialRevision          string      `json:"initialRevision"`
-	InvalidPairRejected      bool        `json:"invalidPairRejected"`
+	CertificateInvalidCursor adminResult `json:"certificateInvalidCursor"`
+	CertificateMissing       adminResult `json:"certificateMissing"`
+	CertificateStatus        adminResult `json:"certificateStatus"`
+	CertificateList          adminResult `json:"certificateList"`
+	TLS12                    result      `json:"tls12"`
+	TLS13                    result      `json:"tls13"`
 	RevisionAfterInvalidPair string      `json:"revisionAfterInvalidPair"`
-	OldRevisionStatus        int         `json:"oldRevisionStatus"`
+	InitialRevision          string      `json:"initialRevision"`
 	OldRevisionBody          string      `json:"oldRevisionBody"`
 	ValidCode                string      `json:"validCode"`
 	ValidRevision            string      `json:"validRevision"`
-	TLS12                    result      `json:"tls12"`
-	TLS13                    result      `json:"tls13"`
+	OldRevisionStatus        int         `json:"oldRevisionStatus"`
 	WrongHostnameRejected    bool        `json:"wrongHostnameRejected"`
-	CertificateList          adminResult `json:"certificateList"`
-	CertificateInvalidCursor adminResult `json:"certificateInvalidCursor"`
-	CertificateStatus        adminResult `json:"certificateStatus"`
-	CertificateMissing       adminResult `json:"certificateMissing"`
+	InvalidPairRejected      bool        `json:"invalidPairRejected"`
 }
 
 type adminResult struct {
-	Status int            `json:"status"`
 	Body   map[string]any `json:"body"`
+	Status int            `json:"status"`
 }
 
 type result struct {
 	NegotiatedProtocol string `json:"negotiatedProtocol"`
-	Status             int    `json:"status"`
 	Body               string `json:"body"`
+	Status             int    `json:"status"`
 }
 
 func main() {
@@ -87,7 +88,7 @@ func main() {
 	check(os.MkdirAll(siteRoot, 0o700))
 	sitePath := filepath.Join(siteRoot, "index.html")
 	check(os.WriteFile(sitePath, []byte("old-active"), 0o600))
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	defer func() { _ = configuration.Stop() }()
 	initialConfig := settings(request.HTTPPort, nil, "")
@@ -125,7 +126,7 @@ func main() {
 	output.WrongHostnameRejected = wrongHostnameErr != nil
 	releaseStore, err := site.NewReleaseStore(filepath.Join(storageDirectory, "site-releases"))
 	check(err)
-	publisher, err := application.NewSitePublisher(releaseStore)
+	publisher, err := siteapp.NewSitePublisher(releaseStore)
 	check(err)
 	adapter, err := restplugin.New(configuration, publisher)
 	check(err)

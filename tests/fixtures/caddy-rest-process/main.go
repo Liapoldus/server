@@ -36,6 +36,7 @@ import (
 	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
 	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
 	"liapoldus.local/server-plugin/contracts"
+	"liapoldus.local/server-plugin/internal/presentation/restplugin"
 )
 
 const generation = "generation-rest-1"
@@ -64,8 +65,8 @@ type result struct {
 	CrossPageQuery   map[string]any `json:"crossPageQuery"`
 	BeforeCompletion map[string]any `json:"beforeCompletion"`
 	ManifestResponse map[string]any `json:"manifestResponse"`
-	ChildExitCode    int            `json:"childExitCode"`
 	Protocols        map[string]any `json:"protocols"`
+	ChildExitCode    int            `json:"childExitCode"`
 }
 
 func main() {
@@ -149,18 +150,13 @@ func run() error {
 		writer.Header().Set(headers["generationState"], "active")
 		_, _ = writer.Write(configBytes)
 	})
-	secretPurposes, err := contracts.LoadSecretPurposes()
-	if err != nil {
-		_ = coreListener.Close()
-		return err
-	}
 	secretValues := map[string][]byte{
 		"fixture-certificate": issued.replica.certificatePEM,
 		"fixture-private-key": issued.replica.privateKeyPEM,
 	}
 	secretPurpose := map[string]string{
-		"fixture-certificate": secretPurposes.ServerCertificate,
-		"fixture-private-key": secretPurposes.ServerPrivateKey,
+		"fixture-certificate": string(restplugin.SettingsCertificatePurpose),
+		"fixture-private-key": string(restplugin.SettingsPrivateKeyPurpose),
 	}
 	var grantsLock sync.Mutex
 	grants := map[string][]byte{}

@@ -1,36 +1,61 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://liapoldus.github.io/plugins/server/site-publish/v1/site-manifest.schema.json",
-  "title": "Server site archive manifest v1",
-  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "required": ["schemaVersion", "siteId", "documentRoot", "indexDocument"],
-  "properties": {
-    "schemaVersion": { "const": 1 },
-    "siteId": { "type": "string", "minLength": 1, "maxLength": 128 },
-    "documentRoot": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^(?:\\.|(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*)(?:/(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*))*)$",
-      "description": "POSIX relative archive directory without ASCII control characters; dot denotes the archive root."
-    },
-    "indexDocument": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*)(?:/(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*))*$",
-      "description": "POSIX relative regular-file path without ASCII control characters, resolved inside documentRoot."
-    }
-  },
   "allOf": [
     {
       "if": {
-        "properties": { "documentRoot": { "const": "." } },
-        "required": ["documentRoot"]
+        "properties": {
+          "documentRoot": {
+            "const": "."
+          }
+        },
+        "required": [
+          "documentRoot"
+        ]
       },
       "then": {
-        "properties": { "indexDocument": { "not": { "const": "site-manifest.json" } } },
-        "required": ["indexDocument"]
+        "properties": {
+          "indexDocument": {
+            "not": {
+              "const": "site-manifest.json"
+            }
+          }
+        },
+        "required": [
+          "indexDocument"
+        ]
       }
     }
-  ]
+  ],
+  "properties": {
+    "documentRoot": {
+      "description": "POSIX relative archive directory without ASCII control characters; dot denotes the archive root.",
+      "minLength": 1,
+      "pattern": "^(?:\\.|(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*)(?:/(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*))*)$",
+      "type": "string"
+    },
+    "indexDocument": {
+      "description": "POSIX relative regular-file path without ASCII control characters, resolved inside documentRoot.",
+      "minLength": 1,
+      "pattern": "^(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*)(?:/(?:[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.[^./\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*|\\.\\.[^/\\\\\\x00-\\x1f\\x7f][^/\\\\\\x00-\\x1f\\x7f]*))*$",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "siteId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "siteId",
+    "documentRoot",
+    "indexDocument"
+  ],
+  "title": "Server site archive manifest v1",
+  "type": "object"
 }

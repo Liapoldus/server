@@ -19,7 +19,7 @@ import (
 	"os"
 	"time"
 
-	"liapoldus.local/server-plugin/internal/application"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
@@ -67,7 +67,7 @@ func main() {
 	}
 
 	runtime := caddyruntime.New()
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	requestSettings, err := json.Marshal(map[string]any{
 		"schemaVersion": 1,

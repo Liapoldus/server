@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
-	"liapoldus.local/server-plugin/internal/application"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
+	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
 	"liapoldus.local/server-plugin/tests/fixtures/shared"
 )
@@ -166,7 +166,7 @@ func main() {
 	check(listener.Close())
 	runtime := caddyruntime.New()
 	check(runtime.SetDispatchTargets([]caddyruntime.DispatchTarget{{ID: "forms", Endpoint: peerServer.Addr(), TimeoutMillis: 500, Security: clientSecurity}}))
-	configuration, err := application.NewConfiguration(runtime)
+	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	defer configuration.Stop()
 	settings, err := json.Marshal(map[string]any{
@@ -185,7 +185,7 @@ func main() {
 		},
 	})
 	check(err)
-	decoded, err := models.DecodeSettings(settings, "schemaVersion", "config", 1)
+	decoded, err := settingsmodel.DecodeSettings(settings)
 	check(err)
 	check(runtime.Validate(decoded.RuntimeConfig))
 	check(configuration.Apply(decoded, "stream-limits"))
@@ -270,9 +270,9 @@ func sendMessage(stream peer.Stream, value any) error {
 }
 
 type responseResult struct {
-	Status      int    `json:"status"`
 	ContentType string `json:"contentType,omitempty"`
 	Body        string `json:"body"`
+	Status      int    `json:"status"`
 }
 
 func get(client *http.Client, url string) *http.Response {

@@ -16,14 +16,14 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
-	"liapoldus.local/server-plugin/internal/domain/models"
+	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
 )
 
 type Runtime struct {
-	mu           sync.RWMutex
 	targets      []DispatchTarget
 	certificates []certificateBinding
 	id           uint64
+	mu           sync.RWMutex
 }
 
 type certificateBinding struct {
@@ -144,30 +144,30 @@ func configuredCertificateBindings(desired settingsConfig) []certificateBinding 
 	return bindings
 }
 
-func (runtime *Runtime) ListCertificates(ctx context.Context, domain string, limit int, cursor string) (models.CertificatePage, error) {
+func (runtime *Runtime) ListCertificates(ctx context.Context, domain string, limit int, cursor string) (certificatemodel.CertificatePage, error) {
 	if runtime == nil || ctx == nil || limit < 1 || limit > 100 || len(domain) > 253 {
-		return models.CertificatePage{}, models.ErrInvalidCertificateQuery
+		return certificatemodel.CertificatePage{}, certificatemodel.ErrInvalidCertificateQuery
 	}
 	if err := ctx.Err(); err != nil {
-		return models.CertificatePage{}, models.ErrInvalidCertificateQuery
+		return certificatemodel.CertificatePage{}, certificatemodel.ErrInvalidCertificateQuery
 	}
 	runtime.mu.RLock()
 	bindings := append([]certificateBinding(nil), runtime.certificates...)
 	runtime.mu.RUnlock()
-	items := make([]models.CertificateSummary, 0, len(bindings))
+	items := make([]certificatemodel.CertificateSummary, 0, len(bindings))
 	for _, binding := range bindings {
 		if domain != "" && binding.domain != strings.ToLower(domain) {
 			continue
 		}
 		status := runtime.certificateStatus(binding)
-		items = append(items, models.CertificateSummary{Domain: status.Domain, Source: status.Source,
+		items = append(items, certificatemodel.CertificateSummary{Domain: status.Domain, Source: status.Source,
 			Readiness: status.Readiness, NotAfter: status.NotAfter, Serial: status.Serial})
 	}
 	start := 0
 	if cursor != "" {
 		decoded, err := base64.RawURLEncoding.DecodeString(cursor)
 		if err != nil || len(decoded) == 0 || len(decoded) > 253 {
-			return models.CertificatePage{}, models.ErrInvalidCertificateQuery
+			return certificatemodel.CertificatePage{}, certificatemodel.ErrInvalidCertificateQuery
 		}
 		for start < len(items) && items[start].Domain <= string(decoded) {
 			start++
@@ -177,7 +177,7 @@ func (runtime *Runtime) ListCertificates(ctx context.Context, domain string, lim
 	if end > len(items) {
 		end = len(items)
 	}
-	page := models.CertificatePage{Items: append([]models.CertificateSummary(nil), items[start:end]...)}
+	page := certificatemodel.CertificatePage{Items: append([]certificatemodel.CertificateSummary(nil), items[start:end]...)}
 	if end < len(items) && end > start {
 		next := base64.RawURLEncoding.EncodeToString([]byte(items[end-1].Domain))
 		page.NextCursor = &next
@@ -185,9 +185,9 @@ func (runtime *Runtime) ListCertificates(ctx context.Context, domain string, lim
 	return page, nil
 }
 
-func (runtime *Runtime) CertificateStatus(ctx context.Context, domain string) (models.CertificateStatus, error) {
+func (runtime *Runtime) CertificateStatus(ctx context.Context, domain string) (certificatemodel.CertificateStatus, error) {
 	if runtime == nil || ctx == nil || domain == "" || len(domain) > 253 || ctx.Err() != nil {
-		return models.CertificateStatus{}, models.ErrInvalidCertificateQuery
+		return certificatemodel.CertificateStatus{}, certificatemodel.ErrInvalidCertificateQuery
 	}
 	runtime.mu.RLock()
 	bindings := append([]certificateBinding(nil), runtime.certificates...)
@@ -197,11 +197,11 @@ func (runtime *Runtime) CertificateStatus(ctx context.Context, domain string) (m
 			return runtime.certificateStatus(binding), nil
 		}
 	}
-	return models.CertificateStatus{}, models.ErrCertificateNotFound
+	return certificatemodel.CertificateStatus{}, certificatemodel.ErrCertificateNotFound
 }
 
-func (*Runtime) certificateStatus(binding certificateBinding) models.CertificateStatus {
-	status := models.CertificateStatus{Domain: binding.domain, Source: binding.source, Readiness: "unknown"}
+func (*Runtime) certificateStatus(binding certificateBinding) certificatemodel.CertificateStatus {
+	status := certificatemodel.CertificateStatus{Domain: binding.domain, Source: binding.source, Readiness: "unknown"}
 	if binding.source == "acme" {
 		status.Readiness = "pending"
 	}

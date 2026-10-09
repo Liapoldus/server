@@ -1,142 +1,378 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://liapoldus.github.io/plugins/server/admin-ui/v1/schema.json",
-  "title": "Server plugin Admin Surface v1",
-  "description": "Strict declarative Constructor surface. It contains no executable UI, URL, listener, or secret value.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["version", "plugin", "requiredCapabilities", "pages"],
-  "properties": {
-    "version": { "const": 1 },
-    "plugin": { "const": "server" },
-    "requiredCapabilities": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": { "$ref": "#/$defs/capability" }
-    },
-    "pages": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 32,
-      "items": { "$ref": "#/$defs/page" }
-    }
-  },
   "$defs": {
-    "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 256 },
-    "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$", "maxLength": 128 },
-    "pageId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
-    "columnId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$" },
-    "field": {
-      "type": "object",
+    "action": {
       "additionalProperties": false,
-      "required": ["key", "type"],
       "properties": {
-        "key": { "$ref": "#/$defs/nonEmptyString" },
-        "type": { "enum": ["string", "number", "boolean", "select", "multiselect", "secret", "file", "directory", "duration", "size", "code", "keyValue", "array", "object"] },
-        "required": { "type": "boolean" },
-        "title": { "type": "string", "maxLength": 120 },
-        "description": { "type": "string", "maxLength": 1024 }
-      }
-    },
-    "inputField": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type"],
-      "properties": {
-        "type": { "enum": ["string", "number", "integer", "boolean", "null"] },
-        "minLength": { "type": "integer", "minimum": 0 },
-        "maxLength": { "type": "integer", "minimum": 0 },
-        "minimum": { "type": "number" },
-        "maximum": { "type": "number" },
-        "enum": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": ["string", "number", "boolean", "null"] } }
-      }
+        "artifactInput": {
+          "$ref": "#/$defs/artifactInput"
+        },
+        "capability": {
+          "$ref": "#/$defs/capability"
+        },
+        "confirmation": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "dangerous": {
+          "type": "boolean"
+        },
+        "id": {
+          "$ref": "#/$defs/pageId"
+        },
+        "inputSchema": {
+          "$ref": "#/$defs/actionInputSchema"
+        },
+        "rowInput": {
+          "additionalProperties": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "minProperties": 1,
+          "type": "object"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "capability",
+        "inputSchema"
+      ],
+      "type": "object"
     },
     "actionInputSchema": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["type", "properties", "required", "additionalProperties"],
       "properties": {
-        "type": { "const": "object" },
-        "properties": { "type": "object", "additionalProperties": { "$ref": "#/$defs/inputField" } },
-        "required": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "additionalProperties": { "const": false }
-      }
+        "additionalProperties": {
+          "const": false
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/inputField"
+          },
+          "type": "object"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "type": {
+          "const": "object"
+        }
+      },
+      "required": [
+        "type",
+        "properties",
+        "required",
+        "additionalProperties"
+      ],
+      "type": "object"
     },
     "artifactInput": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["mediaTypes", "maxBytes", "maxMetadataBytes", "maxMultipartOverheadBytes"],
       "properties": {
-        "mediaTypes": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 32,
-          "uniqueItems": true,
-          "items": { "type": "string", "maxLength": 127, "pattern": "^[a-z0-9!#$%&'*+.^_`|~-]+/[a-z0-9!#$%&'*+.^_`|~-]+$" }
+        "maxBytes": {
+          "maximum": 134217728,
+          "minimum": 1,
+          "type": "integer"
         },
-        "maxBytes": { "type": "integer", "minimum": 1, "maximum": 134217728 },
-        "maxMetadataBytes": { "type": "integer", "minimum": 2, "maximum": 65536 },
-        "maxMultipartOverheadBytes": { "type": "integer", "minimum": 0, "maximum": 65536 }
-      }
+        "maxMetadataBytes": {
+          "maximum": 65536,
+          "minimum": 2,
+          "type": "integer"
+        },
+        "maxMultipartOverheadBytes": {
+          "maximum": 65536,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mediaTypes": {
+          "items": {
+            "maxLength": 127,
+            "pattern": "^[a-z0-9!#$%\u0026'*+.^_`|~-]+/[a-z0-9!#$%\u0026'*+.^_`|~-]+$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mediaTypes",
+        "maxBytes",
+        "maxMetadataBytes",
+        "maxMultipartOverheadBytes"
+      ],
+      "type": "object"
     },
-    "action": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "title", "capability", "inputSchema"],
-      "properties": {
-        "id": { "$ref": "#/$defs/pageId" },
-        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
-        "capability": { "$ref": "#/$defs/capability" },
-        "confirmation": { "type": "string", "minLength": 1, "maxLength": 512 },
-        "dangerous": { "type": "boolean" },
-        "inputSchema": { "$ref": "#/$defs/actionInputSchema" },
-        "rowInput": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/nonEmptyString" } },
-        "artifactInput": { "$ref": "#/$defs/artifactInput" }
-      }
+    "capability": {
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$",
+      "type": "string"
     },
-    "tableSection": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "kind", "dataCapability", "columns", "actions"],
-      "properties": {
-        "id": { "$ref": "#/$defs/pageId" },
-        "kind": { "const": "table" },
-        "title": { "type": "string", "maxLength": 120 },
-        "dataCapability": { "$ref": "#/$defs/capability" },
-        "columns": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/columnId" } },
-        "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } }
-      }
+    "columnId": {
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$",
+      "type": "string"
     },
     "detailSection": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "dataCapability", "fields"],
       "properties": {
-        "id": { "$ref": "#/$defs/pageId" },
-        "kind": { "const": "detail" },
-        "title": { "type": "string", "maxLength": 120 },
-        "dataCapability": { "$ref": "#/$defs/capability" },
-        "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" } }
-      }
+        "dataCapability": {
+          "$ref": "#/$defs/capability"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/field"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/pageId"
+        },
+        "kind": {
+          "const": "detail"
+        },
+        "title": {
+          "maxLength": 120,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "dataCapability",
+        "fields"
+      ],
+      "type": "object"
+    },
+    "field": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "key": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "title": {
+          "maxLength": 120,
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "boolean",
+            "select",
+            "multiselect",
+            "secret",
+            "file",
+            "directory",
+            "duration",
+            "size",
+            "code",
+            "keyValue",
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "type": "object"
+    },
+    "inputField": {
+      "additionalProperties": false,
+      "properties": {
+        "enum": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "maxLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "nonEmptyString": {
+      "maxLength": 256,
+      "minLength": 1,
+      "type": "string"
+    },
+    "page": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/capability"
+        },
+        "id": {
+          "$ref": "#/$defs/pageId"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/section"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "capability",
+        "sections"
+      ],
+      "type": "object"
+    },
+    "pageId": {
+      "pattern": "^[a-z][a-z0-9-]{0,62}$",
+      "type": "string"
     },
     "section": {
       "oneOf": [
-        { "$ref": "#/$defs/tableSection" },
-        { "$ref": "#/$defs/detailSection" }
+        {
+          "$ref": "#/$defs/tableSection"
+        },
+        {
+          "$ref": "#/$defs/detailSection"
+        }
       ]
     },
-    "page": {
-      "type": "object",
+    "tableSection": {
       "additionalProperties": false,
-      "required": ["id", "title", "capability", "sections"],
       "properties": {
-        "id": { "$ref": "#/$defs/pageId" },
-        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
-        "capability": { "$ref": "#/$defs/capability" },
-        "permissions": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } },
-        "sections": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/section" } }
-      }
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/action"
+          },
+          "type": "array"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/columnId"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "dataCapability": {
+          "$ref": "#/$defs/capability"
+        },
+        "id": {
+          "$ref": "#/$defs/pageId"
+        },
+        "kind": {
+          "const": "table"
+        },
+        "title": {
+          "maxLength": 120,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "dataCapability",
+        "columns",
+        "actions"
+      ],
+      "type": "object"
     }
-  }
+  },
+  "$id": "https://liapoldus.github.io/plugins/server/admin-ui/v1/schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Strict declarative plugin administration surface. It contains no executable UI, URL, listener, or secret value.",
+  "properties": {
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/page"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "type": "array"
+    },
+    "plugin": {
+      "const": "server"
+    },
+    "requiredCapabilities": {
+      "items": {
+        "$ref": "#/$defs/capability"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "version",
+    "plugin",
+    "requiredCapabilities",
+    "pages"
+  ],
+  "title": "Server plugin Admin Surface v1",
+  "type": "object"
 }
