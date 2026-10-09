@@ -120,10 +120,10 @@ describe("Caddy site archive manifest v1", () => {
       }
       if (input.payloadSiteId !== undefined && input.manifest.siteId !== input.payloadSiteId) return { accepted: false, reason: "site-id-mismatch" };
       const root = input.manifest.documentRoot === "." ? "" : `${input.manifest.documentRoot}/`;
-      const rootEntry = input.manifest.documentRoot === "." ? undefined : required(entries.find((entry) => entry.path === input.manifest.documentRoot));
+      const rootEntry = input.manifest.documentRoot === "." ? undefined : entries.find((entry) => entry.path === input.manifest.documentRoot);
       if (rootEntry && rootEntry.type !== "directory") return { accepted: false, reason: "document-root-resolves-through-link" };
       const indexPath = `${root}${input.manifest.indexDocument}`;
-      const indexEntry = required(entries.find((entry) => entry.path === indexPath));
+      const indexEntry = entries.find((entry) => entry.path === indexPath);
       if (!indexEntry) return { accepted: false, reason: "index-document-not-found-as-regular-file" };
       if (indexEntry.type !== "regular-file") return { accepted: false, reason: "index-document-is-not-regular-file" };
       const publicPrefix = input.manifest.documentRoot === "." ? "" : `${input.manifest.documentRoot}/`;

@@ -2,11 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const root = resolve(import.meta.dirname, '..');
+const root = resolve(import.meta.dirname, '../..');
 
 describe('manually started Server plugin', () => {
   it('builds independently against the current Plugin SDK', () => {
-    expect(() => execFileSync('go', ['build', './...'], {
+    expect(() => execFileSync('go', ['build', '-o', '/dev/null', './cmd/server'], {
       cwd: root,
       env: {
         ...process.env,

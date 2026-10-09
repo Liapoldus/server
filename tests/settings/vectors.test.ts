@@ -37,9 +37,9 @@ describe("executable settings vectors", () => {
     const sourcePort = await freePort();
     const targetPort = await freePort();
     const result = runRuntime(redirectSettings(sourcePort, targetPort), {
-      method: required(vector.input.request)..method,
-      host: required(vector.input.request)..host,
-      target: required(vector.input.request)..requestTarget,
+	      method: required(vector.input.request).method,
+	      host: required(vector.input.request).host,
+	      target: required(vector.input.request).requestTarget,
     }, sourcePort);
 
     expect(result).toMatchObject({
@@ -47,7 +47,7 @@ describe("executable settings vectors", () => {
       location: vector.expected.location,
     });
     expect(vector.expected.methodPreserved).toBe(true);
-    expect(required(vector.input.request)..method).toBe("POST");
+    expect(required(vector.input.request).method).toBe("POST");
   }, 60_000);
 
   it("rejects a redirect host outside automatic TLS target coverage", async () => {
@@ -56,8 +56,8 @@ describe("executable settings vectors", () => {
     const targetPort = await freePort();
     const result = runRuntime(redirectSettings(sourcePort, targetPort), {
       method: "GET",
-      host: required(vector.input.request)..host,
-      target: required(vector.input.request)..requestTarget,
+      host: required(vector.input.request).host,
+      target: required(vector.input.request).requestTarget,
     }, sourcePort);
 
     expect(result.status).toBe(vector.expected.status);
@@ -91,12 +91,12 @@ function redirectSettings(sourcePort: number, targetPort: number) {
       listeners: [
         {
           id: "http", kind: "http", address: `127.0.0.1:${sourcePort}`, hostnames: [],
-          protocols: required(vector.input.source)..protocols, tls: { mode: required(vector.input.source)..tls },
-          redirectToListenerId: required(vector.input.source)..redirectToListenerId,
+          protocols: required(vector.input.source).protocols, tls: { mode: required(vector.input.source).tls },
+          redirectToListenerId: required(vector.input.source).redirectToListenerId,
         },
         {
-          id: required(vector.input.target)..id, kind: "http", address: `127.0.0.1:${targetPort}`,
-          hostnames: required(vector.input.target)..hostnames, protocols: ["http1"], tls: { mode: required(vector.input.target)..tls },
+          id: required(vector.input.target).id, kind: "http", address: `127.0.0.1:${targetPort}`,
+          hostnames: required(vector.input.target).hostnames, protocols: ["http1"], tls: { mode: required(vector.input.target).tls },
         },
       ],
       routes: [],
