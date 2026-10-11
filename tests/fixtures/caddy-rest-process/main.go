@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,8 +34,8 @@ import (
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
-	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
+	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
+	sdkinfra "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
 	"liapoldus.local/server-plugin/contracts"
 	"liapoldus.local/server-plugin/internal/presentation/restplugin"
 )
@@ -54,6 +55,7 @@ type identities struct {
 	coreServer identity
 	coreClient identity
 	replica    identity
+	peer       identity
 }
 
 type result struct {
@@ -126,16 +128,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	coreProvider, err := newCredentialsProvider(contract, issued.rootPEM, issued.coreServer, issued.coreClient)
-	if err != nil {
-		_ = coreListener.Close()
-		return err
-	}
-	revocation, err := newRevocation(issued)
-	if err != nil {
-		_ = coreListener.Close()
-		return err
-	}
 	coreMux := http.NewServeMux()
 	coreMux.HandleFunc(contract.Core.ConfigPull.Method+" "+contract.Core.ConfigPull.PathTemplate, func(writer http.ResponseWriter, request *http.Request) {
 		if request.PathValue("generation") != generation {
@@ -192,19 +184,69 @@ func run() error {
 		writer.Header().Set("content-type", contract.Core.SecretGrant.Redemption.ResponseMediaType)
 		_, _ = writer.Write(value)
 	})
-	coreServer, err := sdkinfra.NewMutualTLSServer(contract, sdkinfra.MutualTLSServerConfig{
-		Handler: coreMux, Provider: coreProvider,
-		Peer: sdkmodels.PeerIdentity{CommonName: issued.replica.certificate.Leaf.Subject.CommonName}, Revocation: revocation,
-	})
+	lifecycleContract, err := sdkinfra.LoadReplicaLifecycleContract()
 	if err != nil {
 		_ = coreListener.Close()
 		return err
 	}
-	go func() { _ = coreServer.Serve(coreListener) }()
+	registerEndpoint := lifecycleContract.Endpoints["register"]
+	coreMux.HandleFunc(registerEndpoint.Method+" "+registerEndpoint.Path, func(writer http.ResponseWriter, request *http.Request) {
+		var registration sdkmodels.ReplicaRegistrationRequest
+		if json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10)).Decode(&registration) != nil ||
+			registration.Validate() != nil || registration.ContractVersion != lifecycleContract.ContractVersion {
+			http.Error(writer, "invalid replica registration", http.StatusBadRequest)
+			return
+		}
+		now := time.Now().UTC()
+		writer.Header().Set("content-type", lifecycleContract.Responses["register"].MediaType)
+		writer.WriteHeader(lifecycleContract.Responses["register"].Status)
+		_ = json.NewEncoder(writer).Encode(sdkmodels.ReplicaRegistrationResponse{
+			ContractVersion: lifecycleContract.ContractVersion, Identity: registration.Identity,
+			ServerTime: now, LeaseExpiresAt: now.Add(time.Duration(lifecycleContract.Lease.TTLSeconds) * time.Second),
+		})
+	})
+	renewEndpoint := lifecycleContract.Endpoints["renew"]
+	coreMux.HandleFunc(renewEndpoint.Method+" "+renewEndpoint.Path, func(writer http.ResponseWriter, request *http.Request) {
+		var renewal sdkmodels.ReplicaRenewalRequest
+		if json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10)).Decode(&renewal) != nil ||
+			renewal.Validate() != nil || renewal.ContractVersion != lifecycleContract.ContractVersion {
+			http.Error(writer, "invalid replica renewal", http.StatusBadRequest)
+			return
+		}
+		now := time.Now().UTC()
+		writer.Header().Set("content-type", lifecycleContract.Responses["renew"].MediaType)
+		_ = json.NewEncoder(writer).Encode(sdkmodels.ReplicaLease{
+			ContractVersion: lifecycleContract.ContractVersion, Identity: renewal.Identity,
+			ServerTime: now, LeaseExpiresAt: now.Add(time.Duration(lifecycleContract.Lease.TTLSeconds) * time.Second),
+		})
+	})
+	deregisterEndpoint := lifecycleContract.Endpoints["deregister"]
+	coreMux.HandleFunc(deregisterEndpoint.Method+" "+deregisterEndpoint.Path, func(writer http.ResponseWriter, request *http.Request) {
+		var deregistration sdkmodels.ReplicaDeregistrationRequest
+		if json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10)).Decode(&deregistration) != nil ||
+			deregistration.Validate() != nil || deregistration.ContractVersion != lifecycleContract.ContractVersion {
+			http.Error(writer, "invalid replica deregistration", http.StatusBadRequest)
+			return
+		}
+		writer.Header().Set("content-type", lifecycleContract.Responses["deregister"].MediaType)
+		_ = json.NewEncoder(writer).Encode(sdkmodels.ReplicaDeregistrationResponse{
+			ContractVersion: lifecycleContract.ContractVersion, Identity: deregistration.Identity, Deregistered: true,
+		})
+	})
+	coreRoots := x509.NewCertPool()
+	coreRoots.AddCert(issued.root)
+	coreServer := &http.Server{
+		Handler: coreMux,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{issued.coreServer.certificate},
+			ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: coreRoots,
+		},
+	}
+	go func() { _ = coreServer.ServeTLS(coreListener, "", "") }()
 	defer func() {
 		shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		_ = coreServer.GracefulShutdown(shutdown)
+		_ = coreServer.Shutdown(shutdown)
 	}()
 	writePEM := func(name string, content []byte) (string, error) {
 		path := filepath.Join(rootDirectory, name)
@@ -219,6 +261,14 @@ func run() error {
 		return err
 	}
 	keyPath, err := writePEM("replica-key.pem", issued.replica.privateKeyPEM)
+	if err != nil {
+		return err
+	}
+	peerCertPath, err := writePEM("peer.pem", issued.peer.certificatePEM)
+	if err != nil {
+		return err
+	}
+	peerKeyPath, err := writePEM("peer-key.pem", issued.peer.privateKeyPEM)
 	if err != nil {
 		return err
 	}
@@ -242,11 +292,14 @@ func run() error {
 	child := exec.Command(binaryPath,
 		"--instance-id=server-", "--replica-id=server-",
 		fmt.Sprintf("--rest-listen=127.0.0.1:%d", controlPort),
+		fmt.Sprintf("--rest-advertise-url=https://localhost:%d", controlPort),
 		"--core-url=https://"+coreListener.Addr().String(),
-		"--core-server-name=localhost", "--core-common-name=test Core server",
-		"--core-client-common-name=test Core client",
+		"--core-server-name=localhost", "--core-common-name=test Core server", "--core-uri=spiffe://liapoldus/core/server",
+		"--core-client-common-name=test Core client", "--core-client-uri=spiffe://liapoldus/core/client",
 		"--ca-file="+caPath, "--server-cert="+certPath, "--server-key="+keyPath,
-		"--client-cert="+certPath, "--client-key="+keyPath, "--crl-file="+crlPath)
+		"--client-cert="+certPath, "--client-key="+keyPath, "--crl-file="+crlPath,
+		"--peer-identity=spiffe://liapoldus/plugin/server", "--peer-ca-file="+caPath,
+		"--peer-cert="+peerCertPath, "--peer-key="+peerKeyPath)
 	child.Dir = repositoryRoot()
 	child.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=go1.26.0")
 	var childLogs bytes.Buffer
@@ -255,20 +308,7 @@ func run() error {
 	if err := child.Start(); err != nil {
 		return err
 	}
-	pluginProvider, err := newCredentialsProvider(contract, issued.rootPEM, issued.coreClient, issued.coreClient)
-	if err != nil {
-		_ = child.Process.Kill()
-		_ = child.Wait()
-		return err
-	}
-	pluginHTTP, err := sdkinfra.NewMutualTLSClient(contract, pluginProvider, sdkinfra.MutualTLSClientConfig{
-		Peer: sdkmodels.PeerIdentity{CommonName: issued.replica.certificate.Leaf.Subject.CommonName}, ServerName: "localhost", Revocation: revocation,
-	})
-	if err != nil {
-		_ = child.Process.Kill()
-		_ = child.Wait()
-		return err
-	}
+	pluginHTTP := newCorePluginTransport(issued)
 	pluginClient, err := sdkinfra.NewPluginClient(contract, fmt.Sprintf("https://127.0.0.1:%d", controlPort), pluginHTTP,
 		sdkmodels.PeerIdentity{CommonName: issued.replica.certificate.Leaf.Subject.CommonName})
 	if err != nil {
@@ -288,9 +328,20 @@ func run() error {
 		time.Sleep(50 * time.Millisecond)
 	}
 	if healthErr != nil {
+		probeRequest, probeRequestErr := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d/healthz", controlPort), nil)
+		probeDetails := "no response"
+		if probeRequestErr != nil {
+			probeDetails = "request construction failed"
+		} else if probeResponse, probeErr := pluginHTTP.Do(probeRequest); probeErr != nil {
+			probeDetails = probeErr.Error()
+		} else if probeResponse != nil {
+			probeBody, _ := io.ReadAll(io.LimitReader(probeResponse.Body, 2048))
+			_ = probeResponse.Body.Close()
+			probeDetails = fmt.Sprintf("HTTP %d content-type=%q body=%q", probeResponse.StatusCode, probeResponse.Header.Get("content-type"), probeBody)
+		}
 		_ = child.Process.Kill()
 		_ = child.Wait()
-		return fmt.Errorf("plugin health unavailable: %w; child output: %s", healthErr, childLogs.String())
+		return fmt.Errorf("plugin health unavailable: %w; status probe: %s; child output: %s", healthErr, probeDetails, childLogs.String())
 	}
 	ack, err := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: generation, SHA256: digestHex, SchemaVersion: "1"})
 	if err != nil {
@@ -617,7 +668,7 @@ func createIdentities() (identities, error) {
 		return identities{}, err
 	}
 	rootPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootDER})
-	issue := func(serial int64, name string) (identity, error) {
+	issue := func(serial int64, name string, uriSANs ...string) (identity, error) {
 		key, keyErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if keyErr != nil {
 			return identity{}, keyErr
@@ -628,6 +679,13 @@ func createIdentities() (identities, error) {
 			NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
 			KeyUsage:    x509.KeyUsageDigitalSignature,
 			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		}
+		for _, rawURI := range uriSANs {
+			parsedURI, parseErr := url.Parse(rawURI)
+			if parseErr != nil {
+				return identity{}, parseErr
+			}
+			template.URIs = append(template.URIs, parsedURI)
 		}
 		der, issueErr := x509.CreateCertificate(rand.Reader, template, root, &key.PublicKey, rootKey)
 		if issueErr != nil {
@@ -645,19 +703,23 @@ func createIdentities() (identities, error) {
 		}
 		return identity{certificate: pair, certificatePEM: certificatePEM, privateKeyPEM: privateKeyPEM}, nil
 	}
-	coreServer, err := issue(2, "test Core server")
+	coreServer, err := issue(2, "test Core server", "spiffe://liapoldus/core/server")
 	if err != nil {
 		return identities{}, err
 	}
-	coreClient, err := issue(3, "test Core client")
+	coreClient, err := issue(3, "test Core client", "spiffe://liapoldus/core/client")
 	if err != nil {
 		return identities{}, err
 	}
-	replica, err := issue(4, "test Caddy replica")
+	replica, err := issue(4, "test Caddy replica", "spiffe://liapoldus/plugin/server-/server-/fixture")
 	if err != nil {
 		return identities{}, err
 	}
-	return identities{root: root, rootKey: rootKey, rootPEM: rootPEM, coreServer: coreServer, coreClient: coreClient, replica: replica}, nil
+	peer, err := issue(5, "test Server peer", "spiffe://liapoldus/plugin/server")
+	if err != nil {
+		return identities{}, err
+	}
+	return identities{root: root, rootKey: rootKey, rootPEM: rootPEM, coreServer: coreServer, coreClient: coreClient, replica: replica, peer: peer}, nil
 }
 
 func newCredentialsProvider(contract sdkinfra.HTTPContract, roots []byte, server, client identity) (*sdkinfra.StaticCredentialsProvider, error) {
@@ -672,31 +734,52 @@ func newCredentialsProvider(contract sdkinfra.HTTPContract, roots []byte, server
 	return sdkinfra.NewStaticCredentialsProvider(credentials)
 }
 
-func newRevocation(issued identities) (*sdkinfra.Revocation, error) {
-	now := time.Now().UTC()
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number: big.NewInt(1), ThisUpdate: now.Add(-time.Minute), NextUpdate: now.Add(time.Hour),
-	}, issued.root, issued.rootKey)
-	if err != nil {
-		return nil, err
-	}
-	credentials, err := sdkinfra.LoadCredentials(mustContract(), sdkinfra.CredentialsMaterial{
-		CABundle: issued.rootPEM, ServerCertificatePEM: issued.replica.certificatePEM, ServerKeyPEM: issued.replica.privateKeyPEM,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return sdkinfra.NewRevocation(sdkinfra.RevocationConfiguration{
-		Authorities: credentials.TrustAuthorities(), Bundles: [][]byte{der}, Policy: sdkinfra.RevocationFailClosed,
-	})
+type fixtureCorePluginTransport struct {
+	client *http.Client
 }
 
-func mustContract() sdkinfra.HTTPContract {
-	contract, err := sdkinfra.LoadHTTPContract()
-	if err != nil {
-		panic(err)
+func (transport fixtureCorePluginTransport) Do(request *http.Request) (*http.Response, error) {
+	return transport.client.Do(request)
+}
+
+func (transport fixtureCorePluginTransport) DoArtifact(request *http.Request) (*http.Response, error) {
+	return transport.client.Do(request)
+}
+
+func (transport fixtureCorePluginTransport) DoAdminAction(request *http.Request) (*http.Response, error) {
+	return transport.client.Do(request)
+}
+
+func newCorePluginTransport(issued identities) sdkinfra.ControlTransport {
+	roots := x509.NewCertPool()
+	roots.AddCert(issued.root)
+	expected := issued.replica.certificate.Leaf
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: nil,
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS13, RootCAs: roots, Certificates: []tls.Certificate{issued.coreClient.certificate},
+				ServerName: "localhost",
+				VerifyConnection: func(state tls.ConnectionState) error {
+					if len(state.PeerCertificates) != 1 {
+						return errors.New("invalid plugin peer certificate")
+					}
+					actual := state.PeerCertificates[0]
+					if actual.Subject.CommonName != expected.Subject.CommonName || len(actual.URIs) != len(expected.URIs) {
+						return errors.New("plugin peer identity mismatch")
+					}
+					for index, uri := range actual.URIs {
+						if uri.String() != expected.URIs[index].String() {
+							return errors.New("plugin peer identity mismatch")
+						}
+					}
+					return nil
+				},
+			},
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	return contract
+	return fixtureCorePluginTransport{client: client}
 }
 
 func fail(err error) {

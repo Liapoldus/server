@@ -20,8 +20,8 @@ import (
 	"path/filepath"
 	"time"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
-	sdkpresentation "github.com/Liapoldus/plugin-sdk/presentation"
+	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
+	sdkpresentation "github.com/Liapoldus/plugin-sdk/v2/presentation"
 	"liapoldus.local/server-plugin/contracts"
 	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
 	siteapp "liapoldus.local/server-plugin/internal/application/site"

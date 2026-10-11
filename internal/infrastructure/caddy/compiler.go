@@ -14,7 +14,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
 	caddycore "github.com/caddyserver/caddy/v2"
 	"liapoldus.local/server-plugin/contracts"
 )
@@ -77,31 +76,13 @@ type upstream struct {
 	Weight int    `json:"weight"`
 }
 
-type DispatchTarget struct {
-	ID            string
-	Endpoint      string
-	Security      peer.SecurityConfig
-	TimeoutMillis int
-}
-
-func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint64, secrets map[string][]byte) ([]byte, error) {
+func compileSettings(contents []byte, callerSetID uint64, secrets map[string][]byte) ([]byte, error) {
 	var desired settingsConfig
 	decoder := json.NewDecoder(bytes.NewReader(contents))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&desired); err != nil {
 		return nil, errUnsupportedSettings
 	}
-	targetsByID := make(map[string]DispatchTarget, len(targets))
-	for _, target := range targets {
-		if target.ID == "" || target.Endpoint == "" {
-			return nil, errUnsupportedSettings
-		}
-		if _, exists := targetsByID[target.ID]; exists {
-			return nil, errUnsupportedSettings
-		}
-		targetsByID[target.ID] = target
-	}
-
 	listeners := make(map[string]settingsListener, len(desired.Listeners))
 	servers := make(map[string]any, len(desired.Listeners))
 	httpLimits, err := contracts.LoadHTTPDispatch()
@@ -199,7 +180,7 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 			return nil, errUnsupportedSettings
 		}
 		matcherIDsByListener[route.ListenerID][identity] = struct{}{}
-		handler, err := compileHandler(route.ID, route.Handler, targetsByID, usedTargets, &upstreamPools, secrets, usedSecretReferences)
+		handler, err := compileHandler(route.ID, route.Handler, usedTargets, &upstreamPools, secrets, usedSecretReferences)
 		if err != nil {
 			return nil, err
 		}
@@ -297,17 +278,16 @@ func compileSettings(contents []byte, targets []DispatchTarget, targetSetID uint
 			return nil, err
 		}
 		instances := make([]any, 0, len(usedTargets))
-		for _, target := range targets {
-			if _, used := usedTargets[target.ID]; !used {
-				continue
-			}
-			instance := map[string]any{"id": target.ID, "endpoint": target.Endpoint, "methods": sortedMethods(usedTargets[target.ID])}
-			if target.TimeoutMillis > 0 {
-				instance["timeoutMillis"] = target.TimeoutMillis
-			}
-			instances = append(instances, instance)
+		instanceIDs := make([]string, 0, len(usedTargets))
+		for instanceID := range usedTargets {
+			instanceIDs = append(instanceIDs, instanceID)
 		}
-		apps[contract.App] = map[string]any{"instances": instances, "targetSetId": targetSetID}
+		sort.Strings(instanceIDs)
+		for _, instanceID := range instanceIDs {
+			methods := usedTargets[instanceID]
+			instances = append(instances, map[string]any{"id": instanceID, "methods": sortedMethods(methods)})
+		}
+		apps[contract.App] = map[string]any{"instances": instances, "callerSetId": callerSetID}
 	}
 
 	compiled, err := json.Marshal(map[string]any{
@@ -371,7 +351,7 @@ func compileHTTPProtocols(configured []string, tlsMode string) ([]string, []stri
 	return protocols, alpn, nil
 }
 
-func compileHandler(routeID string, handler settingsHandler, targets map[string]DispatchTarget, usedTargets map[string]map[string]struct{}, upstreamPools *[]upstreamPoolConfig, secrets map[string][]byte, usedSecretReferences map[string]struct{}) (map[string]any, error) {
+func compileHandler(routeID string, handler settingsHandler, usedTargets map[string]map[string]struct{}, upstreamPools *[]upstreamPoolConfig, secrets map[string][]byte, usedSecretReferences map[string]struct{}) (map[string]any, error) {
 	switch handler.Type {
 	case "static":
 		if _, err := SiteRoot(handler.SiteID); err != nil {
@@ -414,9 +394,6 @@ func compileHandler(routeID string, handler settingsHandler, targets map[string]
 		}, nil
 	case "plugin":
 		if (handler.Mode != "call" && handler.Mode != "http_stream" && handler.Mode != "websocket" && handler.Mode != "sse") || handler.InstanceID == "" || handler.Capability == "" {
-			return nil, errUnsupportedSettings
-		}
-		if _, exists := targets[handler.InstanceID]; !exists {
 			return nil, errUnsupportedSettings
 		}
 		contract, err := contracts.LoadHTTPDispatch()

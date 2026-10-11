@@ -44,7 +44,7 @@ describe("Caddy Plugin SDK Reload adapter", () => {
       expectedDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
       readyAfterApply: { ready: true, generation: "generation-1" },
       registration: { instanceId: "server", replicaId: "replica-1", ready: true, appliedGeneration: "generation-1" },
-      manifestName: "server",
+      manifestId: "server",
       configurationSchemaValid: true,
       metricsHasReadinessGauge: true,
       firstResponse: { status: 200, body: "sdk-caddy-active" },

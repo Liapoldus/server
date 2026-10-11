@@ -2,9 +2,11 @@ module liapoldus.local/server-plugin
 
 go 1.26.0
 
+replace github.com/Liapoldus/plugin-sdk/v2 => ../../plugin-sdk
+
 require (
-	github.com/Liapoldus/plugin-sdk v1.0.0
-	github.com/Liapoldus/pluginprotocol/v2 v2.0.0
+	github.com/Liapoldus/plugin-sdk/v2 v2.0.0
+	github.com/Liapoldus/pluginprotocol/v3 v3.0.0
 	github.com/caddyserver/caddy/v2 v2.11.4
 	github.com/caddyserver/certmagic v0.25.3
 	github.com/gorilla/websocket v1.5.3
@@ -29,6 +31,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
+	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/alecthomas/chroma/v2 v2.24.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/aryann/difflib v0.0.0-20210328193216-ff5ff6dc229b // indirect

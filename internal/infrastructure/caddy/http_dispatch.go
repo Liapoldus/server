@@ -11,11 +11,10 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
-	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
+	"github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
 	caddycore "github.com/caddyserver/caddy/v2"
 	caddyhttp "github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/gorilla/websocket"
@@ -23,28 +22,23 @@ import (
 )
 
 type dispatchInstance struct {
-	ID            string   `json:"id"`
-	Endpoint      string   `json:"endpoint"`
-	Methods       []string `json:"methods"`
-	TimeoutMillis int      `json:"timeoutMillis,omitempty"`
+	ID      string   `json:"id"`
+	Methods []string `json:"methods"`
 }
 
 type dispatchApp struct {
 	bindings    map[string]*dispatchBinding
 	contract    contracts.HTTPDispatch
 	Instances   []dispatchInstance `json:"instances,omitempty"`
-	TargetSetID uint64             `json:"targetSetId,omitempty"`
+	CallerSetID uint64             `json:"callerSetId,omitempty"`
 }
 
 type dispatchBinding struct {
-	client   peer.Client
-	handler  peer.Handler
+	caller   DispatchCaller
+	instance string
 	calls    map[string]struct{}
 	streams  chan struct{}
-	endpoint string
-	security peer.SecurityConfig
 	timeout  time.Duration
-	mu       sync.Mutex
 }
 
 type httpDispatchHandler struct {
@@ -123,13 +117,12 @@ func (app *dispatchApp) Provision(_ caddycore.Context) error {
 	}
 	app.contract = contract
 	app.bindings = make(map[string]*dispatchBinding, len(app.Instances))
+	caller, ok := lookupDispatchCaller(app.CallerSetID)
+	if !ok {
+		return contracts.ErrInvalidDispatchAssets
+	}
 	for _, instance := range app.Instances {
-		if instance.ID == "" || instance.Endpoint == "" || len(instance.Methods) == 0 {
-			app.close()
-			return contracts.ErrInvalidDispatchAssets
-		}
-		security, ok := lookupDispatchSecurity(app.TargetSetID, instance.ID, instance.Endpoint)
-		if !ok {
+		if instance.ID == "" || len(instance.Methods) == 0 {
 			app.close()
 			return contracts.ErrInvalidDispatchAssets
 		}
@@ -149,29 +142,8 @@ func (app *dispatchApp) Provision(_ caddycore.Context) error {
 			}
 			methods[method] = struct{}{}
 		}
-		timeout := time.Duration(instance.TimeoutMillis) * time.Millisecond
-		if timeout <= 0 {
-			timeout = time.Duration(contract.DefaultTimeoutMillis) * time.Millisecond
-		}
-		registry, buildErr := peer.NewRegistry().Build()
-		if buildErr != nil {
-			app.close()
-			return contracts.ErrInvalidDispatchAssets
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		client, dialErr := peer.Dial(ctx, peer.ClientConfig{
-			Network:  peer.NetworkConfig{Carrier: peer.CarrierTCP, Endpoint: instance.Endpoint},
-			Security: security,
-			Handler:  registry,
-		})
-		cancel()
-		if dialErr != nil {
-			app.close()
-			return peer.ErrUnavailable
-		}
 		app.bindings[instance.ID] = &dispatchBinding{
-			client: client, endpoint: instance.Endpoint, security: security,
-			handler: registry, timeout: timeout, calls: methods,
+			caller: caller, instance: instance.ID, timeout: time.Duration(contract.DefaultTimeoutMillis) * time.Millisecond, calls: methods,
 			streams: make(chan struct{}, contract.MaxStreamConcurrencyPerInstance),
 		}
 	}
@@ -183,9 +155,6 @@ func (app *dispatchApp) Stop() error    { app.close(); return nil }
 func (app *dispatchApp) Cleanup() error { app.close(); return nil }
 
 func (app *dispatchApp) close() {
-	for _, binding := range app.bindings {
-		binding.close()
-	}
 	app.bindings = nil
 }
 
@@ -345,11 +314,12 @@ func (handler *httpDispatchHandler) serveWebSocket(writer http.ResponseWriter, r
 	}
 	ctx, cancel := context.WithCancel(request.Context())
 	defer cancel()
-	stream, err := handler.binding.openStream(ctx, peer.Method(handler.Capability))
-	if err != nil {
+	stream, streamCloser, err := handler.binding.openStream(ctx, peer.Method(handler.Capability))
+	if err != nil || stream == nil || streamCloser == nil {
 		writer.WriteHeader(handler.contract.UnavailableStatus)
 		return nil
 	}
+	defer func() { _ = streamCloser.Close() }()
 	requestPayload := httpRequestPayload{Method: request.Method, Path: request.URL.EscapedPath(), Query: request.URL.RawQuery,
 		Headers: headers, Cookies: handler.requestCookies(request), RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr}
 	start, err := json.Marshal(map[string]any{
@@ -675,11 +645,12 @@ func (handler *httpDispatchHandler) serveStream(writer http.ResponseWriter, requ
 	}
 	ctx, cancel := context.WithCancelCause(request.Context())
 	defer cancel(context.Canceled)
-	stream, err := handler.binding.openStream(ctx, peer.Method(handler.Capability))
-	if err != nil {
+	stream, streamCloser, err := handler.binding.openStream(ctx, peer.Method(handler.Capability))
+	if err != nil || stream == nil || streamCloser == nil {
 		writer.WriteHeader(handler.contract.UnavailableStatus)
 		return nil
 	}
+	defer func() { _ = streamCloser.Close() }()
 	requestPayload := httpRequestPayload{Method: request.Method, Path: request.URL.EscapedPath(), Query: request.URL.RawQuery,
 		Headers: headers, Cookies: handler.requestCookies(request), RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr}
 	start, err := json.Marshal(map[string]any{contract.KindField: contract.RequestStartKind, contract.RequestField: requestPayload})
@@ -1015,79 +986,22 @@ func validStreamHeaders(headers map[string]string) bool {
 	return true
 }
 
-// call uses the current authenticated session once. If the peer has restarted,
-// the current invocation is not replayed because its outcome may be unknown; the
-// failed session is discarded so the next independent request can reconnect.
 func (binding *dispatchBinding) call(ctx context.Context, method peer.Method, payload []byte) (peer.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return peer.Result{}, err
 	}
-	client, err := binding.current(ctx)
+	response, err := binding.caller.Call(ctx, binding.instance, string(method), payload)
 	if err != nil {
 		return peer.Result{}, err
 	}
-	result, err := client.Call(ctx, method, payload)
-	if err != nil {
-		binding.invalidate(client)
-	}
-	return result, err
+	return peer.Result{Payload: response}, nil
 }
 
-func (binding *dispatchBinding) openStream(ctx context.Context, method peer.Method) (peer.Stream, error) {
+func (binding *dispatchBinding) openStream(ctx context.Context, method peer.Method) (peer.Stream, io.Closer, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	client, err := binding.current(ctx)
-	if err != nil {
-		return nil, err
-	}
-	stream, err := client.OpenStream(ctx, method)
-	if err != nil {
-		binding.invalidate(client)
-		return nil, err
-	}
-	return stream, nil
-}
-
-func (binding *dispatchBinding) current(ctx context.Context) (peer.Client, error) {
-	binding.mu.Lock()
-	defer binding.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if binding.client != nil {
-		return binding.client, nil
-	}
-	client, err := peer.Dial(ctx, peer.ClientConfig{
-		Network:  peer.NetworkConfig{Carrier: peer.CarrierTCP, Endpoint: binding.endpoint},
-		Security: binding.security, Handler: binding.handler,
-	})
-	if err != nil {
-		return nil, err
-	}
-	binding.client = client
-	return client, nil
-}
-
-func (binding *dispatchBinding) invalidate(client peer.Client) {
-	binding.mu.Lock()
-	if binding.client == client {
-		binding.client = nil
-		binding.mu.Unlock()
-		_ = client.Close()
-		return
-	}
-	binding.mu.Unlock()
-}
-
-func (binding *dispatchBinding) close() {
-	binding.mu.Lock()
-	client := binding.client
-	binding.client = nil
-	binding.mu.Unlock()
-	if client != nil {
-		_ = client.Close()
-	}
+	return binding.caller.OpenStream(ctx, binding.instance, string(method))
 }
 
 func decodeHTTPResponseAction(payload []byte, contract contracts.HTTPDispatch) (httpResponseAction, error) {

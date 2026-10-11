@@ -20,7 +20,6 @@ import (
 )
 
 type Runtime struct {
-	targets      []DispatchTarget
 	certificates []certificateBinding
 	id           uint64
 	mu           sync.RWMutex
@@ -35,33 +34,11 @@ var nextRuntimeID atomic.Uint64
 
 func New() *Runtime { return &Runtime{id: nextRuntimeID.Add(1)} }
 
-func (runtime *Runtime) SetDispatchTargets(targets []DispatchTarget) error {
-	if runtime == nil {
+func (runtime *Runtime) SetDispatchCaller(caller DispatchCaller) error {
+	if runtime == nil || caller == nil {
 		return errUnsupportedSettings
 	}
-	copyTargets := append([]DispatchTarget(nil), targets...)
-	seen := make(map[string]struct{}, len(copyTargets))
-	for _, target := range copyTargets {
-		if target.ID == "" || target.Endpoint == "" {
-			return errUnsupportedSettings
-		}
-		if target.Security.PlaintextLoopback {
-			if !endpointIsLoopback(target.Endpoint) {
-				return errUnsupportedSettings
-			}
-		} else if target.Security.Identity == "" || target.Security.PeerIdentity == "" ||
-			target.Security.Certificate.PrivateKey == nil || target.Security.Roots == nil {
-			return errUnsupportedSettings
-		}
-		if _, exists := seen[target.ID]; exists {
-			return errUnsupportedSettings
-		}
-		seen[target.ID] = struct{}{}
-	}
-	runtime.mu.Lock()
-	runtime.targets = copyTargets
-	registerDispatchSecurity(runtime.id, copyTargets)
-	runtime.mu.Unlock()
+	registerDispatchCaller(runtime.id, caller)
 	return nil
 }
 
@@ -229,15 +206,14 @@ func (runtime *Runtime) compile(configuration []byte, secrets map[string][]byte)
 		return nil, errUnsupportedSettings
 	}
 	runtime.mu.RLock()
-	targets := append([]DispatchTarget(nil), runtime.targets...)
 	runtime.mu.RUnlock()
-	return compileSettings(configuration, targets, runtime.id, secrets)
+	return compileSettings(configuration, runtime.id, secrets)
 }
 
 func (runtime *Runtime) Stop() error {
 	err := caddycore.Stop()
 	if runtime != nil {
-		unregisterDispatchSecurity(runtime.id)
+		unregisterDispatchCaller(runtime.id)
 	}
 	return err
 }

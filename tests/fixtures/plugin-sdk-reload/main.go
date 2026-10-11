@@ -25,8 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
-	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
+	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
+	sdkinfra "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
 	"liapoldus.local/server-plugin/contracts"
 	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
 	siteapp "liapoldus.local/server-plugin/internal/application/site"
@@ -47,7 +47,7 @@ type output struct {
 	Registration             map[string]any `json:"registration"`
 	Acknowledgement          map[string]any `json:"acknowledgement"`
 	ReadyAfterReject         map[string]any `json:"readyAfterReject"`
-	ManifestName             string         `json:"manifestName"`
+	ManifestID               string         `json:"manifestId"`
 	CandidateFailureStage    string         `json:"candidateFailureStage"`
 	RevisionAfterReject      string         `json:"revisionAfterReject"`
 	ExpectedDigest           string         `json:"expectedDigest"`
@@ -212,7 +212,7 @@ func main() {
 		grants: make(map[string][]byte),
 	}
 	var pluginLogs bytes.Buffer
-	pluginServer, _, err := restplugin.NewMutualTLSServer(configuration, publisher, restplugin.LifecycleOptions{
+	pluginServer, _, _, err := restplugin.NewMutualTLSServer(configuration, publisher, restplugin.LifecycleOptions{
 		Source: coreSource, Broker: secretBroker, Identity: identity, Credentials: pluginProvider,
 		CorePeer:   sdkmodels.PeerIdentity{CommonName: ids.coreClient.leaf.Subject.CommonName},
 		Revocation: revocation, LogOutput: &pluginLogs,
@@ -244,7 +244,7 @@ func main() {
 	manifestBytes, err := pluginClient.Manifest(ctx)
 	check(err)
 	var manifest struct {
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 	check(json.Unmarshal(manifestBytes, &manifest))
 	schemaBytes, err := pluginClient.ConfigurationSchema(ctx)
@@ -275,7 +275,7 @@ func main() {
 		ExpectedDigest:  activeDigest,
 		ReadyAfterApply: map[string]any{"ready": ready.Ready, "generation": ready.Generation},
 		Registration:    map[string]any{"instanceId": registration.InstanceID, "replicaId": registration.ReplicaID, "ready": registration.Ready, "appliedGeneration": registration.AppliedGeneration},
-		ManifestName:    manifest.Name, ConfigurationSchemaValid: json.Valid(schemaBytes),
+		ManifestID:      manifest.ID, ConfigurationSchemaValid: json.Valid(schemaBytes),
 		MetricsHasReadinessGauge: strings.Contains(metrics, contract.Plugin.Responses.Metrics.ReadyMetricName),
 		FirstResponse:            firstResponse, RejectedCandidate: rejectedErr != nil,
 		CandidateFailureStage:   failureStage,

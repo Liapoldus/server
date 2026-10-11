@@ -34,6 +34,9 @@ reverse proxy, WebSocket/SSE и согласованный plugin dispatch.
 - Core↔plugin lifecycle/config — только Plugin SDK REST + per-replica mTLS:
   `Reload(generation)`, plugin pull точных bytes, локальная validate/apply и
   ACK. Нельзя поддерживать product lifecycle через `pluginprotocol`.
+- Server composition берёт `GET /healthz` и `GET /metrics` только из Plugin SDK
+  `HandlerSet`; публичный listener монтирует SDK `NewObservabilityHandler`.
+  Не добавлять собственные handlers, пути, метрики health или response shapes.
 - `pluginprotocol` — только generic plugin↔plugin communication. Server не
   добавляет туда HTTP/Caddy capability contracts или lifecycle methods.
 - Server владеет собственными `contracts/v1/`, settings schema, site manifest,

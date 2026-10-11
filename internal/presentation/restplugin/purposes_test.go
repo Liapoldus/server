@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
+	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
 	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
 	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 )

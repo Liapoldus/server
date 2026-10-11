@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"time"
 
-	sdkapp "github.com/Liapoldus/plugin-sdk/application"
-	sdkinterfaces "github.com/Liapoldus/plugin-sdk/domain/interfaces"
-	sdkmodels "github.com/Liapoldus/plugin-sdk/domain/models"
-	sdkinfra "github.com/Liapoldus/plugin-sdk/infrastructure"
-	sdkpresentation "github.com/Liapoldus/plugin-sdk/presentation"
+	sdkapp "github.com/Liapoldus/plugin-sdk/v2/application"
+	sdkinterfaces "github.com/Liapoldus/plugin-sdk/v2/domain/interfaces"
+	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
+	sdkinfra "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
+	sdkpresentation "github.com/Liapoldus/plugin-sdk/v2/presentation"
 	"liapoldus.local/server-plugin/contracts"
 	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
 	siteapp "liapoldus.local/server-plugin/internal/application/site"
@@ -28,6 +28,7 @@ type Adapter struct {
 	configuration *settingsapp.Configuration
 	publisher     *siteapp.SitePublisher
 	secrets       SecretProvider
+	manifest      *sdkpresentation.ManifestProvider
 }
 
 type SecretProvider interface {
@@ -52,14 +53,22 @@ func New(configuration *settingsapp.Configuration, publisher *siteapp.SitePublis
 	if configuration == nil || publisher == nil {
 		return nil, contracts.ErrInvalidAssets
 	}
-	return &Adapter{configuration: configuration, publisher: publisher}, nil
+	schema, err := contracts.SettingsSchema()
+	if err != nil {
+		return nil, err
+	}
+	manifest, err := sdkpresentation.NewManifestProvider(sdkmodels.ManifestDescriptor{ID: "server", Version: "1.1.4"}, schema)
+	if err != nil {
+		return nil, err
+	}
+	return &Adapter{configuration: configuration, publisher: publisher, manifest: manifest}, nil
 }
 
-func (adapter *Adapter) Manifest(context.Context) ([]byte, error) {
-	if adapter == nil {
+func (adapter *Adapter) Manifest(ctx context.Context) ([]byte, error) {
+	if adapter == nil || adapter.manifest == nil {
 		return nil, contracts.ErrInvalidAssets
 	}
-	return contracts.PluginManifest()
+	return adapter.manifest.Manifest(ctx)
 }
 
 func (adapter *Adapter) ConfigurationSchema(context.Context) ([]byte, error) {
@@ -248,17 +257,17 @@ func NewMutualTLSServer(
 	configuration *settingsapp.Configuration,
 	publisher *siteapp.SitePublisher,
 	options LifecycleOptions,
-) (*sdkinfra.MutualTLSServer, *sdkapp.Lifecycle, error) {
-	handler, lifecycle, _, err := NewHandler(configuration, publisher, options)
+) (*sdkinfra.MutualTLSServer, *sdkapp.Lifecycle, *sdkinfra.ObserverPrometheusCollector, error) {
+	handler, lifecycle, collector, err := NewHandler(configuration, publisher, options)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	contract, err := sdkinfra.LoadHTTPContract()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if options.Credentials == nil || !options.CorePeer.Valid() || options.Revocation == nil {
-		return nil, nil, sdkinfra.ErrInvalidServerTLS
+		return nil, nil, nil, sdkinfra.ErrInvalidServerTLS
 	}
 	server, err := sdkinfra.NewMutualTLSServer(contract, sdkinfra.MutualTLSServerConfig{
 		Handler:    handler,
@@ -268,9 +277,27 @@ func NewMutualTLSServer(
 		ErrorLog:   options.ErrorLog,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return server, lifecycle, nil
+	return server, lifecycle, collector, nil
+}
+
+// NewPublicObservabilityHandler returns the universal SDK healthz/metrics
+// surface for Server's public listener. Server supplies only the versioned
+// contract and SDK collector; it does not implement or customize either route.
+func NewPublicObservabilityHandler(contract sdkinfra.HTTPContract, collector *sdkinfra.ObserverPrometheusCollector) (http.Handler, error) {
+	contracts := presentationContracts(contract)
+	return sdkpresentation.NewObservabilityHandler(sdkpresentation.ObservabilityConfiguration{
+		HealthEndpoint:   contracts.HealthEndpoint,
+		MetricsEndpoint:  contracts.MetricsEndpoint,
+		HealthStatus:     contracts.HealthStatus,
+		HealthBody:       contracts.HealthBody,
+		ContentTypes:     contracts.ContentTypes,
+		Metrics:          collector,
+		NotFound:         contracts.Problems["notFound"],
+		MethodNotAllowed: contracts.Problems["methodNotAllowed"],
+		InternalError:    contracts.Problems["internalError"],
+	})
 }
 
 func presentationContracts(contract sdkinfra.HTTPContract) sdkpresentation.Contracts {

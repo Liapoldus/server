@@ -19,12 +19,13 @@ pull-ит точное поколение конфигурации из Core и 
 роли отдельно задаются `--core-uri` и `--core-client-uri`. Продуктовая
 конфигурация не передаётся через CLI или environment.
 
-Для прямой связи с другим plugin оператор может дополнительно задать один
-peer target: `--peer-target-id`, `--peer-endpoint`, `--peer-identity`,
-`--peer-expected-identity`, `--peer-ca-file`, `--peer-cert`, `--peer-key`.
-Параметры задаются вместе; сертификат и ключ читаются из абсолютных путей.
-Соединение Server→plugin использует взаимный TLS, проверяет peer identity,
-а приватный ключ не включается в Caddy runtime JSON.
+Server не получает адреса соседних plugins из CLI или environment. Для
+аутентифицированных прямых вызовов он использует локальную peer identity
+(`--peer-identity`, `--peer-ca-file`, `--peer-cert`, `--peer-key`), а разрешённый
+endpoint и ожидаемую identity каждый раз разрешает по peer directory, выданному
+Core. Caddy settings содержат только opaque instance ID и capability; трафик
+идёт напрямую Server → `pluginprotocol` → plugin без proxy со стороны Core или
+CLI. Ни один plugin не требует знать реализации соседнего plugin.
 
 v1 включает HTTP/HTTPS, TLS/ACME, HTTP/2/3, статические сайты и reverse proxy.
 Публичный TCP/UDP relay и Caddy-L4 исключены из binary и settings schema и

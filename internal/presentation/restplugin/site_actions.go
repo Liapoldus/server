@@ -7,7 +7,7 @@ import (
 	"errors"
 	"io"
 
-	sdkpresentation "github.com/Liapoldus/plugin-sdk/presentation"
+	sdkpresentation "github.com/Liapoldus/plugin-sdk/v2/presentation"
 	"liapoldus.local/server-plugin/contracts"
 	siteapp "liapoldus.local/server-plugin/internal/application/site"
 	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"

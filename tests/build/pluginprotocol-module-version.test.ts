@@ -15,13 +15,13 @@ async function goFiles(directory: string): Promise<string[]> {
   return nested.flat();
 }
 
-describe("pluginprotocol v2 Go module dependency", () => {
-  it("uses the breaking module major without changing peer wire v1", async () => {
+describe("pluginprotocol v3 Go module dependency", () => {
+  it("uses the current breaking module major without changing peer wire v1", async () => {
     const goMod = await readFile(`${root}/go.mod`, "utf8");
-    expect(goMod).toMatch(/github\.com\/Liapoldus\/pluginprotocol\/v2 v2\.0\.0/);
+    expect(goMod).toMatch(/github\.com\/Liapoldus\/pluginprotocol\/v3 v3\.0\.0/);
     for (const file of await goFiles(root)) {
       const source = await readFile(file, "utf8");
-      expect(source, file).not.toMatch(/github\.com\/Liapoldus\/pluginprotocol\/(?!v2\/)/);
+      expect(source, file).not.toMatch(/github\.com\/Liapoldus\/pluginprotocol\/(?!v3\/)/);
     }
   });
 });

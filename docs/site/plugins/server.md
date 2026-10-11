@@ -10,6 +10,20 @@ Caddy runtime и не проксирует запросы. В v1 операто�
 digest после применения. `pluginprotocol` используется только для generic
 plugin↔plugin communication.
 
+Server binary обязан использовать Plugin SDK `HandlerSet`. SDK единолично
+обслуживает универсальные `GET /healthz` и `GET /metrics` на control REST
+listener и предоставляет `NewObservabilityHandler` для публичного listener.
+Server не реализует и не переопределяет эти endpoints; product HTTP surface
+добавляет только Server-owned routes.
+
+Публичный `POST /api/peer?target=<instance>&method=<method>` принимает один
+ограниченный JSON peer payload и вызывает указанный opaque method через
+`pluginprotocol`. Server разрешает target только по peer directory, выданному
+Core, и возвращает ответ peer без Core/CLI proxy. Эта поверхность общая для
+любых совместимых plugins и не содержит их имён, SDK REST URL или специальных
+веток по продуктам. SDK observability endpoints остаются отдельными и не
+перехватываются peer dispatch.
+
 ## Ответственность и состояние
 
 | Область | Владелец |
@@ -206,12 +220,12 @@ Rollout двух версий допускается только если Serve
 
 ## Ручной запуск v1
 
-Оператор сначала собирает Server binary и задаёт значения bootstrap-флагов из
-окружения своего deployment. В примере показан полный набор параметров для
-вызовов forms-db; группа `--peer-*` необязательна, если Server не вызывает другие
-плагины. Для включённой группы нужны все её флаги. Пути сертификата, ключа, CA и
-CRL должны быть абсолютными. Имена сертификатов в Core bootstrap и аргументах
-плагина должны совпадать точно:
+Оператор собирает Server binary и задаёт bootstrap-флаги из окружения своего
+deployment. Для прямых вызовов plugins Server получает только собственную
+peer identity и доверенный CA; target endpoint и peer identity не задаются
+флагами и не помещаются в Server settings. Они разрешаются при каждом вызове из
+Core-issued peer directory. Пути сертификатов, ключей, CA и CRL должны быть
+абсолютными. Имена Core certificates должны совпадать с Core bootstrap:
 
 ```bash
 ./server \
@@ -228,10 +242,7 @@ CRL должны быть абсолютными. Имена сертифика�
   --client-cert=/absolute/path/to/server-client.pem \
   --client-key=/absolute/path/to/server-client-key.pem \
   --crl-file=/absolute/path/to/control-crl.pem \
-  --peer-target-id=forms-db \
-  --peer-endpoint=127.0.0.1:9643 \
   --peer-identity=spiffe://liapoldus.example/server \
-  --peer-expected-identity=spiffe://liapoldus.example/forms-db \
   --peer-ca-file=/absolute/path/to/peer-ca.pem \
   --peer-cert=/absolute/path/to/server-peer.pem \
   --peer-key=/absolute/path/to/server-peer-key.pem
@@ -249,10 +260,12 @@ identity для входящего `Reload` проверяется по
 точно совпадать с URI SAN соответствующего Core-сертификата. Management API
 использует отдельную identity и trust root.
 
-Peer identity Server должна совпасть с `forms-db --peer-allowed-caller`, а
-`--peer-expected-identity` — с `forms-db --peer-identity`. Для запуска на одной
-машине используйте loopback endpoint; для разных машин — только адрес private
-network, доступный вызывающему плагину. Продуктовые settings через flags,
+`--peer-identity` — локальная SPIFFE identity, которую Server предъявляет
+непосредственному peer. Ожидаемая identity, carrier и endpoint выбираются из
+актуального Core-issued peer directory; caller не подключается к адресу из
+проектного файла или CLI-флага. Core применяет generic link policy и конфигурацию,
+но не проксирует бизнес-вызовы. Server не содержит веток или зависимостей,
+связанных с конкретными соседними plugins. Продуктовые settings через flags,
 environment или локальный application config не передаются: Core хранит их в
 SQLite и уведомляет Server посредством Plugin SDK `Reload`.
 

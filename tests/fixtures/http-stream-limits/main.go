@@ -21,7 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Liapoldus/pluginprotocol/v2/presentation/peer"
+	"github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
 	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
 	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
 	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
@@ -165,7 +165,9 @@ func main() {
 	address := listener.Addr().String()
 	check(listener.Close())
 	runtime := caddyruntime.New()
-	check(runtime.SetDispatchTargets([]caddyruntime.DispatchTarget{{ID: "forms", Endpoint: peerServer.Addr(), TimeoutMillis: 500, Security: clientSecurity}}))
+	check(runtime.SetDispatchCaller(shared.PeerCaller{Targets: map[string]shared.PeerTarget{
+		"forms": {Endpoint: peerServer.Addr(), Security: clientSecurity},
+	}}))
 	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	defer configuration.Stop()
