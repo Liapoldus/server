@@ -88,10 +88,16 @@ Go test/build/vet, deterministic contract check и полный Vitest прош�
   sizes и parameter counts bounded; settings candidate rejection сохраняет
   текущий snapshot через существующий atomic apply pipeline.
 - [~] Runtime/contract adversarial tests и generated request-parameters schema
-  добавлены; полный child-process suite, migration preview/recovery и cross-repo
-  compatibility gates ещё открыты.
-- [ ] Реализовать детерминированную migration preview/recovery для существующих
-  untyped service routes в Studio; не сохранять старую редакторскую модель.
+  добавлены; полный child-process suite и cross-repo compatibility gates
+  остаются отдельными acceptance-пунктами.
+- [x] Детерминированный migration preview/recovery для существующих untyped
+  service routes реализован в Studio Server Editor. Preview предлагается только
+  для представимых без потери полей routes, показывает добавляемый response
+  template, а host до patch сохраняет точные байты Project в mode-0600 recovery
+  copy. Неизвестные и непредставимые routes остаются без изменений. Studio
+  покрывает отказ при stale source и восстановление. Пакет редактора `.60`
+  прошёл 74/74 теста; digest и статус live WebView acceptance записаны в
+  актуальном Studio checkpoint. Установка ожидает native trust confirmation.
 - [~] Specialized editor реализуется только в `plugins/studio-server/` через
   Studio declarative extension/host bridge; пакет `0.3.0` редактирует
   `server-http/v1` endpoints и меняет общий Project draft. Server не получает
