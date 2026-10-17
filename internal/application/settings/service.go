@@ -50,6 +50,19 @@ func (configuration *Configuration) Apply(settings settingsmodel.Settings, revis
 	return configuration.ApplyWithSecrets(settings, revision, nil)
 }
 
+// Validate checks the candidate without replacing the active runtime.
+func (configuration *Configuration) Validate(settings settingsmodel.Settings) error {
+	if configuration == nil {
+		return ErrCandidateRejected
+	}
+	configuration.mu.Lock()
+	defer configuration.mu.Unlock()
+	if err := configuration.runtime.Validate(settings.RuntimeConfig); err != nil {
+		return ErrCandidateRejected
+	}
+	return nil
+}
+
 func (configuration *Configuration) ApplyWithSecrets(settings settingsmodel.Settings, revision string, secrets map[string][]byte) error {
 	if configuration == nil || revision == "" {
 		return ErrInvalidRevision

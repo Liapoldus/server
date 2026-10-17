@@ -26,6 +26,25 @@ func (runtime *settingsTestRuntime) Activate([]byte) error {
 
 func (*settingsTestRuntime) Stop() error { return nil }
 
+func TestCandidateValidationDoesNotActivateOrChangeRevision(t *testing.T) {
+	runtime := &settingsTestRuntime{}
+	configuration, err := NewConfiguration(runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := settingsmodel.Settings{SchemaVersion: 1, RuntimeConfig: []byte(`{"listeners":[],"routes":[]}`)}
+	if err := configuration.Apply(settings, "1"); err != nil {
+		t.Fatal(err)
+	}
+	runtime.validateErr = errors.New("refused")
+	if !errors.Is(configuration.Validate(settings), ErrCandidateRejected) {
+		t.Fatal("candidate was accepted")
+	}
+	if configuration.revision != "1" || runtime.activations != 1 {
+		t.Fatal("validation changed the active runtime")
+	}
+}
+
 func TestConfigurationErrorsPreservation(t *testing.T) {
 	cases := []struct {
 		err     error

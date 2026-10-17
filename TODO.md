@@ -596,3 +596,9 @@ host-ов.
 replicas. Delivery/provider API не является задачей Server/Core v3.
 
 Не добавлять v2/v3 API/dependencies в v1 binary или v1 test matrix.
+
+
+## Config preflight endpoint — 2026-10-17
+
+- Server settings now expose a pure service-owned candidate validator; invalid route configurations are rejected before activation. Service release candidate is 1.1.8 Linux/arm64, SHA-256 `befcb98b28424b04682ff730f6d0da9b7bf7f2d8222fdb42e9dfc294407d28b1`; full Go tests, vet and build passed.
+- The current local Project still pins 1.1.7. Installing/trusting/running 1.1.8 and publishing this owner change await the exact local digest approval and commit/push.

@@ -19,7 +19,7 @@ import (
 	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
-const ServiceVersion = "1.1.7"
+const ServiceVersion = "1.1.8"
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
 
@@ -158,6 +158,20 @@ func (adapter *Adapter) ConfigurationSchema(context.Context) ([]byte, error) {
 		return nil, contracts.ErrInvalidAssets
 	}
 	return contracts.SettingsSchema()
+}
+
+func (adapter *Adapter) ValidateConfiguration(ctx context.Context, contents []byte) error {
+	if adapter == nil || adapter.configuration == nil || ctx.Err() != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	if err := contracts.ValidateSettings(contents); err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	settings, err := settingsmodel.DecodeSettings(contents)
+	if err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	return adapter.configuration.Validate(settings)
 }
 
 func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configuration) error {
@@ -404,7 +418,7 @@ func presentationContracts(contract sdkinfra.HTTPContract) sdkpresentation.Contr
 	return sdkpresentation.Contracts{
 		ContractVersion:  contract.ContractVersion,
 		IdentityEndpoint: endpoint("identity"), ManifestEndpoint: endpoint("manifest"),
-		ConfigSchemaEndpoint: endpoint("configSchema"), HealthEndpoint: endpoint("health"),
+		ConfigSchemaEndpoint: endpoint("configSchema"), ConfigValidationEndpoint: endpoint("configValidate"), HealthEndpoint: endpoint("health"),
 		ReadyEndpoint: endpoint("ready"), ReloadEndpoint: endpoint("reload"),
 		MetricsEndpoint: endpoint("metrics"),
 		HealthStatus:    contract.Service.Responses.Health.Status,
