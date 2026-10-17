@@ -19,7 +19,7 @@ import (
 	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
-const ServiceVersion = "1.1.6"
+const ServiceVersion = "1.1.7"
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
 
@@ -61,6 +61,9 @@ func New(configuration *settingsapp.Configuration, publisher *siteapp.SitePublis
 	}
 	manifest, err := sdkpresentation.NewManifestProvider(sdkmodels.ManifestDescriptor{
 		ID: "server", Version: ServiceVersion, ConfigurationUI: serverConfigurationUI(), Resources: serverResources(),
+		EditorButtons: &sdkmodels.ServiceEditorButtonsDescriptor{Version: sdkmodels.ServiceEditorButtonsVersion, Buttons: []sdkmodels.ServiceEditorButton{
+			sdkmodels.NewServiceEditorButton("server", "endpoints", sdkmodels.ConfigurationUIText{RU: "Редактор эндпоинтов", EN: "Endpoint editor"}, sdkmodels.ConfigurationUIText{RU: "Открыть редактор эндпоинтов Server", EN: "Open the Server endpoint editor"}),
+		}},
 	}, schema)
 	if err != nil {
 		return nil, err

@@ -18,6 +18,9 @@ func TestServerManifestPublishesValidatedConfigurationUI(t *testing.T) {
 	}
 	provider, err := sdkpresentation.NewManifestProvider(sdkmodels.ManifestDescriptor{
 		ID: "server", Version: ServiceVersion, ConfigurationUI: serverConfigurationUI(), Resources: serverResources(),
+		EditorButtons: &sdkmodels.ServiceEditorButtonsDescriptor{Version: sdkmodels.ServiceEditorButtonsVersion, Buttons: []sdkmodels.ServiceEditorButton{
+			sdkmodels.NewServiceEditorButton("server", "endpoints", sdkmodels.ConfigurationUIText{RU: "Редактор эндпоинтов", EN: "Endpoint editor"}, sdkmodels.ConfigurationUIText{RU: "Открыть редактор эндпоинтов Server", EN: "Open the Server endpoint editor"}),
+		}},
 	}, schema)
 	if err != nil {
 		t.Fatalf("validate Server configuration UI against its schema: %v", err)
@@ -32,6 +35,9 @@ func TestServerManifestPublishesValidatedConfigurationUI(t *testing.T) {
 	}
 	if received.Version != ServiceVersion {
 		t.Fatalf("manifest release version = %q, want %q", received.Version, ServiceVersion)
+	}
+	if received.EditorButtons == nil || received.EditorButtons.Version != sdkmodels.ServiceEditorButtonsVersion || len(received.EditorButtons.Buttons) != 1 || received.EditorButtons.Buttons[0].ID != "server.endpoints" {
+		t.Fatalf("Server manifest omitted its stable editor button: %#v", received.EditorButtons)
 	}
 	if received.ConfigurationUI == nil || received.ConfigurationUI.Version != sdkmodels.ConfigurationUIVersion || len(received.ConfigurationUI.Groups) != 3 {
 		t.Fatalf("Server manifest omitted its validated configuration UI: %#v", received.ConfigurationUI)
