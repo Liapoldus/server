@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 type fixtureInput struct {

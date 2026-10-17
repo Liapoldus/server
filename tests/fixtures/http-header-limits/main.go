@@ -11,9 +11,9 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
-	"liapoldus.local/server-plugin/contracts"
-	_ "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	"liapoldus.local/server-service/contracts"
+	_ "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 func main() {

@@ -8,6 +8,15 @@ type HTTPDispatchDocumentRequestBodySemantics struct {
 	ChunkedIncluded             bool     `json:"chunkedIncluded"`
 }
 
+type HTTPDispatchDocumentRequestParameters struct {
+	Field         string   `json:"field"`
+	Version       string   `json:"version"`
+	Schema        string   `json:"schema"`
+	Values        []string `json:"values"`
+	Validation    string   `json:"validation"`
+	BodySemantics string   `json:"bodySemantics"`
+}
+
 type HTTPDispatchDocumentResponseCookies struct {
 	Field                      string   `json:"field"`
 	Schema                     string   `json:"schema"`
@@ -19,6 +28,7 @@ type HTTPDispatchDocumentResponseCookies struct {
 
 type HTTPDispatchDocument struct {
 	RequestBodySemantics            HTTPDispatchDocumentRequestBodySemantics `json:"requestBodySemantics"`
+	RequestParameters               HTTPDispatchDocumentRequestParameters    `json:"requestParameters"`
 	Module                          string                                   `json:"module"`
 	App                             string                                   `json:"app"`
 	SetCookieHeader                 string                                   `json:"setCookieHeader"`
@@ -44,7 +54,7 @@ type HTTPDispatchDocument struct {
 
 func HTTPDispatch() HTTPDispatchDocument {
 	return HTTPDispatchDocument{
-		Module:                          "http.handlers.liapoldus_plugin",
+		Module:                          "http.handlers.liapoldus_service",
 		App:                             "liapoldus.dispatch",
 		DefaultTimeoutMillis:            int(5000),
 		MaxStreamConcurrencyPerInstance: int(128),
@@ -61,6 +71,14 @@ func HTTPDispatch() HTTPDispatchDocument {
 			Modes:                       []string{"call", "http_stream", "sse"},
 			OverflowBeforeResponseStart: "requestTooLargeStatus-and-cancel-stream",
 			OverflowAfterResponseStart:  "abort-stream-without-replacing-response",
+		},
+		RequestParameters: HTTPDispatchDocumentRequestParameters{
+			Field:         "parameters",
+			Version:       "server-http/v1",
+			Schema:        "contracts/v1/http-request-parameters.schema.json",
+			Values:        []string{"path", "query", "headers", "body"},
+			Validation:    "Server parses and validates typed path, query and declared header values before invoking a service; malformed or invalid requests receive a generic 400 and are not dispatched.",
+			BodySemantics: "If a route declares a JSON body schema, body bytes are validated against it and copied unchanged into parameters.body. If omitted, a non-empty unary body is rejected. Stream modes continue to carry their bounded body frames outside parameters.body.",
 		},
 		UnavailableStatus:     int(503),
 		InvalidResponseStatus: int(502),

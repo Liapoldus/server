@@ -1,7 +1,7 @@
 package site
 
 type SitePublishManifestDocument struct {
-	Plugin             string `json:"plugin"`
+	Service            string `json:"service"`
 	PublishCapability  string `json:"publishCapability"`
 	RollbackCapability string `json:"rollbackCapability"`
 	ArchiveEntry       string `json:"archiveEntry"`
@@ -14,7 +14,7 @@ type SitePublishManifestDocument struct {
 func SitePublishManifest() SitePublishManifestDocument {
 	return SitePublishManifestDocument{
 		Version:            int(1),
-		Plugin:             "server",
+		Service:            "server",
 		PublishCapability:  "server.sites.publish",
 		RollbackCapability: "server.sites.rollback",
 		ArchiveEntry:       "site-manifest.json",

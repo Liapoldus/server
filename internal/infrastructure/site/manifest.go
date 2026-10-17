@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"liapoldus.local/server-plugin/contracts"
+	"liapoldus.local/server-service/contracts"
 )
 
 var ErrInvalidManifest = errors.New("invalid site manifest")

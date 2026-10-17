@@ -5,7 +5,7 @@ import (
 	"os"
 
 	caddycore "github.com/caddyserver/caddy/v2"
-	_ "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	_ "liapoldus.local/server-service/internal/infrastructure/caddy"
 )
 
 func main() {

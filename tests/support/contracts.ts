@@ -17,7 +17,7 @@ interface Documents {
  'http-stream-vectors.json': typeof import('../../contracts/v1/http-stream-vectors.json');
  'http-stream.json': typeof import('../../contracts/v1/http-stream.json');
  'http-stream.schema.json': typeof import('../../contracts/v1/http-stream.schema.json');
- 'plugin.json': typeof import('../../contracts/v1/plugin.json');
+ 'service.json': typeof import('../../contracts/v1/service.json');
  'settings-semantics.json': typeof import('../../contracts/v1/settings-semantics.json');
  'settings-vectors.json': typeof import('../../contracts/v1/settings-vectors.json');
  'settings.schema.json': typeof import('../../contracts/v1/settings.schema.json');

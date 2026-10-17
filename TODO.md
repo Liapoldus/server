@@ -1,4 +1,145 @@
-# TODO — Server plugin v1
+# TODO — Server service v1
+
+## Live unknown-route retest — 2026-10-16 20:54 UTC
+
+- Earlier notes below saying Server `1.1.5` returns `200` for unmatched paths
+  are historical and superseded. On the current running target, an unknown
+  path returned `HTTP 404 Not Found`; `/echo?text=continuation-current-runtime`
+  returned `HTTP 200` and `echo: continuation-current-runtime`.
+- Read-only Docker status showed `liapoldus-server` and `liapoldus-echo` both
+  Up. No runtime lifecycle or service configuration was changed in this check.
+- Keep the source regression tests as the permanent gate; live behavior is
+  now verified on the current Server runtime.
+
+Текущая номенклатура: Server service, Service SDK REST и Wool. Control plane:
+Studio → CLI → Core → Service SDK REST; прямой data plane — сервисы → Wool.
+Старые имена и пути в датированных отчётах и завершённых acceptance-записях ниже
+сохранены как историческое evidence, а не поддерживаемые API или команды.
+Актуальный reload regression: `tests/lifecycle/service-sdk-reload.test.ts`.
+
+## Breaking nomenclature migration — 2026-10-13
+
+Server-owned code/contracts/docs/tests/generators переведены на Service SDK v2
+и Wool v3; majors, нейтральные IDs/application methods и immutable generation
+bytes/digests сохранены. Старый dispatch handler type отклоняется без alias.
+Go test/build/vet, deterministic contract check и полный Vitest прошли
+(33 файла / 83 теста). `tsc` (19 ошибок) и ESLint (51 ошибка) воспроизводят
+существующий clean-HEAD baseline. Локальный VitePress sync/build после миграции
+прошёл; hosted CI и remote source pins ждут публикации owner repositories.
+Точные пути, команды и ограничения: [отчёт](docs/nomenclature-migration-report.md).
+
+## Одобренный scope конфигуратора Studio — 2026-10-13
+
+Это новое активное направление по [`../../studio/plan.md`](../../studio/plan.md);
+прежние датированные записи «product scope remains outside this slice» описывают
+предыдущие срезы, а не отменяют эту явную цель.
+
+- [x] Публиковать `service-configuration-ui/v1` через Service SDK manifest;
+  descriptor валидируется SDK против Server-owned JSON Schema и задаёт
+  декларативные hints для listeners, service routes и typed HTTP parameters.
+  JSON Schema остаётся единственным validation authority.
+- [x] Ввести Server-owned `server-http/v1`: method + template path, typed
+  path/query/header scalar/array params, explicit repeat policy, required/bounds,
+  configurable unknown-param policy, JSON request-body schema, response
+  status/contentType/schema/example. Legacy untyped service routes и дублирование
+  method/path в `match` отклоняются; live response schemas не применяются.
+- [x] Валидировать method/path/query/headers/body и response examples до peer
+  dispatch; ошибки запроса — generic 400 без вызова сервиса. Query/body/schema
+  sizes и parameter counts bounded; settings candidate rejection сохраняет
+  текущий snapshot через существующий atomic apply pipeline.
+- [~] Runtime/contract adversarial tests и generated request-parameters schema
+  добавлены; полный child-process suite, migration preview/recovery и cross-repo
+  compatibility gates ещё открыты.
+- [ ] Реализовать детерминированную migration preview/recovery для существующих
+  untyped service routes в Studio; не сохранять старую редакторскую модель.
+- [~] Specialized editor реализуется только в `plugins/studio-server/` через
+  Studio declarative extension/host bridge; пакет `0.3.0` редактирует
+  `server-http/v1` endpoints и меняет общий Project draft. Server не получает
+  Studio, Core или CLI зависимости. GUI install/trust и resource/host/matcher
+  редакторы остаются открытыми.
+- [~] JSON Schema settings fields для request body и response помечены
+  `x-studio-json-document: true`, чтобы Studio могла заменять документ как
+  ограниченное типизированное значение, сохраняя fail-closed поведение для
+  обычных `additionalProperties: true`. Runtime version поднят до 1.1.5;
+  contract generation/check и полный `go test ./...` прошли, Linux/arm64 binary собран
+  с site-release OS advisory lock и schema fix (SHA-256
+  `0b741f53186e7d4a4eb05a9e9e20ac10c0647fee56cb6884e64d877edc556a34`).
+  Unit/race и child-process publish-race проверки прошли. В Docker бинарник ещё
+  не запускался; live manifest/schema и отсутствие повторных Caddy
+  lock-maintenance ошибок требуют подтверждённого Studio runtime restart.
+- [ ] Сверить независимость от Echo и подтвердить прямой Server → Wool → Echo
+  путь без Core/CLI business proxy, затем пройти UI-driven Docker/curl acceptance.
+
+До исполнения пункты OPEN. Текущий Server runtime не считается обновлённым
+только потому, что Studio plan описывает желаемый редактор.
+
+## Studio endpoint add/remove и unmatched HTTP fallback — 2026-10-16
+
+- Новый live recheck текущего target `local`: обычный
+  `GET /_acceptance-unknown-route-20261016` через уже работающий Server `1.1.5`
+  вернул HTTP 200 с пустым body. Это подтверждает, что исправление ещё не
+  присутствует в запущенном контейнере.
+- Source regression `TestCompileSettingsReturns404ForUnmatchedRequests`
+  подтверждает terminal catch-all 404 и Caddy validation. Исправлено
+  обнаруженное release metadata расхождение: Core-facing manifest и replica
+  registration теперь берут одну `restservice.ServiceVersion` (`1.1.6`). Новый
+  manifest assertion сначала воспроизвёл `1.1.5`, затем прошёл после фикса.
+- Точечные проверки прошли:
+  `GOWORK=off go test ./internal/infrastructure/caddy ./internal/presentation/restservice
+  -run '^(TestCompileSettingsReturns404ForUnmatchedRequests|TestServerManifestPublishesValidatedConfigurationUI)$' -count=1`.
+  Дополнительно добавлен runtime HTTP regression:
+  `TestRuntimeReturns404ForUnmatchedRequest` активирует Caddy на loopback и
+  проверяет фактический HTTP status неизвестного маршрута; точечный Caddy и
+  manifest набор прошёл.
+  Повторно запущен точный runtime gate:
+  `GOWORK=off go test ./internal/infrastructure/caddy -run
+  '^(TestRuntimeReturns404ForUnmatchedRequest|TestCompileSettingsReturns404ForUnmatchedRequests)$'
+  -count=1 -v` — обе проверки PASS. Текущий Server `1.1.5` в target `local`
+  по-прежнему возвращает `HTTP 200` с пустым body для
+  `/_acceptance-unknown-route-20261016`.
+  Linux/arm64 candidate собран из текущего worktree:
+  `/tmp/liapoldus-server-404.wjKFck/server`, SHA-256
+  `efe16ac1343a03935ec797cfa968c7382e237521db6a6d817f134b408564f494`.
+  ELF architecture, Go build metadata и module replacements на локальные
+  Service SDK/Wool проверены. Через Studio candidate зарегистрирован как
+  `server@1.1.6`, `linux/arm64`; registry показывает точный digest выше.
+  Candidate остаётся untrusted, Project binding и runtime не менялись.
+- Следующий live gate — exact trust/launch через Studio, заменить только Server
+  в Project `Server Echo Studio` / target `local`, проверить readiness, `/echo`
+  и unknown-path 404 через curl, затем проверить Echo logs. Core, Echo, БД,
+  credentials и certificates не затрагивать.
+
+- Через текущий UI Server Editor в Project `Server Echo Studio` выбран live
+  method Echo `echo.handle`, добавлен `GET /echo-ui-probe` в общий draft,
+  сохранён в Project и применён в Core. `curl` вернул
+  `echo: ui-draft-acceptance` / HTTP 200; Echo logs, открытые кнопкой Logs в
+  Canvas inspector, содержат точный текст запроса.
+- Временный route удалён кнопкой редактора и сохранён; Project содержит только
+  исходный `echo-route`. Core desired/applied generation совпали на 42. Однако
+  старый Server binary возвращал HTTP 200 с пустым body для неизвестного пути.
+- Исправлен Caddy compiler: каждый listener получил terminal catch-all
+  `static_response` 404 после configured routes и TLS hostname fallback.
+  `TestCompileSettingsReturns404ForUnmatchedRequests` проходит и дополнительно
+  вызывает Caddy `Validate` для итоговой конфигурации.
+- Canonical Server docs фиксируют 404 для unmatched HTTP route. Подготовлен
+  Server `1.1.6` Linux/arm64 candidate с catch-all 404 и JSON-value annotation:
+  `/var/folders/qk/694xx2l56_l01zmd37h82szh0000gn/T/liapoldus-server-configfix.XXXXXX.4UyCSUABmN/server`, SHA-256
+  `264f144bbead45926cd0e65a1acaa6d0e9587ad279a2750d280c100b891e411b`.
+  ELF format/platform подтверждены; candidate не регистрировался, не доверялся
+  и не запускался. Live Docker 404 acceptance и Core-backed schema refresh
+  остаются открытыми.
+
+## Generic Studio JSON value annotation — 2026-10-16
+
+- `apiResponse.example` принимает любое JSON-значение, но schema была пустой и
+  generic Studio inspector fail-closed скрывал весь `config.routes`. Добавлена
+  UI-only `x-studio-json-value`; Server schema generator и AJV test helper
+  обновлены. `apiRequestBody.schema` и `apiResponse.schema` остаются отдельными
+  object-документами `x-studio-json-document`.
+- Studio host валидирует и распаковывает помеченный JSON value envelope в draft;
+  служебный ключ не записывается в canonical settings. Server contract package
+  tests и `cmd/contracts --check` прошли. Полное acceptance редактора выполняется
+  через Studio позже; runtime schema semantics не менялись.
 
 ## Технический settings slice — 2026-10-09
 
@@ -134,38 +275,38 @@ root.
 
 Нормативная цель: [Core target](https://liapoldus.github.io/core/architecture/target),
 [v1 acceptance](https://liapoldus.github.io/core/configuration/acceptance) и
-[Server contract](https://liapoldus.github.io/plugins/server). Агентное задание:
+[Server contract](https://liapoldus.github.io/services/server). Агентное задание:
 [задачи по субъектам v2](../../tasks/README.md).
-Этот репозиторий — отдельный HTTP Server plugin; `server` — его product/API
+Этот репозиторий — отдельный HTTP Server service; `server` — его product/API
 identity, Caddy — реализация внутри binary.
 
 ## Цель и фиксированные ограничения
 
-- Оператор вручную устанавливает и запускает Server plugin. Core не владеет
+- Оператор вручную устанавливает и запускает Server service. Core не владеет
   процессом, не может запускать/останавливать/перезапускать/масштабировать или
   удалять его.
 - Public v1 surface: HTTP/1.1, HTTP/2, HTTP/3, TLS/ACME, static sites,
-  reverse proxy, SSE и plugin dispatch; WebSocket поддерживает RFC 6455 over
+  reverse proxy, SSE и service dispatch; WebSocket поддерживает RFC 6455 over
   HTTP/1.1. Caddy-L4/public TCP/UDP
   listeners/relay/P2P/NAT traversal — v3, не binary/schema/API/conformance v1.
 - HTTP/3 остаётся HTTP. Core содержит только Management/control plane и не
   содержит Caddy runtime/data plane.
-- Core↔plugin lifecycle/config — Plugin SDK REST + unique per-replica mTLS:
-  `Reload`, plugin-initiated exact generation pull, local validate/apply и
-  digest ACK. `pluginprotocol` — только generic plugin↔plugin API.
+- Core↔service lifecycle/config — Service SDK REST + unique per-replica mTLS:
+  `Reload`, service-initiated exact generation pull, local validate/apply и
+  digest ACK. `wool` — только generic service↔service API.
 - Settings schema, site archive/manifest, product errors, capabilities и Admin
   Surface принадлежат только этому repo. Общие settings редактируются через
   Core generic API; product Admin Surface не заменяет его control RPCs.
 - ACME issuance/automatic renewal — Caddy/CertMagic; ручные renew/revoke API
   отсутствуют в v1; custom certificates задаются
   secret references. Внешний Admin API Caddy не публикуется. Persistence
-  сертификатов и release artifacts принадлежит Server plugin.
+  сертификатов и release artifacts принадлежит Server service.
 - `current`/`previous` сохраняются; site release immutable и переключается
   атомарно после успешной validation/operation.
 
 ## Что уже зафиксировано контрактами
 
-- [x] В public plugin identity, contracts, CLI/management naming использовать
+- [x] В public service identity, contracts, CLI/management naming использовать
   `server`; Caddy допустим как имя runtime/library/technology, не как отдельный
   public service identity. Внутренние fixture/package names разрешены, пока не
   попадают в установленный API.
@@ -347,6 +488,13 @@ identity, Caddy — реализация внутри binary.
   `tests/site-publish-runtime.test.ts` подтверждает digest-addressed revisions,
   rollback/CAS, restart до activation и recovery после durable pointer switch;
   `tests/site-publish-runtime.test.ts` также проверяет сохранность serving root.
+- [x] Убрать пустой site-journal polling каждые 100 мс: worker теперь
+  пробуждается после durable acceptance и обрабатывает весь журнал одним
+  проходом; startup recovery и синхронный rollback сохранены. Regression test
+  подтверждает отсутствие фоновых lock-вызовов без принятой публикации и
+  обработку принятой операции. Проверены `go test ./...`; оставлена runtime
+  проверка нового контейнера Server перед подтверждением отсутствия повторных
+  Caddy lock-maintenance ошибок.
 - [x] Admin Surface предоставляет plugin-owned certificate list/status,
   site/release/operation actions и status. Ручные renew/revoke не входят в v1.
   Любые common settings или
@@ -415,7 +563,7 @@ GOTOOLCHAIN=go1.26.0 npm test -- --maxWorkers=1` прошёл (33 файла / 8
 host-ов.
 
 - [x] Сериализовать durable site-release mutations между независимыми Server
-  process через named lock `certmagic.FileStorage`: publish, recovery worker и
+  process через стабильный OS advisory lock (`gofrs/flock`): publish, recovery worker и
   rollback используют один coordination lock, поэтому pending-operation check,
   orphan-staging cleanup и `current`/`previous` switch не расходятся между
   process-local mutex-ами. Проверено отдельным TypeScript-driven test, который
@@ -430,7 +578,7 @@ host-ов.
   `npx vitest run tests/site-publish-cross-process-recovery.test.ts --maxWorkers=1`.
   Это доказывает только межпроцессную координацию на тестовой локальной FS; ни
   один RWX/network filesystem profile ещё не объявлен поддерживаемым.
-- [ ] Саморегистрация каждой replica через Plugin SDK; SemVer/digest и
+- [ ] Саморегистрация каждой replica через Service SDK; SemVer/digest и
   совместимость shared state/HTTP/peer contracts. Gate: Core restart, lease
   expiry, two-cohort rolling/canary, ingress sticky и bounded stream drain.
 - [ ] Multi-replica site/ACME storage на общем RWX filesystem. Зафиксировать
@@ -443,7 +591,7 @@ host-ов.
 - [ ] Caddy-L4 и public TCP/UDP relay за Server-owned контрактами и отдельным
   real-runtime conformance. P2P/NAT traversal не подразумевается обычным relay.
 - [ ] CAPTCHA/Identity integration — только после явной разморозки владельцев,
-  без специальных Core/product методов в SDK или `pluginprotocol`.
+  без специальных Core/product методов в SDK или `wool`.
 Установку и плановые обновления Server выполняет оператор выбранными средствами; Core никогда не управляет workloads или числом
 replicas. Delivery/provider API не является задачей Server/Core v3.
 

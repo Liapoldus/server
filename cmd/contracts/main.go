@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"liapoldus.local/server-plugin/contracts/definitions"
+	"liapoldus.local/server-service/contracts/definitions"
 )
 
 func main() {

@@ -1,6 +1,6 @@
 package settings
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 type SettingsVectorsDocumentScenariosItemInputSource struct {
 	Tls                  string   `json:"tls"`

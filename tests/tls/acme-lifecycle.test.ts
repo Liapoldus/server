@@ -77,7 +77,7 @@ describe("automatic TLS lifecycle", () => {
         expect(result.revision).toBe("revision-1");
         expect(result.certificateStatus).toMatchObject({ domain: host, source: "acme", readiness: "ready" });
         expect(result.certificateStatus.serial).toEqual(expect.any(String));
-        expect(result.tlsProbe).toMatchObject({ status: 200, body: "plugin-owned", serverName: host });
+        expect(result.tlsProbe).toMatchObject({ status: 200, body: "service-owned", serverName: host });
         expect(result.renewal).toMatchObject({ completed: true, changedCertificate: true });
       } finally {
         rmSync(trustDirectory, { recursive: true, force: true });

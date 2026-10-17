@@ -17,10 +17,10 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/certmagic"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	caddycertificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	caddycertificatemodel "liapoldus.local/server-service/internal/domain/models/certificate"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 type input struct {
@@ -85,7 +85,7 @@ func main() {
 	check(err)
 	check(os.MkdirAll(siteRoot, 0o700))
 	if request.SiteContent == "" {
-		request.SiteContent = "plugin-owned"
+		request.SiteContent = "service-owned"
 	}
 	check(os.WriteFile(filepath.Join(siteRoot, "index.html"), []byte(request.SiteContent), 0o600))
 	if request.SiteFileContent == "" {

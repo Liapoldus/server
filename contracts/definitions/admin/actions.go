@@ -1,6 +1,6 @@
 package admin
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 type AdminActionsDocumentArchiveEntryCountSemantics struct {
 	Unit                      string   `json:"unit"`
@@ -55,13 +55,13 @@ type AdminActionsDocumentPublishOperation struct {
 }
 
 type AdminActionsDocumentOperationStatus struct {
-	StateMapping                 map[string]string `json:"stateMapping"`
-	CoreResource                 string            `json:"coreResource"`
-	PluginStatusCapability       string            `json:"pluginStatusCapability"`
-	PluginStates                 []string          `json:"pluginStates"`
-	CoreStates                   []string          `json:"coreStates"`
-	WorkerPollMilliseconds       int               `json:"workerPollMilliseconds"`
-	CoreControlUsesPluginSdkRest bool              `json:"coreControlUsesPluginSdkRest"`
+	StateMapping                  map[string]string `json:"stateMapping"`
+	CoreResource                  string            `json:"coreResource"`
+	ServiceStatusCapability       string            `json:"serviceStatusCapability"`
+	ServiceStates                 []string          `json:"serviceStates"`
+	CoreStates                    []string          `json:"coreStates"`
+	WorkerPollMilliseconds        int               `json:"workerPollMilliseconds"`
+	CoreControlUsesServiceSdkRest bool              `json:"coreControlUsesServiceSdkRest"`
 }
 
 type AdminActionsDocumentOperationsEntryErrorsEntry struct {
@@ -146,7 +146,7 @@ type AdminActionsDocument struct {
 	Operations       map[string]AdminActionsDocumentOperationsEntry `json:"operations"`
 	OperationStatus  AdminActionsDocumentOperationStatus            `json:"operationStatus"`
 	PublishOperation AdminActionsDocumentPublishOperation           `json:"publishOperation"`
-	Plugin           string                                         `json:"plugin"`
+	Service          string                                         `json:"service"`
 	Archive          AdminActionsDocumentArchive                    `json:"archive"`
 	ReleaseLifecycle AdminActionsDocumentReleaseLifecycle           `json:"releaseLifecycle"`
 	Version          int                                            `json:"version"`
@@ -155,7 +155,7 @@ type AdminActionsDocument struct {
 func AdminActions() AdminActionsDocument {
 	return AdminActionsDocument{
 		Version: int(1),
-		Plugin:  "server",
+		Service: "server",
 		Archive: AdminActionsDocumentArchive{
 			MediaType:              "application/gzip",
 			MinArtifactBytes:       int(1),
@@ -186,7 +186,7 @@ func AdminActions() AdminActionsDocument {
 		},
 		ReleaseLifecycle: AdminActionsDocumentReleaseLifecycle{
 			ImmutableRevisions: true,
-			Storage:            "plugin-owned-persistent-filesystem",
+			Storage:            "service-owned-persistent-filesystem",
 			CurrentPrevious:    "successful-publish-or-rollback-atomically-swaps-current-and-previous",
 			Staging:            "validate-complete-staged-release-before-activation",
 			Activation:         "atomic-current-previous-pointer-swap-only-after-successful-terminal-operation",
@@ -200,23 +200,23 @@ func AdminActions() AdminActionsDocument {
 			CurrentPointer:           "changes-only-after-all-archive-and-manifest-validation-succeeds",
 		},
 		OperationStatus: AdminActionsDocumentOperationStatus{
-			CoreResource:           "GET /api/operations/{id}",
-			WorkerPollMilliseconds: int(100),
-			PluginStatusCapability: "server.operations.get",
-			PluginStates:           []string{"accepted", "running", "completed", "failed"},
-			CoreStates:             []string{"pending", "running", "succeeded", "failed", "degraded"},
+			CoreResource:            "GET /api/operations/{id}",
+			WorkerPollMilliseconds:  int(100),
+			ServiceStatusCapability: "server.operations.get",
+			ServiceStates:           []string{"accepted", "running", "completed", "failed"},
+			CoreStates:              []string{"pending", "running", "succeeded", "failed", "degraded"},
 			StateMapping: map[string]string{
 				"accepted":  "pending",
 				"running":   "running",
 				"completed": "succeeded",
 				"failed":    "failed",
 			},
-			CoreControlUsesPluginSdkRest: true,
+			CoreControlUsesServiceSdkRest: true,
 		},
 		Operations: map[string]AdminActionsDocumentOperationsEntry{
 			"server.sites.list": {
 				Kind:      "query",
-				Ownership: "plugin-admin-surface-capability",
+				Ownership: "service-admin-surface-capability",
 				RequestSchema: schema.Value(schema.Definition{
 					Definition: "https://json-schema.org/draft/2020-12/schema",
 					Type:       "object",
@@ -282,7 +282,7 @@ func AdminActions() AdminActionsDocument {
 			},
 			"server.sites.releases.list": {
 				Kind:      "query",
-				Ownership: "plugin-admin-surface-capability",
+				Ownership: "service-admin-surface-capability",
 				RequestSchema: schema.Value(schema.Definition{
 					Definition: "https://json-schema.org/draft/2020-12/schema",
 					Type:       "object",
@@ -355,7 +355,7 @@ func AdminActions() AdminActionsDocument {
 			},
 			"server.sites.rollback": {
 				Kind:      "action",
-				Ownership: "plugin-admin-surface-action",
+				Ownership: "service-admin-surface-action",
 				RequestSchema: schema.Value(schema.Definition{
 					Definition: "https://json-schema.org/draft/2020-12/schema",
 					Type:       "object",
@@ -414,14 +414,14 @@ func AdminActions() AdminActionsDocument {
 				}),
 				Idempotency: schema.Value(AdminActionsDocumentOperationsEntryIdempotency{
 					Required:  true,
-					Scope:     []string{"plugin-instance", "capability", "idempotency-key"},
+					Scope:     []string{"service-instance", "capability", "idempotency-key"},
 					Semantics: schema.Value("correlation-only"),
 					Repeat:    schema.Value("invoke-again"),
 				}),
 			},
 			"server.sites.publish": {
 				Kind:      "artifact-action",
-				Ownership: "plugin-admin-surface-action",
+				Ownership: "service-admin-surface-action",
 				Errors: map[string]AdminActionsDocumentOperationsEntryErrorsEntry{
 					"invalid_input": {
 						HTTP:      int(400),
@@ -451,11 +451,11 @@ func AdminActions() AdminActionsDocument {
 				}),
 				Idempotency: schema.Value(AdminActionsDocumentOperationsEntryIdempotency{
 					Required:       true,
-					Scope:          []string{"plugin-instance", "capability", "idempotency-key"},
+					Scope:          []string{"service-instance", "capability", "idempotency-key"},
 					SameInput:      schema.Value("return-existing-operation-without-duplicate-effect"),
 					DifferentInput: schema.Value("reject-before-acceptance-with-ALREADY_EXISTS"),
 				}),
-				Transport: schema.Value("plugin-sdk.rest.artifact-stream"),
+				Transport: schema.Value("service-sdk.rest.artifact-stream"),
 				Multipart: schema.Value(AdminActionsDocumentOperationsEntryMultipart{
 					Parts:                     []string{"metadata", "artifact"},
 					Order:                     []string{"metadata", "artifact"},
@@ -495,7 +495,7 @@ func AdminActions() AdminActionsDocument {
 			},
 			"server.operations.list": {
 				Kind:      "query",
-				Ownership: "plugin-admin-surface-capability",
+				Ownership: "service-admin-surface-capability",
 				RequestSchema: schema.Value(schema.Definition{
 					Definition: "https://json-schema.org/draft/2020-12/schema",
 					Type:       "object",
@@ -570,7 +570,7 @@ func AdminActions() AdminActionsDocument {
 			},
 			"server.operations.get": {
 				Kind:      "action",
-				Ownership: "plugin-admin-surface-action",
+				Ownership: "service-admin-surface-action",
 				RequestSchema: schema.Value(schema.Definition{
 					Definition: "https://json-schema.org/draft/2020-12/schema",
 					Type:       "object",
@@ -637,7 +637,7 @@ func AdminActions() AdminActionsDocument {
 			},
 			"server.certificates.list": {
 				Kind:      "query",
-				Ownership: "plugin-admin-surface-capability",
+				Ownership: "service-admin-surface-capability",
 				RequestSchema: schema.Value(schema.Definition{
 					Definition: "https://json-schema.org/draft/2020-12/schema",
 					Type:       "object",
@@ -711,7 +711,7 @@ func AdminActions() AdminActionsDocument {
 			},
 			"server.certificates.get": {
 				Kind:      "action",
-				Ownership: "plugin-admin-surface-action",
+				Ownership: "service-admin-surface-action",
 				RequestSchema: schema.Value(schema.Definition{
 					Definition: "https://json-schema.org/draft/2020-12/schema",
 					Type:       "object",

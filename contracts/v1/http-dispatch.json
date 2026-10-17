@@ -21,7 +21,7 @@
   "maxRequestBytes": 1048576,
   "maxRequestHeaderBytes": 65536,
   "maxStreamConcurrencyPerInstance": 128,
-  "module": "http.handlers.liapoldus_plugin",
+  "module": "http.handlers.liapoldus_service",
   "requestBodySemantics": {
     "chunkedIncluded": true,
     "count": "body-octets-after-transfer-framing",
@@ -36,6 +36,19 @@
   "requestHeaderByteSemantics": "each parsed field name, colon-space, value, and CRLF; includes Host; excludes request line and final empty line",
   "requestHeaderTooLargeStatus": 431,
   "requestIDHeader": "X-Request-ID",
+  "requestParameters": {
+    "bodySemantics": "If a route declares a JSON body schema, body bytes are validated against it and copied unchanged into parameters.body. If omitted, a non-empty unary body is rejected. Stream modes continue to carry their bounded body frames outside parameters.body.",
+    "field": "parameters",
+    "schema": "contracts/v1/http-request-parameters.schema.json",
+    "validation": "Server parses and validates typed path, query and declared header values before invoking a service; malformed or invalid requests receive a generic 400 and are not dispatched.",
+    "values": [
+      "path",
+      "query",
+      "headers",
+      "body"
+    ],
+    "version": "server-http/v1"
+  },
   "requestTooLargeStatus": 413,
   "responseCookies": {
     "field": "cookies",

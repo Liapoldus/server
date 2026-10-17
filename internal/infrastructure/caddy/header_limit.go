@@ -7,7 +7,7 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	caddyhttp "github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"liapoldus.local/server-plugin/contracts"
+	"liapoldus.local/server-service/contracts"
 )
 
 type requestHeaderLimit struct {

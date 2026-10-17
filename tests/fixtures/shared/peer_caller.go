@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	protocolpeer "github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
+	protocolpeer "github.com/Liapoldus/wool/v3/presentation/peer"
 )
 
 // PeerTarget and PeerCaller are deterministic test adapters that stand in for

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-describe("Caddy Plugin SDK Reload adapter", () => {
+describe("Caddy Service SDK Reload adapter", () => {
   it("preserves the last-good Caddy generation and reports the replica not-ready after activation failure", async () => {
     const port = await freePort();
     const adminProbe = createServer();
@@ -22,7 +22,7 @@ describe("Caddy Plugin SDK Reload adapter", () => {
     try {
       // Caddy must start while its configured default admin address is owned
       // by this probe; the Server runtime must not bind or expose that API.
-      output = execFileSync("go", ["run", "./tests/fixtures/plugin-sdk-reload"], {
+      output = execFileSync("go", ["run", "./tests/fixtures/service-sdk-reload"], {
         cwd: root,
         env: {
           ...process.env,

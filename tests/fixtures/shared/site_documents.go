@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
 )
 
 // RegisterSiteDirectoryReader keeps legacy Caddy behavior fixtures independent

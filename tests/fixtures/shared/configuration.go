@@ -1,9 +1,9 @@
 package shared
 
 import (
-	"liapoldus.local/server-plugin/contracts"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
+	"liapoldus.local/server-service/contracts"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
 func Apply(configuration *settingsapp.Configuration, raw []byte, revision string, secrets map[string][]byte) error {

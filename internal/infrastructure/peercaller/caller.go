@@ -1,5 +1,5 @@
-// Package peercaller resolves Core-authorized plugin links and makes one
-// authenticated pluginprotocol call without retrying the operation.
+// Package peercaller resolves Core-authorized service links and makes one
+// authenticated wool call without retrying the operation.
 package peercaller
 
 import (
@@ -16,15 +16,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	sdkapplication "github.com/Liapoldus/plugin-sdk/v2/application"
-	sdkinterfaces "github.com/Liapoldus/plugin-sdk/v2/domain/interfaces"
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
-	sdkinfrastructure "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
-	protocolmodel "github.com/Liapoldus/pluginprotocol/v3/domain/peer"
-	protocolpeer "github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
+	sdkapplication "github.com/Liapoldus/service-sdk/v2/application"
+	sdkinterfaces "github.com/Liapoldus/service-sdk/v2/domain/interfaces"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
+	sdkinfrastructure "github.com/Liapoldus/service-sdk/v2/infrastructure"
+	protocolmodel "github.com/Liapoldus/wool/v3/domain/peer"
+	protocolpeer "github.com/Liapoldus/wool/v3/presentation/peer"
 )
 
-var ErrCallUnavailable = errors.New("configured plugin call is unavailable")
+var ErrCallUnavailable = errors.New("configured service call is unavailable")
 
 const maximumPeerMessageBytes = 2 << 20
 
@@ -222,7 +222,7 @@ func peerResolutionFailureStage(err error) string {
 // payloads, identities, and transport error strings are deliberately omitted.
 func (caller *Caller) fail(ctx context.Context, stage string) error {
 	if caller != nil && caller.logger != nil {
-		caller.logger.Warn(ctx, "plugin host call unavailable", sdkinterfaces.Field{Key: "stage", Value: stage})
+		caller.logger.Warn(ctx, "service host call unavailable", sdkinterfaces.Field{Key: "stage", Value: stage})
 	}
 	return ErrCallUnavailable
 }
@@ -232,7 +232,7 @@ func (caller *Caller) failWithDirectory(ctx context.Context, stage string, direc
 		return ErrCallUnavailable
 	}
 	summary := summarizePeerDirectory(directory, linkID)
-	caller.logger.Warn(ctx, "plugin host call unavailable",
+	caller.logger.Warn(ctx, "service host call unavailable",
 		sdkinterfaces.Field{Key: "stage", Value: stage},
 		sdkinterfaces.Field{Key: "callerPlacementId", Value: caller.identity.PlacementID},
 		sdkinterfaces.Field{Key: "peerLinkFound", Value: strconv.FormatBool(summary.LinkFound)},

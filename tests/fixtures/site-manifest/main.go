@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/infrastructure/site"
+	"liapoldus.local/server-service/contracts"
+	"liapoldus.local/server-service/internal/infrastructure/site"
 )
 
 type stagedEntry struct {

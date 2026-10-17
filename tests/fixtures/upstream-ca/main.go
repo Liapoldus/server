@@ -19,9 +19,9 @@ import (
 	"os"
 	"time"
 
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 const (

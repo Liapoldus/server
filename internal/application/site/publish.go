@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
-	"time"
 
-	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/domain/interfaces"
-	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
+	"liapoldus.local/server-service/contracts"
+	"liapoldus.local/server-service/internal/domain/interfaces"
+	sitemodel "liapoldus.local/server-service/internal/domain/models/site"
 )
 
 var (
@@ -33,13 +32,14 @@ type SitePage[T any] = sitemodel.SitePage[T]
 // remain behind the domain repository port.
 type SitePublisher struct {
 	repository interfaces.SiteReleaseRepository
+	pending    chan struct{}
 }
 
 func NewSitePublisher(repository interfaces.SiteReleaseRepository) (*SitePublisher, error) {
 	if repository == nil {
 		return nil, ErrInvalidSitePublisher
 	}
-	return &SitePublisher{repository: repository}, nil
+	return &SitePublisher{repository: repository, pending: make(chan struct{}, 1)}, nil
 }
 
 func (publisher *SitePublisher) Accept(ctx context.Context, input SitePublishInput) (SiteOperation, error) {
@@ -47,7 +47,18 @@ func (publisher *SitePublisher) Accept(ctx context.Context, input SitePublishInp
 		input.ContentType == "" || input.IdempotencyKey == "" || len(input.Metadata) == 0 {
 		return SiteOperation{}, ErrInvalidSitePublish
 	}
-	return publisher.repository.AcceptSitePublish(ctx, input)
+	operation, err := publisher.repository.AcceptSitePublish(ctx, input)
+	if err == nil {
+		publisher.signalPending()
+	}
+	return operation, err
+}
+
+func (publisher *SitePublisher) signalPending() {
+	select {
+	case publisher.pending <- struct{}{}:
+	default:
+	}
 }
 
 func (publisher *SitePublisher) ProcessPending(ctx context.Context) error {
@@ -58,19 +69,18 @@ func (publisher *SitePublisher) ProcessPending(ctx context.Context) error {
 }
 
 // RunWorker processes durable accepted site operations outside the artifact
-// request. An operation is visible as accepted before archive activation runs;
-// fatal storage/journal errors are returned to the composition root.
-func (publisher *SitePublisher) RunWorker(ctx context.Context, interval time.Duration) error {
-	if publisher == nil || publisher.repository == nil || ctx == nil || interval <= 0 {
+// request. Accepted operations coalesce into one wake-up because each pass
+// scans the complete durable journal. Startup recovery is run by the caller
+// before the worker starts; fatal storage/journal errors return to composition.
+func (publisher *SitePublisher) RunWorker(ctx context.Context) error {
+	if publisher == nil || publisher.repository == nil || publisher.pending == nil || ctx == nil {
 		return ErrInvalidSitePublisher
 	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-publisher.pending:
 			if err := publisher.ProcessPending(ctx); err != nil {
 				return err
 			}

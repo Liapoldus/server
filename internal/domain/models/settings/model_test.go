@@ -6,7 +6,7 @@ import (
 )
 
 func TestDecodeSettingsPreservation(t *testing.T) {
-	if ErrInvalidSettings.Error() != "invalid Caddy plugin settings" {
+	if ErrInvalidSettings.Error() != "invalid Caddy service settings" {
 		t.Fatal("settings error message changed")
 	}
 	cases := []struct {

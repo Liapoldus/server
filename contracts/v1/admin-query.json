@@ -13,12 +13,12 @@
       "operations"
     ]
   },
-  "plugin": "server",
   "resources": {
     "certificates": "server.certificates.list",
     "operations": "server.operations.list",
     "releases": "server.sites.releases.list",
     "sites": "server.sites.list"
   },
+  "service": "server",
   "version": 1
 }

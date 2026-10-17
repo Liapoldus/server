@@ -1,16 +1,20 @@
-# Server plugin
+# Server service
 
-Server plugin — отдельный сервис на базе Caddy. Он обслуживает пользовательский
+Control plane: Studio → CLI → Core → Service SDK REST. Data plane:
+независимые сервисы → Wool. Runtime entities — Services; StudioPlugins
+обозначают только расширения редактора Studio.
+
+Server service — отдельный сервис на базе Caddy. Он обслуживает пользовательский
 HTTP/HTTPS traffic; Core хранит его desired JSON configuration, но не содержит
 Caddy runtime и не проксирует запросы. В v1 оператор отдельно устанавливает и
-запускает Core, Server plugin и forms-db.
+запускает Core, Server service и forms-db.
 
-Общий Core↔plugin lifecycle принадлежит Plugin SDK REST: Core вызывает
-`Reload(generation)`, plugin сам запрашивает точное поколение и подтверждает
-digest после применения. `pluginprotocol` используется только для generic
-plugin↔plugin communication.
+Общий Core↔service lifecycle принадлежит Service SDK REST: Core вызывает
+`Reload(generation)`, service сам запрашивает точное поколение и подтверждает
+digest после применения. `wool` используется только для generic
+service↔service communication.
 
-Server binary обязан использовать Plugin SDK `HandlerSet`. SDK единолично
+Server binary обязан использовать Service SDK `HandlerSet`. SDK единолично
 обслуживает универсальные `GET /healthz` и `GET /metrics` на control REST
 listener и предоставляет `NewObservabilityHandler` для публичного listener.
 Server не реализует и не переопределяет эти endpoints; product HTTP surface
@@ -18,9 +22,9 @@ Server не реализует и не переопределяет эти endpo
 
 Публичный `POST /api/peer?target=<instance>&method=<method>` принимает один
 ограниченный JSON peer payload и вызывает указанный opaque method через
-`pluginprotocol`. Server разрешает target только по peer directory, выданному
+`wool`. Server разрешает target только по peer directory, выданному
 Core, и возвращает ответ peer без Core/CLI proxy. Эта поверхность общая для
-любых совместимых plugins и не содержит их имён, SDK REST URL или специальных
+любых совместимых services и не содержит их имён, SDK REST URL или специальных
 веток по продуктам. SDK observability endpoints остаются отдельными и не
 перехватываются peer dispatch.
 
@@ -29,13 +33,13 @@ Core, и возвращает ответ peer без Core/CLI proxy. Эта по
 | Область | Владелец |
 | --- | --- |
 | Desired HTTP settings | Core SQLite хранит исходные JSON bytes с поколениями `active`/`previous`. |
-| Settings schema и runtime validation | Server plugin; Core применяет только общий plugin-owned schema validation. |
-| HTTP/TLS runtime | Server plugin на Caddy; конфигурация JSON компилируется во внутренний runtime snapshot. |
-| ACME и certificates | Server plugin/Caddy; состояние находится в его persistent storage. |
-| Static site artifacts | Server plugin; immutable releases с указателями `current`/`previous`. |
+| Settings schema и runtime validation | Server service; Core применяет только общий service-owned schema validation. |
+| HTTP/TLS runtime | Server service на Caddy; конфигурация JSON компилируется во внутренний runtime snapshot. |
+| ACME и certificates | Server service/Caddy; состояние находится в его persistent storage. |
+| Static site artifacts | Server service; immutable releases с указателями `current`/`previous`. |
 | Process lifecycle | Оператор средствами ОС; Core не устанавливает, не запускает, не останавливает и не перезапускает процесс. |
 
-В v1 допускается одна Server plugin replica на Core. Оператор вручную сохраняет
+В v1 допускается одна Server service replica на Core. Оператор вручную сохраняет
 один и тот же persistent directory при обновлении или рестарте. Внешний Caddy
 Admin API не публикуется и не является интерфейсом Core.
 
@@ -44,7 +48,7 @@ Admin API не публикуется и не является интерфей�
 Внутренний decoder settings использует typed Go-константы из
 `internal/domain/models/settings_definition.go`: version `1`, поле версии
 `schemaVersion` и поле runtime config `config`. Runtime не читает эти значения
-из `plugin.json`; native regression tests проверяют их точное соответствие
+из `service.json`; native regression tests проверяют их точное соответствие
 опубликованному manifest, исходные config bytes и settings error messages.
 Три неизменяемых grant purposes для certificate, private key и upstream CA
 определены типом `SettingsSecretPurpose` в REST adapter; прежний внутренний
@@ -53,12 +57,77 @@ Public settings schema/semantics, Admin descriptors и site artifacts сохра
 своих текущих владельцев. Этот технический срез не завершает общую миграцию
 контрактов в code-first и не расширяет v1 возможности.
 
-Server plugin принимает только собственный versioned JSON contract, не raw Caddy
+Server service принимает только собственный versioned JSON contract, не raw Caddy
 JSON и не Caddyfile. Настройки задают public HTTP/HTTPS listeners и ordered
-routes. Matcher v1 поддерживает hostname/method и ровно один path режим
-`exact`, `prefix`, `glob` или Go RE2 `regex`; совпавший route использует один
-terminal handler: static site, HTTP(S) reverse-proxy pool или plugin capability.
-Middleware chain и общий `continue` не входят в v1.
+routes. Для static и reverse-proxy routes `match` поддерживает hostname и ровно
+один path режим `exact`, `prefix`, `glob` или Go RE2 `regex`. Service route
+обязан содержать versioned `api` contract `server-http/v1`: method и template
+path задаются в нём, а не дублируются в `match`; `match` для такого route может
+задавать только host. Named path placeholders имеют форму `{name}` и занимают
+ровно один сегмент. Старый untyped service route без `api` contract не
+принимается. Совпавший route использует один terminal handler: static site,
+HTTP(S) reverse-proxy pool или service capability. Middleware chain и общий
+`continue` не входят в v1.
+
+### Typed request/response contract
+
+`api` задаёт typed path/query/header параметры: scalar или array типов string,
+integer, number и boolean; optional/required, enum, длины и числовые границы.
+Для repeated values требуется явная политика: `single` отклоняет повторы,
+`first`/`last` выбирают одно значение, `repeat` формирует массив из повторных
+query/header значений, а `commaDelimited` разбивает одно значение по запятым.
+Неизвестные query и headers разрешены по умолчанию и могут быть запрещены
+независимо (`allowUnknownQuery`, `allowUnknownHeaders`). Секретные и hop-by-hop
+headers нельзя объявить как параметры; Cookie передаётся только отдельным
+`requestCookieNames` allow-list.
+
+Пример конфигурации `GET /echo?text=...`:
+
+```yaml
+api:
+  version: server-http/v1
+  method: GET
+  path: /echo
+  queryParameters:
+    - name: text
+      type: string
+      repeated: single
+      required: true
+      minLength: 1
+      maxLength: 2048
+  responses:
+    - status: 200
+      contentType: application/json
+      schema:
+        type: object
+        required: [text]
+        properties:
+          text: { type: string }
+      example: { text: hello }
+```
+
+Унарный `body` задаётся как `application/json` JSON Schema с обязательностью и
+лимитом до 1 MiB. Server валидирует request method/path/параметры/body до
+dispatch; ошибка возвращает общий `400` без отражения пользовательских значений
+и без вызова capability. Сервис получает нормализованные данные в
+`parameters` (`version`, `path`, `query`, `headers`, optional `body`) согласно
+[`http-request-parameters.schema.json`](../../../contracts/v1/http-request-parameters.schema.json).
+JSON body копируется без преобразования. Непустое unary body запрещено, если
+schema не объявлена; stream modes передают body отдельными bounded frames.
+
+`responses` описывают status, content type, schema и example. При candidate
+apply Server проверяет каждую example против schema; response schema служит
+документацией и не валидирует живой ответ, не преобразует его и не ограничивает
+продуктовые status codes.
+
+`schema` у request body и response — это schema-owned JSON document; в SDK
+configuration schema он помечен `x-studio-json-document: true`. Studio может
+заменять документ целиком через bounded typed draft operation, но не редактирует
+его произвольные вложенные пути. Остальные открытые объекты остаются закрытыми
+для полной замены.
+`example` — отдельное bounded JSON value (`x-studio-json-value: true`): он может
+быть объектом, массивом или scalar и редактируется как единое значение. Server
+сверяет его с sibling response schema при apply.
 
 Общий размер HTTP request headers ограничен 64 KiB: считается сумма каждого
 имени поля, разделителя `: `, значения и CRLF; `Host` включён, request line и
@@ -67,7 +136,7 @@ Middleware chain и общий `continue` не входят в v1.
 bounded `max_header_bytes`; точная семантика размера закреплена в
 `contracts/v1/http-dispatch.json`.
 
-У plugin route запрос может задавать `requestCookieNames` — уникальный allow-list
+У service route запрос может задавать `requestCookieNames` — уникальный allow-list
 имён Cookie, которые будут переданы выбранной capability в typed `cookies[]`.
 Сопоставление имён точное и регистрозависимое; порядок и повторения разрешённых
 cookies сохраняются. По умолчанию список пуст, сырой заголовок `Cookie` никогда
@@ -108,15 +177,18 @@ leaf-сертификата: serial, `notBefore` и `notAfter`, когда се�
 пути хранилища не перечисляются. PEM, private key и secret references никогда
 не входят в ответ. Неизвестный домен возвращает `not_found`.
 
+HTTP-запрос, который не совпал ни с одним настроенным route, завершается
+`404 Not Found`; успешный пустой ответ не используется как неявный fallback.
+
 Site publication выполняется через generic Admin Surface artifact action и
-Plugin SDK. `202 Accepted` возвращается после durable staging artifact с
+Service SDK. `202 Accepted` возвращается после durable staging artifact с
 проверенными размером и SHA-256; digest относится к сжатым байтам. Фоновая
 operation распаковывает и проверяет gzip/tar, manifest, лимиты и archive
 entries. Только после полной проверки immutable release атомарно становится
 `current`, а прежний `current` — `previous`. Ошибка проверки переводит operation
 в `failed` и оставляет оба активных указателя без изменений.
 
-Для terminal plugin route `mode: "call"` передаёт конечный JSON request/response.
+Для terminal service route `mode: "call"` передаёт конечный JSON request/response.
 `mode: "http_stream"` передаёт metadata отдельным `request_start`, затем поток
 body-кадров и `request_end`; ответ начинается единственным `response_start` и
 завершается `response_end`. Server считает реальные body octets после HTTP
@@ -140,40 +212,40 @@ SSE использует тот же bidi peer stream, но передаёт с�
 `event/data/id/retry` поля; Server проверяет event целиком до сериализации в
 `text/event-stream`, нормализует перевод строки в `data` и запрещает CR/LF/NUL
 в управляющих полях. WebSocket использует отдельный handshake frame внутри
-того же bidi stream: plugin принимает или отклоняет upgrade и может выбрать
+того же bidi stream: service принимает или отклоняет upgrade и может выбрать
 только предложенный клиентом subprotocol. После успешного `101` сообщения
 передаются как пары `message_start/chunk/end`; тип text/binary и граница каждого
 сообщения сохраняются. Ping/pong остаётся на стороне Server, а сообщения
-ограничены 1 MiB. До upgrade неверное решение plugin возвращает обычную
+ограничены 1 MiB. До upgrade неверное решение service возвращает обычную
 ошибку Server; после upgrade некорректный frame или разрыв закрывает только
 этот WebSocket. Реальный Caddy→mTLS-peer путь для accept/reject, subprotocol,
 text/binary и message boundaries проверяет
 `tests/websocket-dispatch-runtime.test.ts`.
 WebSocket handshake может выставить те же typed cookies; они передаются только
-если весь handshake action валиден и plugin принимает upgrade.
+если весь handshake action валиден и service принимает upgrade.
 В v1 WebSocket использует классический RFC 6455 upgrade поверх HTTP/1.1;
 HTTP/2 Extended CONNECT и WebSocket over HTTP/3 не объявляются поддерживаемыми.
 
-## Восстановление plugin-to-plugin соединения
+## Восстановление service-to-service соединения
 
 Server устанавливает peer-соединение при активации runtime snapshot. Если целевой
-plugin перезапустился, текущий вызов завершается ограниченной ошибкой и не
+service перезапустился, текущий вызов завершается ограниченной ошибкой и не
 повторяется: результат уже отправленного вызова может быть неизвестен. Server
 сбрасывает закрытую peer-сессию; следующий независимый запрос устанавливает
 новое аутентифицированное соединение к тому же объявленному endpoint. Поэтому
 операторские клиенты могут повторить безопасный read-only запрос, но не должны
 автоматически переигрывать неизвестный результат изменяющей операции. Core не
-перезапускает удалённые plugin processes и не проксирует peer traffic.
+перезапускает удалённые service processes и не проксирует peer traffic.
 
 ## Версионные границы
 
-- V2: общие Core/Plugin SDK registration, leases и rollout без изменения
+- V2: общие Core/Service SDK registration, leases и rollout без изменения
   Server repository. Проверяй эту платформенную работу на generic fixtures;
   существующий Server v1 используется только как неизменённый regression target.
 - V3: Server-specific replica registration/compatibility, rollout, scaling и
   shared storage/ACME conformance.
 - V3: Caddy-L4 и public TCP/UDP listeners/relay; Identity/CAPTCHA integrations
-  только после отдельной разморозки соответствующих plugin owners.
+  только после отдельной разморозки соответствующих service owners.
 - Во всех версиях оператор отвечает за проверку immutable release artifact,
   установку и плановое обновление Server.
   Core не получает API установки или управления workloads.
@@ -185,7 +257,7 @@ plugin перезапустился, текущий вызов завершае�
 ## Масштабируемый Server в v3 — отложенный проектный контракт
 
 В отличие от однорепличного v1, будущий v3 допускает несколько Server replicas одного
-instance. Каждая должна регистрироваться через Plugin SDK с уникальной mTLS identity,
+instance. Каждая должна регистрироваться через Service SDK с уникальной mTLS identity,
 SemVer/digest, placement и applied generation. Одновременно могут обслуживать
 две совместимые когорты `(release digest, config generation)`; Core назначает
 когорты и проверяет ACK, а внешний ingress применяет и подтверждает публичные
@@ -216,12 +288,12 @@ Rollout двух версий допускается только если Serve
 Несовместимые версии требуют отдельного maintenance rollout без совместного
 доступа к state. Caddy-L4 и public TCP/UDP relay также относятся к v3, но
 проверяются отдельными Server-owned gates. Каноническая модель регистрации и размещения приведена в
-[документации Core](../core/architecture/plugin-deployment).
+[документации Core](../core/architecture/service-deployment).
 
 ## Ручной запуск v1
 
 Оператор собирает Server binary и задаёт bootstrap-флаги из окружения своего
-deployment. Для прямых вызовов plugins Server получает только собственную
+deployment. Для прямых вызовов services Server получает только собственную
 peer identity и доверенный CA; target endpoint и peer identity не задаются
 флагами и не помещаются в Server settings. Они разрешаются при каждом вызове из
 Core-issued peer directory. Пути сертификатов, ключей, CA и CRL должны быть
@@ -251,7 +323,7 @@ Core-issued peer directory. Пути сертификатов, ключей, CA 
 Замените демонстрационные IDs, адреса и сертификаты значениями `core.yaml` и
 своего deployment; placeholder paths нужно заменить существующими абсолютными
 путями. `--server-cert`/`--server-key` — REST identity, которую Core сверяет с
-`plugins[].replicas[].expectedPeerIdentity`. `--client-cert`/`--client-key` —
+`services[].replicas[].expectedPeerIdentity`. `--client-cert`/`--client-key` —
 отдельная identity, предъявляемая Core при pull конфигурации. Core client
 identity для входящего `Reload` проверяется по
 `--core-client-common-name`; Core HTTPS server при pull проверяется по
@@ -265,10 +337,10 @@ identity для входящего `Reload` проверяется по
 актуального Core-issued peer directory; caller не подключается к адресу из
 проектного файла или CLI-флага. Core применяет generic link policy и конфигурацию,
 но не проксирует бизнес-вызовы. Server не содержит веток или зависимостей,
-связанных с конкретными соседними plugins. Продуктовые settings через flags,
+связанных с конкретными соседними services. Продуктовые settings через flags,
 environment или локальный application config не передаются: Core хранит их в
-SQLite и уведомляет Server посредством Plugin SDK `Reload`.
+SQLite и уведомляет Server посредством Service SDK `Reload`.
 
 После запуска проверьте health/replica readiness через Core Management API и
-проверьте HTTP listener Server отдельно. Не публикуйте Plugin SDK REST endpoint,
+проверьте HTTP listener Server отдельно. Не публикуйте Service SDK REST endpoint,
 peer endpoint или Core control listener в публичную сеть.

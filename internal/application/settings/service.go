@@ -9,9 +9,9 @@ import (
 	"sort"
 	"sync"
 
-	"liapoldus.local/server-plugin/internal/domain/interfaces"
-	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
+	"liapoldus.local/server-service/internal/domain/interfaces"
+	certificatemodel "liapoldus.local/server-service/internal/domain/models/certificate"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
 var (

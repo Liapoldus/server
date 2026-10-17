@@ -1,16 +1,16 @@
 import fs from 'node:fs';
-const base='/Users/docup/Projects/Liapoldus Engine/plugins/server/';
+const base='/Users/docup/Projects/Liapoldus Engine/services/server/';
 let patch='*** Begin Patch\n';
 function edit(file, transform) {const old=fs.readFileSync(file,'utf8'); const next=transform(old); if(next!==old)patch+=`*** Update File: ${base+file}\n@@\n`+old.trimEnd().split('\n').map(l=>'-'+l).join('\n')+'\n'+next.trimEnd().split('\n').map(l=>'+'+l).join('\n')+'\n';}
 function replaceFunction(s,name,body) { const re=new RegExp(`func ${name}\\([^]*?^}`, 'm'); if(!re.test(s))throw Error(name); return s.replace(re,body); }
-function defs(s) {return s.replace('import (','import (\n"liapoldus.local/server-plugin/contracts/definitions"');}
-for(const file of ['assets.go','plugin_manifest.go','site_artifact.go','site_manifest.go','admin_queries.go','dispatch.go','site_archive.go']) {
+function defs(s) {return s.replace('import (','import (\n"liapoldus.local/server-service/contracts/definitions"');}
+for(const file of ['assets.go','service_manifest.go','site_artifact.go','site_manifest.go','admin_queries.go','dispatch.go','site_archive.go']) {
  edit('contracts/'+file,s=>{
   s=defs(s).replace(/\n\s*"embed"/g,'').replace(/\n\s*"io\/fs"/g,file==='site_manifest.go'?'\n"io/fs"':'');
   s=s.replace(/\/\/go:embed[^\n]*\nvar \w+ embed.FS\n/g,'');
   s=s.replace(/fs.ReadFile\(files, "v1\/([^"\n]+)"\)/g,'definitions.Bytes("$1")');
   s=s.replace(/fs.ReadFile\(siteManifestFiles, schemaPath\)/g,'definitions.Bytes(strings.TrimPrefix(schemaPath, "v1/"))');
-  if(file==='plugin_manifest.go')return 'package contracts\n\nimport "liapoldus.local/server-plugin/contracts/definitions"\n\nfunc PluginManifest() ([]byte,error) { return definitions.Bytes("plugin.json") }\n';
+  if(file==='service_manifest.go')return 'package contracts\n\nimport "liapoldus.local/server-service/contracts/definitions"\n\nfunc ServiceManifest() ([]byte,error) { return definitions.Bytes("service.json") }\n';
   if(file==='site_archive.go')s=replaceFunction(s,'LoadSiteArchiveLimits',`func LoadSiteArchiveLimits() (SiteArchiveLimits,error) {\n v := definitions.AdminActions().Archive\n return SiteArchiveLimits{MinArtifactBytes:int64(v.MinArtifactBytes), ArtifactBytes:int64(v.ArtifactBytes), MetadataBytes:int64(v.MetadataBytes), MultipartOverhead:int64(v.MultipartOverheadBytes), ExpandedBytes:int64(v.ExpandedBytes), MaxEntries:int64(v.MaxFiles), MaxCompressionRatio:int64(v.MaxCompressionRatio)},nil\n}`).replace(/\n\s*"encoding\/json"/g,'');
   if(file==='site_manifest.go')s=replaceFunction(s,'loadSitePublishManifestLink',`func loadSitePublishManifestLink() (sitePublishManifestLink,error) {\n v := definitions.SiteLink()\n return sitePublishManifestLink{ArchiveEntry:v.ArchiveEntry,Schema:v.Schema,PublishCapability:v.PublishCapability,RollbackCapability:v.RollbackCapability},nil\n}`);
   if(file==='admin_queries.go') {

@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-const base='/Users/docup/Projects/Liapoldus Engine/plugins/server/';let patch='*** Begin Patch\n';
+const base='/Users/docup/Projects/Liapoldus Engine/services/server/';let patch='*** Begin Patch\n';
 function edit(file,fn){const old=fs.readFileSync(file,'utf8');const next=fn(old);if(old!==next)patch+=`*** Update File: ${base+file}\n@@\n`+old.trimEnd().split('\n').map(l=>'-'+l).join('\n')+'\n'+next.trimEnd().split('\n').map(l=>'+'+l).join('\n')+'\n';}
 edit('tests/support/contracts.ts',s=>s.replaceAll(').default;',');'));
 for(const file of fs.readdirSync('tests').filter(f=>f.endsWith('.ts') && new RegExp(process.argv[2]??'.').test(f)))edit('tests/'+file,s=>{

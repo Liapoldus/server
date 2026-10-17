@@ -1,12 +1,12 @@
-package restplugin
+package restservice
 
 import (
 	"context"
 	"testing"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
 func TestSettingsSecretPurposesPreservation(t *testing.T) {

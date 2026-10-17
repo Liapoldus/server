@@ -19,12 +19,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
+	"github.com/Liapoldus/wool/v3/presentation/peer"
 	"github.com/gorilla/websocket"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 type peerFrame struct {
@@ -137,11 +137,11 @@ func main() {
 		"config": map[string]any{
 			"listeners": []any{map[string]any{"id": "web", "kind": "http", "address": publicAddress, "hostnames": []string{}, "protocols": []string{"http1"}, "tls": map[string]any{"mode": "disabled"}}},
 			"routes": []any{
-				map[string]any{"id": "socket", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/socket"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
-				map[string]any{"id": "reject", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/reject"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
-				map[string]any{"id": "bad-subprotocol", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/bad-subprotocol"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
-				map[string]any{"id": "bad-cookie", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/bad-cookie"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
-				map[string]any{"id": "oversized", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/oversized"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
+				map[string]any{"id": "socket", "listenerId": "web", "api": serviceAPI("/socket"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
+				map[string]any{"id": "reject", "listenerId": "web", "api": serviceAPI("/reject"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
+				map[string]any{"id": "bad-subprotocol", "listenerId": "web", "api": serviceAPI("/bad-subprotocol"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
+				map[string]any{"id": "bad-cookie", "listenerId": "web", "api": serviceAPI("/bad-cookie"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
+				map[string]any{"id": "oversized", "listenerId": "web", "api": serviceAPI("/oversized"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.socket", "mode": "websocket"}},
 			},
 		},
 	})
@@ -158,7 +158,7 @@ func main() {
 	connection, response, err := dialer.Dial(websocketURL, request.Header)
 	check(err)
 	if response.StatusCode != http.StatusSwitchingProtocols || connection.Subprotocol() != "forms.v1" {
-		panic("websocket plugin handshake result mismatch")
+		panic("websocket service handshake result mismatch")
 	}
 	acceptedCookies := response.Header.Values("Set-Cookie")
 	check(connection.WriteMessage(websocket.TextMessage, []byte("hello")))
@@ -169,19 +169,19 @@ func main() {
 	check(err)
 	_, _, closeErr := connection.ReadMessage()
 	if closeErr == nil {
-		panic("expected plugin close after response messages")
+		panic("expected service close after response messages")
 	}
 	_ = connection.Close()
 
 	rejectedConnection, rejectedResponse, rejectedErr := dialer.Dial("ws://"+publicAddress+"/reject", request.Header)
 	if rejectedErr == nil || rejectedConnection != nil || rejectedResponse == nil || rejectedResponse.StatusCode != http.StatusForbidden {
-		panic("websocket plugin rejection was not returned before upgrade")
+		panic("websocket service rejection was not returned before upgrade")
 	}
 	_ = rejectedResponse.Body.Close()
 	rejectedCookies := rejectedResponse.Header.Values("Set-Cookie")
 	badProtocolConnection, badProtocolResponse, badProtocolErr := dialer.Dial("ws://"+publicAddress+"/bad-subprotocol", request.Header)
 	if badProtocolErr == nil || badProtocolConnection != nil || badProtocolResponse == nil || badProtocolResponse.StatusCode != http.StatusBadGateway {
-		panic("server accepted a plugin subprotocol that the client did not offer")
+		panic("server accepted a service subprotocol that the client did not offer")
 	}
 	_ = badProtocolResponse.Body.Close()
 	badCookieConnection, badCookieResponse, badCookieErr := dialer.Dial("ws://"+publicAddress+"/bad-cookie", request.Header)
@@ -212,8 +212,15 @@ func main() {
 		"rejected":           map[string]any{"status": rejectedResponse.StatusCode, "setCookie": rejectedCookies, "upgraded": false},
 		"invalidSubprotocol": map[string]any{"status": badProtocolResponse.StatusCode, "upgraded": false},
 		"invalidCookie":      map[string]any{"status": badCookieResponse.StatusCode, "setCookie": badCookieSetCookie, "upgraded": false},
-		"oversizedMessage":   map[string]any{"closeCode": oversizedCloseErr.Code, "pluginReceivesOversizedMessage": false},
+		"oversizedMessage":   map[string]any{"closeCode": oversizedCloseErr.Code, "serviceReceivesOversizedMessage": false},
 	}))
+}
+
+func serviceAPI(path string) map[string]any {
+	return map[string]any{
+		"version": "server-http/v1", "method": "GET", "path": path,
+		"responses": []any{map[string]any{"status": 200, "contentType": "application/json", "schema": map[string]any{}, "example": nil}},
+	}
 }
 
 func send(stream peer.Stream, value any) error {

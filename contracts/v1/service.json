@@ -11,7 +11,7 @@
     "conformanceVectors": "contracts/v1/settings-vectors.json",
     "fields": [
       {
-        "description": "Public HTTP and HTTPS listeners. Validate the complete settings revision against the plugin-owned settings.schema.json contract.",
+        "description": "Public HTTP and HTTPS listeners. Validate the complete settings revision against the service-owned settings.schema.json contract.",
         "name": "listeners",
         "required": true,
         "type": "array"

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-describe("Caddy production process Plugin SDK lifecycle", () => {
+describe("Caddy production process Service SDK lifecycle", () => {
   it("pulls config, publishes a streamed site artifact, and serves its immutable release", () => {
     const output = execFileSync("go", ["run", "./tests/fixtures/caddy-rest-process"], {
       cwd: root,

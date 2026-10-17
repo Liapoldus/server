@@ -25,15 +25,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
-	sdkinfra "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
-	"liapoldus.local/server-plugin/contracts"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	siteapp "liapoldus.local/server-plugin/internal/application/site"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/internal/infrastructure/site"
-	"liapoldus.local/server-plugin/internal/presentation/restplugin"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
+	sdkinfra "github.com/Liapoldus/service-sdk/v2/infrastructure"
+	"liapoldus.local/server-service/contracts"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	siteapp "liapoldus.local/server-service/internal/application/site"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/internal/infrastructure/site"
+	"liapoldus.local/server-service/internal/presentation/restservice"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 type input struct {
@@ -91,14 +91,14 @@ func (broker *fixtureSecretBroker) Redeem(_ context.Context, redemption sdkmodel
 }
 
 type identities struct {
-	roots        *x509.CertPool
-	root         *x509.Certificate
-	rootPEM      []byte
-	rootKey      *ecdsa.PrivateKey
-	coreServer   tlsCertificate
-	pluginServer tlsCertificate
-	pluginClient tlsCertificate
-	coreClient   tlsCertificate
+	roots         *x509.CertPool
+	root          *x509.Certificate
+	rootPEM       []byte
+	rootKey       *ecdsa.PrivateKey
+	coreServer    tlsCertificate
+	serviceServer tlsCertificate
+	serviceClient tlsCertificate
+	coreClient    tlsCertificate
 }
 
 type tlsCertificate struct {
@@ -176,7 +176,7 @@ func main() {
 	coreProvider := newCredentialsProvider(contract, ids, ids.coreServer, ids.coreClient)
 	coreServer, err := sdkinfra.NewMutualTLSServer(contract, sdkinfra.MutualTLSServerConfig{
 		Handler: coreMux, Provider: coreProvider,
-		Peer:       sdkmodels.PeerIdentity{CommonName: ids.pluginClient.leaf.Subject.CommonName},
+		Peer:       sdkmodels.PeerIdentity{CommonName: ids.serviceClient.leaf.Subject.CommonName},
 		Revocation: revocation,
 	})
 	check(err)
@@ -187,15 +187,15 @@ func main() {
 		_ = coreServer.GracefulShutdown(shutdown)
 	}()
 
-	pluginProvider := newCredentialsProvider(contract, ids, ids.pluginServer, ids.pluginClient)
-	pluginCoreTLS, err := sdkinfra.NewMutualTLSClient(contract, pluginProvider, sdkinfra.MutualTLSClientConfig{
+	serviceProvider := newCredentialsProvider(contract, ids, ids.serviceServer, ids.serviceClient)
+	serviceCoreTLS, err := sdkinfra.NewMutualTLSClient(contract, serviceProvider, sdkinfra.MutualTLSClientConfig{
 		Peer:       sdkmodels.PeerIdentity{CommonName: ids.coreServer.leaf.Subject.CommonName},
 		ServerName: "localhost", Revocation: revocation,
 	})
 	check(err)
-	coreSource, err := sdkinfra.NewCoreConfigurationSource(contract, "https://"+coreListener.Addr().String(), pluginCoreTLS)
+	coreSource, err := sdkinfra.NewCoreConfigurationSource(contract, "https://"+coreListener.Addr().String(), serviceCoreTLS)
 	check(err)
-	pluginListener, err := net.Listen("tcp", "127.0.0.1:0")
+	serviceListener, err := net.Listen("tcp", "127.0.0.1:0")
 	check(err)
 	identity, err := sdkmodels.NewReplicaIdentity("server", "replica-1")
 	check(err)
@@ -204,67 +204,67 @@ func main() {
 	publisher, err := siteapp.NewSitePublisher(releaseStore)
 	check(err)
 	secretBroker := &fixtureSecretBroker{
-		values: map[string][]byte{"fixture-certificate": ids.pluginServer.certificatePEM, "fixture-private-key": ids.pluginServer.privateKeyPEM},
+		values: map[string][]byte{"fixture-certificate": ids.serviceServer.certificatePEM, "fixture-private-key": ids.serviceServer.privateKeyPEM},
 		permissions: map[string]string{
-			"fixture-certificate": string(restplugin.SettingsCertificatePurpose),
-			"fixture-private-key": string(restplugin.SettingsPrivateKeyPurpose),
+			"fixture-certificate": string(restservice.SettingsCertificatePurpose),
+			"fixture-private-key": string(restservice.SettingsPrivateKeyPurpose),
 		},
 		grants: make(map[string][]byte),
 	}
-	var pluginLogs bytes.Buffer
-	pluginServer, _, _, err := restplugin.NewMutualTLSServer(configuration, publisher, restplugin.LifecycleOptions{
-		Source: coreSource, Broker: secretBroker, Identity: identity, Credentials: pluginProvider,
+	var serviceLogs bytes.Buffer
+	serviceServer, _, _, err := restservice.NewMutualTLSServer(configuration, publisher, restservice.LifecycleOptions{
+		Source: coreSource, Broker: secretBroker, Identity: identity, Credentials: serviceProvider,
 		CorePeer:   sdkmodels.PeerIdentity{CommonName: ids.coreClient.leaf.Subject.CommonName},
-		Revocation: revocation, LogOutput: &pluginLogs,
+		Revocation: revocation, LogOutput: &serviceLogs,
 	})
 	check(err)
-	go func() { _ = pluginServer.Serve(pluginListener) }()
+	go func() { _ = serviceServer.Serve(serviceListener) }()
 	defer func() {
 		shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		_ = pluginServer.GracefulShutdown(shutdown)
+		_ = serviceServer.GracefulShutdown(shutdown)
 	}()
 
-	corePluginTLS, err := sdkinfra.NewMutualTLSClient(contract, coreProvider, sdkinfra.MutualTLSClientConfig{
-		Peer:       sdkmodels.PeerIdentity{CommonName: ids.pluginServer.leaf.Subject.CommonName},
+	coreServiceTLS, err := sdkinfra.NewMutualTLSClient(contract, coreProvider, sdkinfra.MutualTLSClientConfig{
+		Peer:       sdkmodels.PeerIdentity{CommonName: ids.serviceServer.leaf.Subject.CommonName},
 		ServerName: "localhost", Revocation: revocation,
 	})
 	check(err)
-	pluginClient, err := sdkinfra.NewPluginClient(contract, "https://"+pluginListener.Addr().String(), corePluginTLS,
+	serviceClient, err := sdkinfra.NewServiceClient(contract, "https://"+serviceListener.Addr().String(), coreServiceTLS,
 		sdkmodels.PeerIdentity{CommonName: ids.coreClient.leaf.Subject.CommonName})
 	check(err)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	firstAck, err := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: "generation-1", SHA256: activeDigest, SchemaVersion: "1"})
+	firstAck, err := serviceClient.Reload(ctx, sdkmodels.Reload{Generation: "generation-1", SHA256: activeDigest, SchemaVersion: "1"})
 	check(err)
-	ready, err := pluginClient.Readiness(ctx)
+	ready, err := serviceClient.Readiness(ctx)
 	check(err)
-	registration, err := pluginClient.Identity(ctx)
+	registration, err := serviceClient.Identity(ctx)
 	check(err)
-	manifestBytes, err := pluginClient.Manifest(ctx)
+	manifestBytes, err := serviceClient.Manifest(ctx)
 	check(err)
 	var manifest struct {
 		ID string `json:"id"`
 	}
 	check(json.Unmarshal(manifestBytes, &manifest))
-	schemaBytes, err := pluginClient.ConfigurationSchema(ctx)
+	schemaBytes, err := serviceClient.ConfigurationSchema(ctx)
 	check(err)
-	metrics, err := pluginClient.Metrics(ctx)
+	metrics, err := serviceClient.Metrics(ctx)
 	check(err)
 	firstResponse := requestDataPlane(request.Port)
-	_, rejectedErr := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: "generation-2", SHA256: failedDigest, SchemaVersion: "1"})
-	readyAfterReject, readyErr := pluginClient.Readiness(ctx)
+	_, rejectedErr := serviceClient.Reload(ctx, sdkmodels.Reload{Generation: "generation-2", SHA256: failedDigest, SchemaVersion: "1"})
+	readyAfterReject, readyErr := serviceClient.Readiness(ctx)
 	check(readyErr)
 	responseAfterReject := requestDataPlane(request.Port)
-	redactionPassed := !strings.Contains(pluginLogs.String(), string(ids.pluginServer.privateKeyPEM)) &&
-		!strings.Contains(pluginLogs.String(), string(ids.pluginServer.certificatePEM)) &&
-		!strings.Contains(pluginLogs.String(), "fixture-certificate") &&
-		!strings.Contains(pluginLogs.String(), "fixture-private-key") &&
-		!strings.Contains(metrics, string(ids.pluginServer.privateKeyPEM)) &&
-		!strings.Contains(metrics, string(ids.pluginServer.certificatePEM)) &&
+	redactionPassed := !strings.Contains(serviceLogs.String(), string(ids.serviceServer.privateKeyPEM)) &&
+		!strings.Contains(serviceLogs.String(), string(ids.serviceServer.certificatePEM)) &&
+		!strings.Contains(serviceLogs.String(), "fixture-certificate") &&
+		!strings.Contains(serviceLogs.String(), "fixture-private-key") &&
+		!strings.Contains(metrics, string(ids.serviceServer.privateKeyPEM)) &&
+		!strings.Contains(metrics, string(ids.serviceServer.certificatePEM)) &&
 		!strings.Contains(metrics, "fixture-certificate") &&
 		!strings.Contains(metrics, "fixture-private-key") &&
-		!strings.Contains(pluginLogs.String(), "fixture-grant-") &&
+		!strings.Contains(serviceLogs.String(), "fixture-grant-") &&
 		!strings.Contains(metrics, "fixture-grant-")
 	failureStage := ""
 	if activationProbe.failed.Load() {
@@ -276,7 +276,7 @@ func main() {
 		ReadyAfterApply: map[string]any{"ready": ready.Ready, "generation": ready.Generation},
 		Registration:    map[string]any{"instanceId": registration.InstanceID, "replicaId": registration.ReplicaID, "ready": registration.Ready, "appliedGeneration": registration.AppliedGeneration},
 		ManifestID:      manifest.ID, ConfigurationSchemaValid: json.Valid(schemaBytes),
-		MetricsHasReadinessGauge: strings.Contains(metrics, contract.Plugin.Responses.Metrics.ReadyMetricName),
+		MetricsHasReadinessGauge: strings.Contains(metrics, contract.Service.Responses.Metrics.ReadyMetricName),
 		FirstResponse:            firstResponse, RejectedCandidate: rejectedErr != nil,
 		CandidateFailureStage:   failureStage,
 		RevisionAfterReject:     configuration.Revision(),
@@ -441,11 +441,11 @@ func createIdentities() (identities, error) {
 	if err != nil {
 		return identities{}, err
 	}
-	pluginServer, err := issue(3, "plugin test server")
+	serviceServer, err := issue(3, "service test server")
 	if err != nil {
 		return identities{}, err
 	}
-	pluginClient, err := issue(4, "plugin test client")
+	serviceClient, err := issue(4, "service test client")
 	if err != nil {
 		return identities{}, err
 	}
@@ -453,7 +453,7 @@ func createIdentities() (identities, error) {
 	if err != nil {
 		return identities{}, err
 	}
-	return identities{roots: pool, root: root, rootPEM: rootPEM, rootKey: rootKey, coreServer: coreServer, pluginServer: pluginServer, pluginClient: pluginClient, coreClient: coreClient}, nil
+	return identities{roots: pool, root: root, rootPEM: rootPEM, rootKey: rootKey, coreServer: coreServer, serviceServer: serviceServer, serviceClient: serviceClient, coreClient: coreClient}, nil
 }
 
 func newCredentialsProvider(contract sdkinfra.HTTPContract, ids identities, server, client tlsCertificate) *sdkinfra.StaticCredentialsProvider {

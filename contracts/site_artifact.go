@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"liapoldus.local/server-plugin/contracts/definitions"
-	admindef "liapoldus.local/server-plugin/contracts/definitions/admin"
-	sitedef "liapoldus.local/server-plugin/contracts/definitions/site"
+	"liapoldus.local/server-service/contracts/definitions"
+	admindef "liapoldus.local/server-service/contracts/definitions/admin"
+	sitedef "liapoldus.local/server-service/contracts/definitions/site"
 	"sync"
 	"time"
 
@@ -62,7 +62,7 @@ func LoadSiteOperationContract() (SiteOperationContract, error) {
 	if !exists || operation.SurfaceBinding == nil || operation.SurfaceBinding.PageID == "" || operation.SurfaceBinding.SectionID == "" || operation.SurfaceBinding.ActionID == "" {
 		return SiteOperationContract{}, ErrInvalidAssets
 	}
-	statusOperation, exists := document.Operations[document.OperationStatus.PluginStatusCapability]
+	statusOperation, exists := document.Operations[document.OperationStatus.ServiceStatusCapability]
 	if !exists || statusOperation.SurfaceBinding == nil || statusOperation.SurfaceBinding.PageID == "" || statusOperation.SurfaceBinding.ActionID == "" {
 		return SiteOperationContract{}, ErrInvalidAssets
 	}
@@ -70,10 +70,10 @@ func LoadSiteOperationContract() (SiteOperationContract, error) {
 	if !exists || rollbackOperation.SurfaceBinding == nil || rollbackOperation.SurfaceBinding.PageID == "" || rollbackOperation.SurfaceBinding.ActionID == "" {
 		return SiteOperationContract{}, ErrInvalidAssets
 	}
-	states := document.OperationStatus.PluginStates
+	states := document.OperationStatus.ServiceStates
 	return SiteOperationContract{Capability: manifest.PublishCapability, RollbackCapability: manifest.RollbackCapability, ManifestEntry: manifest.ArchiveEntry,
 		PageID: operation.SurfaceBinding.PageID, SectionID: operation.SurfaceBinding.SectionID, ActionID: operation.SurfaceBinding.ActionID,
-		StatusCapability: document.OperationStatus.PluginStatusCapability,
+		StatusCapability: document.OperationStatus.ServiceStatusCapability,
 		StatusPageID:     statusOperation.SurfaceBinding.PageID, StatusActionID: statusOperation.SurfaceBinding.ActionID,
 		RollbackActionID:   rollbackOperation.SurfaceBinding.ActionID,
 		WorkerPollInterval: time.Duration(document.OperationStatus.WorkerPollMilliseconds) * time.Millisecond,
@@ -90,7 +90,7 @@ func AdminActionProblem(pageID, actionID, category string) (int, string, error) 
 	return AdminProblem(capability, category)
 }
 
-// AdminSurface returns the plugin-owned action descriptor exactly as versioned.
+// AdminSurface returns the service-owned action descriptor exactly as versioned.
 func AdminSurface() ([]byte, error) {
 	contents, err := definitions.Bytes("admin-surface.json")
 	if err != nil || !ValidJSONNoDuplicateKeys(contents) {

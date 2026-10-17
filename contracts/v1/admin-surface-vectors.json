@@ -53,7 +53,7 @@
     },
     {
       "expected": {
-        "plugin": "reject-before-durable-acceptance"
+        "service": "reject-before-durable-acceptance"
       },
       "id": "admin-publish-rejects-empty-artifact",
       "input": {
@@ -62,7 +62,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-expanded-size-over-limit",
       "input": {
@@ -71,7 +71,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-file-count-over-limit",
       "input": {
@@ -81,7 +81,7 @@
     {
       "expected": {
         "effectiveTarEntries": 10001,
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-counts-explicit-directories-toward-entry-limit",
       "input": {
@@ -92,7 +92,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-compression-ratio-over-limit",
       "input": {
@@ -102,7 +102,7 @@
     },
     {
       "expected": {
-        "plugin": "accept"
+        "service": "accept"
       },
       "id": "admin-publish-allows-concatenated-gzip-members",
       "input": {
@@ -112,7 +112,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-corrupt-gzip-member",
       "input": {
@@ -121,7 +121,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-truncated-gzip-member",
       "input": {
@@ -130,7 +130,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-non-gzip-trailing-bytes",
       "input": {
@@ -140,7 +140,7 @@
     },
     {
       "expected": {
-        "plugin": "accept"
+        "service": "accept"
       },
       "id": "admin-publish-allows-zero-tar-padding",
       "input": {
@@ -150,7 +150,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-nonzero-tar-trailing-data",
       "input": {
@@ -160,7 +160,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-unsafe-archive-entry",
       "input": {
@@ -174,7 +174,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-duplicate-path",
       "input": {
@@ -190,7 +190,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-case-collision",
       "input": {
@@ -206,7 +206,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-unicode-nfc-collision",
       "input": {
@@ -222,7 +222,7 @@
     },
     {
       "expected": {
-        "plugin": "accept-then-fail-operation-before-current-pointer-change"
+        "service": "accept-then-fail-operation-before-current-pointer-change"
       },
       "id": "admin-publish-rejects-link-entry",
       "input": {
@@ -236,7 +236,7 @@
     },
     {
       "expected": {
-        "plugin": "return-existing-operation-without-duplicate-effect"
+        "service": "return-existing-operation-without-duplicate-effect"
       },
       "id": "admin-publish-reuses-idempotent-operation",
       "input": {

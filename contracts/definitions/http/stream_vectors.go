@@ -1,30 +1,30 @@
 package http
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 type HTTPStreamVectorsDocumentScenariosItemExpected struct {
-	MaxConcurrentPerInstance       *int      `json:"maxConcurrentPerInstance,omitempty"`
-	IdleTimeoutMillis              *int      `json:"idleTimeoutMillis,omitempty"`
-	MaxDurationMillis              *int      `json:"maxDurationMillis,omitempty"`
-	TimeoutIsIndependentFromUnary  *bool     `json:"timeoutIsIndependentFromUnary,omitempty"`
-	ExtraRequestStatus             *int      `json:"extraRequestStatus,omitempty"`
-	TargetDispatch                 *bool     `json:"targetDispatch,omitempty"`
-	Stream                         *string   `json:"stream,omitempty"`
-	ReplaceResponse                *bool     `json:"replaceResponse,omitempty"`
-	ForwardedBytes                 *string   `json:"forwardedBytes,omitempty"`
-	RequestEndSent                 *bool     `json:"requestEndSent,omitempty"`
-	Response                       *string   `json:"response,omitempty"`
-	ContentType                    *string   `json:"contentType,omitempty"`
-	Body                           *string   `json:"body,omitempty"`
-	CancelStream                   *bool     `json:"cancelStream,omitempty"`
-	Status                         *any      `json:"status,omitempty"`
-	Subprotocol                    *string   `json:"subprotocol,omitempty"`
-	Upgraded                       *bool     `json:"upgraded,omitempty"`
-	MessageTypes                   *[]string `json:"messageTypes,omitempty"`
-	MessageCount                   *int      `json:"messageCount,omitempty"`
-	BoundariesPreserved            *bool     `json:"boundariesPreserved,omitempty"`
-	CloseCode                      *int      `json:"closeCode,omitempty"`
-	PluginReceivesOversizedMessage *bool     `json:"pluginReceivesOversizedMessage,omitempty"`
+	MaxConcurrentPerInstance        *int      `json:"maxConcurrentPerInstance,omitempty"`
+	IdleTimeoutMillis               *int      `json:"idleTimeoutMillis,omitempty"`
+	MaxDurationMillis               *int      `json:"maxDurationMillis,omitempty"`
+	TimeoutIsIndependentFromUnary   *bool     `json:"timeoutIsIndependentFromUnary,omitempty"`
+	ExtraRequestStatus              *int      `json:"extraRequestStatus,omitempty"`
+	TargetDispatch                  *bool     `json:"targetDispatch,omitempty"`
+	Stream                          *string   `json:"stream,omitempty"`
+	ReplaceResponse                 *bool     `json:"replaceResponse,omitempty"`
+	ForwardedBytes                  *string   `json:"forwardedBytes,omitempty"`
+	RequestEndSent                  *bool     `json:"requestEndSent,omitempty"`
+	Response                        *string   `json:"response,omitempty"`
+	ContentType                     *string   `json:"contentType,omitempty"`
+	Body                            *string   `json:"body,omitempty"`
+	CancelStream                    *bool     `json:"cancelStream,omitempty"`
+	Status                          *any      `json:"status,omitempty"`
+	Subprotocol                     *string   `json:"subprotocol,omitempty"`
+	Upgraded                        *bool     `json:"upgraded,omitempty"`
+	MessageTypes                    *[]string `json:"messageTypes,omitempty"`
+	MessageCount                    *int      `json:"messageCount,omitempty"`
+	BoundariesPreserved             *bool     `json:"boundariesPreserved,omitempty"`
+	CloseCode                       *int      `json:"closeCode,omitempty"`
+	ServiceReceivesOversizedMessage *bool     `json:"serviceReceivesOversizedMessage,omitempty"`
 }
 
 type HTTPStreamVectorsDocumentScenariosItemInput struct {
@@ -34,7 +34,7 @@ type HTTPStreamVectorsDocumentScenariosItemInput struct {
 	ID    string  `json:"id"`
 }
 
-type HTTPStreamVectorsDocumentScenariosItemPluginDecision struct {
+type HTTPStreamVectorsDocumentScenariosItemServiceDecision struct {
 	Subprotocol *string `json:"subprotocol,omitempty"`
 	Status      *int    `json:"status,omitempty"`
 	Accept      bool    `json:"accept"`
@@ -47,21 +47,21 @@ type HTTPStreamVectorsDocumentScenariosItemMessagesItem struct {
 }
 
 type HTTPStreamVectorsDocumentScenariosItem struct {
-	Expected                 HTTPStreamVectorsDocumentScenariosItemExpected        `json:"expected"`
-	ActivityEveryMillis      *int                                                  `json:"activityEveryMillis,omitempty"`
-	TransferEncoding         *string                                               `json:"transferEncoding,omitempty"`
-	IdleTimeoutMillis        *int                                                  `json:"idleTimeoutMillis,omitempty"`
-	ResponseStarted          *bool                                                 `json:"responseStarted,omitempty"`
-	MaxDurationMillis        *int                                                  `json:"maxDurationMillis,omitempty"`
-	MessageBytes             *string                                               `json:"messageBytes,omitempty"`
-	Mode                     *string                                               `json:"mode,omitempty"`
-	RouteMaxConcurrency      *int                                                  `json:"routeMaxConcurrency,omitempty"`
-	BodyLengthDeltaFromLimit *int                                                  `json:"bodyLengthDeltaFromLimit,omitempty"`
-	Input                    *HTTPStreamVectorsDocumentScenariosItemInput          `json:"input,omitempty"`
-	ClientSubprotocols       *[]string                                             `json:"clientSubprotocols,omitempty"`
-	PluginDecision           *HTTPStreamVectorsDocumentScenariosItemPluginDecision `json:"pluginDecision,omitempty"`
-	Messages                 *[]HTTPStreamVectorsDocumentScenariosItemMessagesItem `json:"messages,omitempty"`
-	ID                       string                                                `json:"id"`
+	Expected                 HTTPStreamVectorsDocumentScenariosItemExpected         `json:"expected"`
+	ActivityEveryMillis      *int                                                   `json:"activityEveryMillis,omitempty"`
+	TransferEncoding         *string                                                `json:"transferEncoding,omitempty"`
+	IdleTimeoutMillis        *int                                                   `json:"idleTimeoutMillis,omitempty"`
+	ResponseStarted          *bool                                                  `json:"responseStarted,omitempty"`
+	MaxDurationMillis        *int                                                   `json:"maxDurationMillis,omitempty"`
+	MessageBytes             *string                                                `json:"messageBytes,omitempty"`
+	Mode                     *string                                                `json:"mode,omitempty"`
+	RouteMaxConcurrency      *int                                                   `json:"routeMaxConcurrency,omitempty"`
+	BodyLengthDeltaFromLimit *int                                                   `json:"bodyLengthDeltaFromLimit,omitempty"`
+	Input                    *HTTPStreamVectorsDocumentScenariosItemInput           `json:"input,omitempty"`
+	ClientSubprotocols       *[]string                                              `json:"clientSubprotocols,omitempty"`
+	ServiceDecision          *HTTPStreamVectorsDocumentScenariosItemServiceDecision `json:"serviceDecision,omitempty"`
+	Messages                 *[]HTTPStreamVectorsDocumentScenariosItemMessagesItem  `json:"messages,omitempty"`
+	ID                       string                                                 `json:"id"`
 }
 
 type HTTPStreamVectorsDocument struct {
@@ -107,7 +107,7 @@ func HTTPStreamVectors() HTTPStreamVectorsDocument {
 			Expected: HTTPStreamVectorsDocumentScenariosItemExpected{
 				ForwardedBytes: schema.Value("maxRequestBytes"),
 				RequestEndSent: schema.Value(true),
-				Response:       schema.Value("plugin-response"),
+				Response:       schema.Value("service-response"),
 			},
 			ResponseStarted:          schema.Value(false),
 			Mode:                     schema.Value("http_stream"),
@@ -162,25 +162,25 @@ func HTTPStreamVectors() HTTPStreamVectorsDocument {
 			TransferEncoding:         schema.Value("chunked"),
 			BodyLengthDeltaFromLimit: schema.Value(int(1)),
 		}, {
-			ID: "websocket-plugin-accepts-before-upgrade-and-selects-offered-subprotocol",
+			ID: "websocket-service-accepts-before-upgrade-and-selects-offered-subprotocol",
 			Expected: HTTPStreamVectorsDocumentScenariosItemExpected{
 				Status:      schema.Value[any](101),
 				Subprotocol: schema.Value("forms.v1"),
 			},
 			Mode:               schema.Value("websocket"),
 			ClientSubprotocols: schema.Value([]string{"forms.v1", "forms.v2"}),
-			PluginDecision: schema.Value(HTTPStreamVectorsDocumentScenariosItemPluginDecision{
+			ServiceDecision: schema.Value(HTTPStreamVectorsDocumentScenariosItemServiceDecision{
 				Accept:      true,
 				Subprotocol: schema.Value("forms.v1"),
 			}),
 		}, {
-			ID: "websocket-plugin-rejects-before-upgrade",
+			ID: "websocket-service-rejects-before-upgrade",
 			Expected: HTTPStreamVectorsDocumentScenariosItemExpected{
 				Status:   schema.Value[any](403),
 				Upgraded: schema.Value(false),
 			},
 			Mode: schema.Value("websocket"),
-			PluginDecision: schema.Value(HTTPStreamVectorsDocumentScenariosItemPluginDecision{
+			ServiceDecision: schema.Value(HTTPStreamVectorsDocumentScenariosItemServiceDecision{
 				Accept: false,
 				Status: schema.Value(int(403)),
 			}),
@@ -192,7 +192,7 @@ func HTTPStreamVectors() HTTPStreamVectorsDocument {
 			},
 			Mode:               schema.Value("websocket"),
 			ClientSubprotocols: schema.Value([]string{"forms.v1"}),
-			PluginDecision: schema.Value(HTTPStreamVectorsDocumentScenariosItemPluginDecision{
+			ServiceDecision: schema.Value(HTTPStreamVectorsDocumentScenariosItemServiceDecision{
 				Accept:      true,
 				Subprotocol: schema.Value("forms.private"),
 			}),
@@ -214,8 +214,8 @@ func HTTPStreamVectors() HTTPStreamVectorsDocument {
 		}, {
 			ID: "websocket-message-over-limit-closes-with-1009",
 			Expected: HTTPStreamVectorsDocumentScenariosItemExpected{
-				CloseCode:                      schema.Value(int(1009)),
-				PluginReceivesOversizedMessage: schema.Value(false),
+				CloseCode:                       schema.Value(int(1009)),
+				ServiceReceivesOversizedMessage: schema.Value(false),
 			},
 			Mode:         schema.Value("websocket"),
 			MessageBytes: schema.Value("maxMessageBytes+1"),

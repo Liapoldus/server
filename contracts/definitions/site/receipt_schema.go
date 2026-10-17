@@ -1,11 +1,11 @@
 package site
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func ArtifactOperationResultSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/plugins/server/v1/artifact-operation-result.schema.json",
+		ID:                   "https://liapoldus.github.io/services/server/v1/artifact-operation-result.schema.json",
 		Type:                 "object",
 		AdditionalProperties: false,
 		Required:             schema.Value([]string{"version", "operationId", "state"}),

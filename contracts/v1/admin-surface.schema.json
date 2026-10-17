@@ -339,10 +339,10 @@
       "type": "object"
     }
   },
-  "$id": "https://liapoldus.github.io/plugins/server/admin-ui/v1/schema.json",
+  "$id": "https://liapoldus.github.io/services/server/admin-ui/v1/schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Strict declarative plugin administration surface. It contains no executable UI, URL, listener, or secret value.",
+  "description": "Strict declarative service administration surface. It contains no executable UI, URL, listener, or secret value.",
   "properties": {
     "pages": {
       "items": {
@@ -352,9 +352,6 @@
       "minItems": 1,
       "type": "array"
     },
-    "plugin": {
-      "const": "server"
-    },
     "requiredCapabilities": {
       "items": {
         "$ref": "#/$defs/capability"
@@ -363,16 +360,19 @@
       "type": "array",
       "uniqueItems": true
     },
+    "service": {
+      "const": "server"
+    },
     "version": {
       "const": 1
     }
   },
   "required": [
     "version",
-    "plugin",
+    "service",
     "requiredCapabilities",
     "pages"
   ],
-  "title": "Server plugin Admin Surface v1",
+  "title": "Server service Admin Surface v1",
   "type": "object"
 }

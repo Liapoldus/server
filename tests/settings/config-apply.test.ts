@@ -5,15 +5,15 @@ import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { Ajv2020 } from "ajv/dist/2020.js";
+import { settingsAjv } from "../support/settings-ajv.js";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const schema = readContract('settings.schema.json');
 
-describe("Caddy plugin settings contract", () => {
+describe("Caddy service settings contract", () => {
   it("accepts strict Liapoldus settings and rejects native Caddy JSON", () => {
-    const validate = new Ajv2020({ allErrors: true }).compile(schema);
+    const validate = settingsAjv().compile(schema);
 
     expect(validate({ schemaVersion: 1, config: { listeners: [], routes: [] } })).toBe(true);
     expect(validate({ schemaVersion: 1, config: { apps: {} } })).toBe(false);
@@ -62,7 +62,7 @@ describe("Caddy plugin settings contract", () => {
       encoding: "utf8",
     });
 
-    expect(parseJSON<Result>(output)).toEqual({ revision: "revision-1", status: 200, body: "plugin-owned" });
+    expect(parseJSON<Result>(output)).toEqual({ revision: "revision-1", status: 200, body: "service-owned" });
   }, 60_000);
 
   it("activates automatic TLS before an unreachable test ACME authority issues a certificate", async () => {

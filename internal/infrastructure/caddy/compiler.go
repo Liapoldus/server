@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 
 	caddycore "github.com/caddyserver/caddy/v2"
-	"liapoldus.local/server-plugin/contracts"
+	"liapoldus.local/server-service/contracts"
 )
 
 var errUnsupportedSettings = errors.New("unsupported Caddy settings")
@@ -52,6 +52,7 @@ type settingsRoute struct {
 	ID         string              `json:"id"`
 	ListenerID string              `json:"listenerId"`
 	Match      *settingsRouteMatch `json:"match"`
+	API        *apiContract        `json:"api"`
 	Handler    settingsHandler     `json:"handler"`
 }
 
@@ -169,7 +170,26 @@ func compileSettings(contents []byte, callerSetID uint64, secrets map[string][]b
 		if _, exists := listeners[route.ListenerID]; !exists {
 			return nil, errUnsupportedSettings
 		}
-		matcher, identity, err := canonicalMatcher(route.Match)
+		matcherSource := route.Match
+		if route.Handler.Type == "service" {
+			if route.API == nil || (matcherSource != nil && (matcherSource.Path != nil || len(matcherSource.Methods) != 0)) {
+				return nil, errUnsupportedSettings
+			}
+			if _, err := compileAPIContract(*route.API, route.ID, route.Handler.Mode); err != nil {
+				return nil, errUnsupportedSettings
+			}
+			var hosts []string
+			if matcherSource != nil {
+				hosts = matcherSource.Hosts
+			}
+			matcherSource = &settingsRouteMatch{
+				Hosts: hosts, Methods: []string{route.API.Method},
+				Path: &pathMatcher{Type: "template", Value: route.API.Path},
+			}
+		} else if route.API != nil || (matcherSource != nil && matcherSource.Path != nil && matcherSource.Path.Type == "template") {
+			return nil, errUnsupportedSettings
+		}
+		matcher, identity, err := canonicalMatcher(matcherSource)
 		if err != nil {
 			return nil, errUnsupportedSettings
 		}
@@ -180,7 +200,7 @@ func compileSettings(contents []byte, callerSetID uint64, secrets map[string][]b
 			return nil, errUnsupportedSettings
 		}
 		matcherIDsByListener[route.ListenerID][identity] = struct{}{}
-		handler, err := compileHandler(route.ID, route.Handler, usedTargets, &upstreamPools, secrets, usedSecretReferences)
+		handler, err := compileHandler(route.ID, route.Handler, route.API, usedTargets, &upstreamPools, secrets, usedSecretReferences)
 		if err != nil {
 			return nil, err
 		}
@@ -253,6 +273,15 @@ func compileSettings(contents []byte, callerSetID uint64, secrets map[string][]b
 			})
 		}
 		routesByListener[listenerID] = serverRoutes
+	}
+	for listenerID := range listeners {
+		routesByListener[listenerID] = append(routesByListener[listenerID], map[string]any{
+			"handle": []any{map[string]any{
+				"handler":     "static_response",
+				"status_code": 404,
+			}},
+			"terminal": true,
+		})
 	}
 	for listenerID, server := range servers {
 		serverConfig := server.(map[string]any)
@@ -351,7 +380,7 @@ func compileHTTPProtocols(configured []string, tlsMode string) ([]string, []stri
 	return protocols, alpn, nil
 }
 
-func compileHandler(routeID string, handler settingsHandler, usedTargets map[string]map[string]struct{}, upstreamPools *[]upstreamPoolConfig, secrets map[string][]byte, usedSecretReferences map[string]struct{}) (map[string]any, error) {
+func compileHandler(routeID string, handler settingsHandler, api *apiContract, usedTargets map[string]map[string]struct{}, upstreamPools *[]upstreamPoolConfig, secrets map[string][]byte, usedSecretReferences map[string]struct{}) (map[string]any, error) {
 	switch handler.Type {
 	case "static":
 		if _, err := SiteRoot(handler.SiteID); err != nil {
@@ -392,8 +421,8 @@ func compileHandler(routeID string, handler settingsHandler, usedTargets map[str
 			},
 			"transport": map[string]any{"protocol": "liapoldus_upstream_pool", "pool": routeID},
 		}, nil
-	case "plugin":
-		if (handler.Mode != "call" && handler.Mode != "http_stream" && handler.Mode != "websocket" && handler.Mode != "sse") || handler.InstanceID == "" || handler.Capability == "" {
+	case "service":
+		if (handler.Mode != "call" && handler.Mode != "http_stream" && handler.Mode != "websocket" && handler.Mode != "sse") || handler.InstanceID == "" || handler.Capability == "" || api == nil {
 			return nil, errUnsupportedSettings
 		}
 		contract, err := contracts.LoadHTTPDispatch()
@@ -408,7 +437,7 @@ func compileHandler(routeID string, handler settingsHandler, usedTargets map[str
 		if index := strings.LastIndexByte(module, '.'); index >= 0 {
 			module = module[index+1:]
 		}
-		moduleConfig := map[string]any{"handler": module, "instance": handler.InstanceID, "capability": handler.Capability, "mode": handler.Mode}
+		moduleConfig := map[string]any{"handler": module, "instance": handler.InstanceID, "capability": handler.Capability, "mode": handler.Mode, "api": api}
 		if len(handler.RequestCookieNames) > 0 {
 			moduleConfig["requestCookieNames"] = append([]string(nil), handler.RequestCookieNames...)
 		}

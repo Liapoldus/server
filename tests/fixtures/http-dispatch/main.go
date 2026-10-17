@@ -17,21 +17,27 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	"github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
-	"liapoldus.local/server-plugin/contracts"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	"github.com/Liapoldus/wool/v3/presentation/peer"
+	"liapoldus.local/server-service/contracts"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 type requestPayload struct {
-	Method  string            `json:"method"`
-	Path    string            `json:"path"`
-	Headers map[string]string `json:"headers"`
-	Cookies []cookiePair      `json:"cookies"`
+	Method     string            `json:"method"`
+	Path       string            `json:"path"`
+	Headers    map[string]string `json:"headers"`
+	Cookies    []cookiePair      `json:"cookies"`
+	Parameters struct {
+		Version string         `json:"version"`
+		Path    map[string]any `json:"path"`
+		Query   map[string]any `json:"query"`
+	} `json:"parameters"`
 }
 
 type cookiePair struct {
@@ -46,15 +52,17 @@ func main() {
 
 	serverSecurity, clientSecurity := peerCredentials()
 	var received requestPayload
+	var echoCalls atomic.Int64
 	streamContract, err := contracts.LoadHTTPStream()
 	check(err)
 	var streamReceived, streamMethod, streamPath string
 	var streamBytesRead int64
 	registry, err := peer.NewRegistry().RegisterCall("http.echo", func(_ context.Context, call peer.Call) (peer.Result, error) {
+		echoCalls.Add(1)
 		if err := json.Unmarshal(call.Payload, &received); err != nil {
 			return peer.Result{}, err
 		}
-		return peer.Result{Payload: []byte(`{"status":202,"headers":{"Content-Type":"text/plain"},"cookies":[{"name":"session","value":"ordinary-value","path":"/","secure":true,"sameSite":"lax"},{"name":"auth","value":"http-only-value","path":"/","secure":true,"httpOnly":true,"sameSite":"strict"}],"body":"plugin-response"}`)}, nil
+		return peer.Result{Payload: []byte(`{"status":202,"headers":{"Content-Type":"text/plain"},"cookies":[{"name":"session","value":"ordinary-value","path":"/","secure":true,"sameSite":"lax"},{"name":"auth","value":"http-only-value","path":"/","secure":true,"httpOnly":true,"sameSite":"strict"}],"body":"service-response"}`)}, nil
 	}).RegisterCall("http.invalid", func(context.Context, peer.Call) (peer.Result, error) {
 		return peer.Result{Payload: []byte(`{"status":200,"headers":{"Content-Type":"text/plain"},"cookies":[{"name":"session","value":"secret","httpOnly":true},{"name":"invalid;name","value":"bad"}],"body":"must-not-escape"}`)}, nil
 	}).RegisterStream("http.stream", func(stream peer.Stream) error {
@@ -144,16 +152,16 @@ func main() {
 			}},
 			"routes": []any{
 				map[string]any{
-					"id": "dispatch", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/submit"}},
-					"handler": map[string]any{"type": "plugin", "instanceId": "fixture", "capability": "http.echo", "mode": "call", "requestCookieNames": []string{"session", "csrf"}},
+					"id": "dispatch", "listenerId": "web", "api": serviceAPI("POST", "/submit", []any{map[string]any{"name": "text", "type": "string", "repeated": "single", "required": true, "maxLength": 128}}),
+					"handler": map[string]any{"type": "service", "instanceId": "fixture", "capability": "http.echo", "mode": "call", "requestCookieNames": []string{"session", "csrf"}},
 				},
 				map[string]any{
-					"id": "invalid-action", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/invalid"}},
-					"handler": map[string]any{"type": "plugin", "instanceId": "fixture", "capability": "http.invalid", "mode": "call"},
+					"id": "invalid-action", "listenerId": "web", "api": serviceAPI("GET", "/invalid", nil),
+					"handler": map[string]any{"type": "service", "instanceId": "fixture", "capability": "http.invalid", "mode": "call"},
 				},
 				map[string]any{
-					"id": "stream", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/stream"}},
-					"handler": map[string]any{"type": "plugin", "instanceId": "fixture", "capability": "http.stream", "mode": "http_stream"},
+					"id": "stream", "listenerId": "web", "api": serviceAPI("POST", "/stream", nil),
+					"handler": map[string]any{"type": "service", "instanceId": "fixture", "capability": "http.stream", "mode": "http_stream"},
 				},
 			},
 		},
@@ -164,7 +172,7 @@ func main() {
 	check(configuration.Apply(decoded, "revision-1"))
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	request, err := http.NewRequest(http.MethodPost, "http://"+publicAddress+"/submit", nil)
+	request, err := http.NewRequest(http.MethodPost, "http://"+publicAddress+"/submit?text=typed-value", nil)
 	check(err)
 	request.Header.Set("X-Request-ID", "fixture-request")
 	request.Header.Set("Cookie", "private=must-not-cross-boundary; session=allowed-value; csrf=csrf-value; session=second-value")
@@ -173,6 +181,12 @@ func main() {
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 	check(err)
+	check(response.Body.Close())
+	invalidInputRequest, err := http.NewRequest(http.MethodPost, "http://"+publicAddress+"/submit", nil)
+	check(err)
+	invalidInputResponse, err := client.Do(invalidInputRequest)
+	check(err)
+	check(invalidInputResponse.Body.Close())
 	streamRequest, err := http.NewRequest(http.MethodPost, "http://"+publicAddress+"/stream", strings.NewReader("alpha-beta"))
 	check(err)
 	streamResponse, err := client.Do(streamRequest)
@@ -192,6 +206,10 @@ func main() {
 		"contentType": response.Header.Get("Content-Type"), "body": string(body),
 		"setCookie": response.Header.Values("Set-Cookie"),
 		"method":    received.Method, "path": received.Path,
+		"typedRequestVersion":    received.Parameters.Version,
+		"typedQueryText":         received.Parameters.Query["text"],
+		"invalidInputStatus":     invalidInputResponse.StatusCode,
+		"echoServiceCalls":       echoCalls.Load(),
 		"cookieForwarded":        len(received.Cookies) != 0,
 		"receivedCookies":        received.Cookies,
 		"privateCookieForwarded": containsCookie(received.Cookies, "private"),
@@ -207,6 +225,16 @@ func main() {
 		"oversizedStatus":        oversizedResponse.StatusCode,
 		"streamBytesRead":        streamBytesRead,
 	}))
+}
+
+func serviceAPI(method, path string, queryParameters []any) map[string]any {
+	return map[string]any{
+		"version": "server-http/v1", "method": method, "path": path,
+		"queryParameters": queryParameters,
+		"responses": []any{map[string]any{
+			"status": 200, "contentType": "application/json", "schema": map[string]any{}, "example": nil,
+		}},
+	}
 }
 
 func peerCredentials() (peer.SecurityConfig, peer.SecurityConfig) {

@@ -3,7 +3,7 @@ package interfaces
 import (
 	"context"
 
-	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
+	certificatemodel "liapoldus.local/server-service/internal/domain/models/certificate"
 )
 
 type CertificateInventory interface {

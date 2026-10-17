@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../..');
 
-describe('manually started Server plugin', () => {
-  it('builds independently against the current Plugin SDK', () => {
+describe('manually started Server service', () => {
+  it('builds independently against the current Service SDK', () => {
     expect(() => execFileSync('go', ['build', '-o', '/dev/null', './cmd/server'], {
       cwd: root,
       env: {

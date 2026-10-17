@@ -39,7 +39,7 @@ export interface Page {
 }
 export interface Surface {
   version: number;
-  plugin: string;
+  service: string;
   requiredCapabilities: string[];
   pages: Page[];
 }

@@ -34,10 +34,10 @@ import (
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
-	sdkinfra "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
-	"liapoldus.local/server-plugin/contracts"
-	"liapoldus.local/server-plugin/internal/presentation/restplugin"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
+	sdkinfra "github.com/Liapoldus/service-sdk/v2/infrastructure"
+	"liapoldus.local/server-service/contracts"
+	"liapoldus.local/server-service/internal/presentation/restservice"
 )
 
 const generation = "generation-rest-1"
@@ -147,8 +147,8 @@ func run() error {
 		"fixture-private-key": issued.replica.privateKeyPEM,
 	}
 	secretPurpose := map[string]string{
-		"fixture-certificate": string(restplugin.SettingsCertificatePurpose),
-		"fixture-private-key": string(restplugin.SettingsPrivateKeyPurpose),
+		"fixture-certificate": string(restservice.SettingsCertificatePurpose),
+		"fixture-private-key": string(restservice.SettingsPrivateKeyPurpose),
 	}
 	var grantsLock sync.Mutex
 	grants := map[string][]byte{}
@@ -298,7 +298,7 @@ func run() error {
 		"--core-client-common-name=test Core client", "--core-client-uri=spiffe://liapoldus/core/client",
 		"--ca-file="+caPath, "--server-cert="+certPath, "--server-key="+keyPath,
 		"--client-cert="+certPath, "--client-key="+keyPath, "--crl-file="+crlPath,
-		"--peer-identity=spiffe://liapoldus/plugin/server", "--peer-ca-file="+caPath,
+		"--peer-identity=spiffe://liapoldus/service/server", "--peer-ca-file="+caPath,
 		"--peer-cert="+peerCertPath, "--peer-key="+peerKeyPath)
 	child.Dir = repositoryRoot()
 	child.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=go1.26.0")
@@ -308,8 +308,8 @@ func run() error {
 	if err := child.Start(); err != nil {
 		return err
 	}
-	pluginHTTP := newCorePluginTransport(issued)
-	pluginClient, err := sdkinfra.NewPluginClient(contract, fmt.Sprintf("https://127.0.0.1:%d", controlPort), pluginHTTP,
+	serviceHTTP := newCoreServiceTransport(issued)
+	serviceClient, err := sdkinfra.NewServiceClient(contract, fmt.Sprintf("https://127.0.0.1:%d", controlPort), serviceHTTP,
 		sdkmodels.PeerIdentity{CommonName: issued.replica.certificate.Leaf.Subject.CommonName})
 	if err != nil {
 		_ = child.Process.Kill()
@@ -321,7 +321,7 @@ func run() error {
 	deadline := time.Now().Add(15 * time.Second)
 	var healthErr error
 	for time.Now().Before(deadline) {
-		healthErr = pluginClient.Health(ctx)
+		healthErr = serviceClient.Health(ctx)
 		if healthErr == nil {
 			break
 		}
@@ -332,7 +332,7 @@ func run() error {
 		probeDetails := "no response"
 		if probeRequestErr != nil {
 			probeDetails = "request construction failed"
-		} else if probeResponse, probeErr := pluginHTTP.Do(probeRequest); probeErr != nil {
+		} else if probeResponse, probeErr := serviceHTTP.Do(probeRequest); probeErr != nil {
 			probeDetails = probeErr.Error()
 		} else if probeResponse != nil {
 			probeBody, _ := io.ReadAll(io.LimitReader(probeResponse.Body, 2048))
@@ -341,21 +341,21 @@ func run() error {
 		}
 		_ = child.Process.Kill()
 		_ = child.Wait()
-		return fmt.Errorf("plugin health unavailable: %w; status probe: %s; child output: %s", healthErr, probeDetails, childLogs.String())
+		return fmt.Errorf("service health unavailable: %w; status probe: %s; child output: %s", healthErr, probeDetails, childLogs.String())
 	}
-	ack, err := pluginClient.Reload(ctx, sdkmodels.Reload{Generation: generation, SHA256: digestHex, SchemaVersion: "1"})
+	ack, err := serviceClient.Reload(ctx, sdkmodels.Reload{Generation: generation, SHA256: digestHex, SchemaVersion: "1"})
 	if err != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()
 		return fmt.Errorf("REST Reload failed: %w; child output: %s", err, childLogs.String())
 	}
-	ready, err := pluginClient.Readiness(ctx)
+	ready, err := serviceClient.Readiness(ctx)
 	if err != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()
 		return err
 	}
-	surface, err := pluginClient.AdminSurface(ctx)
+	surface, err := serviceClient.AdminSurface(ctx)
 	if err != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()
@@ -392,7 +392,7 @@ func run() error {
 		CallerID: "test operator", InstanceID: "server", PageID: "certificates", ActionID: "query",
 		SurfaceDigest: surface.SHA256, RequestID: "cross-page-query",
 	}
-	crossPageResult, err := pluginClient.AdminAction(ctx, queryInvocation, []byte(`{"resource":"sites"}`))
+	crossPageResult, err := serviceClient.AdminAction(ctx, queryInvocation, []byte(`{"resource":"sites"}`))
 	if err != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()
@@ -408,7 +408,7 @@ func run() error {
 		return err
 	}
 	surfaceDigest := sha256.Sum256(surface.Bytes)
-	artifactResult, err := pluginClient.ArtifactStream(ctx, sdkmodels.ArtifactInvocation{
+	artifactResult, err := serviceClient.ArtifactStream(ctx, sdkmodels.ArtifactInvocation{
 		CallerID: "test operator", InstanceID: "server", PageID: "sites", ActionID: "publish",
 		SurfaceDigest: "sha256:" + hex.EncodeToString(surfaceDigest[:]), IdempotencyKey: "site-publish-1", RequestID: "test-publish-1",
 	}, metadata, "application/gzip", io.NopCloser(bytes.NewReader(archive)))
@@ -447,7 +447,7 @@ func run() error {
 	operationDeadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(operationDeadline) {
 		statusBody, _ := json.Marshal(map[string]string{"operationId": artifactReceipt.OperationID})
-		statusResult, statusErr := pluginClient.AdminAction(ctx, operationInvocation, statusBody)
+		statusResult, statusErr := serviceClient.AdminAction(ctx, operationInvocation, statusBody)
 		if statusErr == nil && statusResult.StatusCode == http.StatusOK {
 			var document struct {
 				State string `json:"state"`
@@ -711,11 +711,11 @@ func createIdentities() (identities, error) {
 	if err != nil {
 		return identities{}, err
 	}
-	replica, err := issue(4, "test Caddy replica", "spiffe://liapoldus/plugin/server-/server-/fixture")
+	replica, err := issue(4, "test Caddy replica", "spiffe://liapoldus/service/server-/server-/fixture")
 	if err != nil {
 		return identities{}, err
 	}
-	peer, err := issue(5, "test Server peer", "spiffe://liapoldus/plugin/server")
+	peer, err := issue(5, "test Server peer", "spiffe://liapoldus/service/server")
 	if err != nil {
 		return identities{}, err
 	}
@@ -734,23 +734,23 @@ func newCredentialsProvider(contract sdkinfra.HTTPContract, roots []byte, server
 	return sdkinfra.NewStaticCredentialsProvider(credentials)
 }
 
-type fixtureCorePluginTransport struct {
+type fixtureCoreServiceTransport struct {
 	client *http.Client
 }
 
-func (transport fixtureCorePluginTransport) Do(request *http.Request) (*http.Response, error) {
+func (transport fixtureCoreServiceTransport) Do(request *http.Request) (*http.Response, error) {
 	return transport.client.Do(request)
 }
 
-func (transport fixtureCorePluginTransport) DoArtifact(request *http.Request) (*http.Response, error) {
+func (transport fixtureCoreServiceTransport) DoArtifact(request *http.Request) (*http.Response, error) {
 	return transport.client.Do(request)
 }
 
-func (transport fixtureCorePluginTransport) DoAdminAction(request *http.Request) (*http.Response, error) {
+func (transport fixtureCoreServiceTransport) DoAdminAction(request *http.Request) (*http.Response, error) {
 	return transport.client.Do(request)
 }
 
-func newCorePluginTransport(issued identities) sdkinfra.ControlTransport {
+func newCoreServiceTransport(issued identities) sdkinfra.ControlTransport {
 	roots := x509.NewCertPool()
 	roots.AddCert(issued.root)
 	expected := issued.replica.certificate.Leaf
@@ -762,15 +762,15 @@ func newCorePluginTransport(issued identities) sdkinfra.ControlTransport {
 				ServerName: "localhost",
 				VerifyConnection: func(state tls.ConnectionState) error {
 					if len(state.PeerCertificates) != 1 {
-						return errors.New("invalid plugin peer certificate")
+						return errors.New("invalid service peer certificate")
 					}
 					actual := state.PeerCertificates[0]
 					if actual.Subject.CommonName != expected.Subject.CommonName || len(actual.URIs) != len(expected.URIs) {
-						return errors.New("plugin peer identity mismatch")
+						return errors.New("service peer identity mismatch")
 					}
 					for index, uri := range actual.URIs {
 						if uri.String() != expected.URIs[index].String() {
-							return errors.New("plugin peer identity mismatch")
+							return errors.New("service peer identity mismatch")
 						}
 					}
 					return nil
@@ -779,7 +779,7 @@ func newCorePluginTransport(issued identities) sdkinfra.ControlTransport {
 		},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	return fixtureCorePluginTransport{client: client}
+	return fixtureCoreServiceTransport{client: client}
 }
 
 func fail(err error) {

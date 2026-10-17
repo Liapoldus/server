@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("custom TLS HTTP protocol conformance", () => {
-  it("negotiates HTTP/2 over TLS and serves HTTP/3 over QUIC with plugin-owned certificate settings", async () => {
+  it("negotiates HTTP/2 over TLS and serves HTTP/3 over QUIC with service-owned certificate settings", async () => {
     const httpsPort = await freePort();
     const output = execFileSync("go", ["run", "./tests/fixtures/http2-http3"], {
       cwd: root,

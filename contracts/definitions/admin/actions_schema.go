@@ -1,18 +1,18 @@
 package admin
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func AdminActionsSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/plugins/server/admin-ui/v1/actions.schema.json",
-		Title:                "Server plugin Admin Surface action catalog v1",
+		ID:                   "https://liapoldus.github.io/services/server/admin-ui/v1/actions.schema.json",
+		Title:                "Server service Admin Surface action catalog v1",
 		Type:                 "object",
 		AdditionalProperties: false,
-		Required:             schema.Value([]string{"version", "plugin", "archive", "releaseLifecycle", "publishOperation", "operationStatus", "operations"}),
+		Required:             schema.Value([]string{"version", "service", "archive", "releaseLifecycle", "publishOperation", "operationStatus", "operations"}),
 		Properties: map[string]schema.Definition{"version": {
 			Const: 1,
-		}, "plugin": {
+		}, "service": {
 			Const: "server",
 		}, "archive": {
 			Ref: "#/$defs/archive",
@@ -83,7 +83,7 @@ func AdminActionsSchema() schema.Definition {
 			Properties: map[string]schema.Definition{"kind": {
 				Const: "query",
 			}, "ownership": {
-				Const: "plugin-admin-surface-capability",
+				Const: "service-admin-surface-capability",
 			}, "requestSchema": {
 				Ref: "#/$defs/jsonSchema",
 			}, "responseSchema": {
@@ -100,7 +100,7 @@ func AdminActionsSchema() schema.Definition {
 			Properties: map[string]schema.Definition{"kind": {
 				Const: "action",
 			}, "ownership": {
-				Const: "plugin-admin-surface-action",
+				Const: "service-admin-surface-action",
 			}, "surfaceBinding": {
 				Ref: "#/$defs/surfaceBinding",
 			}, "requestSchema": {
@@ -144,11 +144,11 @@ func AdminActionsSchema() schema.Definition {
 			Properties: map[string]schema.Definition{"kind": {
 				Const: "artifact-action",
 			}, "ownership": {
-				Const: "plugin-admin-surface-action",
+				Const: "service-admin-surface-action",
 			}, "surfaceBinding": {
 				Ref: "#/$defs/surfaceBinding",
 			}, "transport": {
-				Const: "plugin-sdk.rest.artifact-stream",
+				Const: "service-sdk.rest.artifact-stream",
 			}, "multipart": {
 				Type:                 "object",
 				AdditionalProperties: false,
@@ -297,7 +297,7 @@ func AdminActionsSchema() schema.Definition {
 			Properties: map[string]schema.Definition{"immutableRevisions": {
 				Const: true,
 			}, "storage": {
-				Const: "plugin-owned-persistent-filesystem",
+				Const: "service-owned-persistent-filesystem",
 			}, "currentPrevious": {
 				Const: "successful-publish-or-rollback-atomically-swaps-current-and-previous",
 			}, "staging": {
@@ -325,22 +325,22 @@ func AdminActionsSchema() schema.Definition {
 		}, "operationStatus": {
 			Type:                 "object",
 			AdditionalProperties: false,
-			Required:             schema.Value([]string{"coreResource", "workerPollMilliseconds", "pluginStatusCapability", "pluginStates", "coreStates", "stateMapping", "coreControlUsesPluginSdkRest"}),
+			Required:             schema.Value([]string{"coreResource", "workerPollMilliseconds", "serviceStatusCapability", "serviceStates", "coreStates", "stateMapping", "coreControlUsesServiceSdkRest"}),
 			Properties: map[string]schema.Definition{"coreResource": {
 				Const: "GET /api/operations/{id}",
 			}, "workerPollMilliseconds": {
 				Type:    "integer",
 				Minimum: schema.Value(int(25)),
 				Maximum: schema.Value(int(60000)),
-			}, "pluginStatusCapability": {
+			}, "serviceStatusCapability": {
 				Const: "server.operations.get",
-			}, "pluginStates": {
+			}, "serviceStates": {
 				Const: []any{"accepted", "running", "completed", "failed"},
 			}, "coreStates": {
 				Const: []any{"pending", "running", "succeeded", "failed", "degraded"},
 			}, "stateMapping": {
 				Const: map[string]any{"accepted": "pending", "running": "running", "completed": "succeeded", "failed": "failed"},
-			}, "coreControlUsesPluginSdkRest": {
+			}, "coreControlUsesServiceSdkRest": {
 				Const: true,
 			}},
 		}},

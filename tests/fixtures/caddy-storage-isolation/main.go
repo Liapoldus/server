@@ -7,7 +7,7 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/certmagic"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 func main() {

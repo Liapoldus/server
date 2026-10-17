@@ -3,11 +3,11 @@ package definitions
 
 import (
 	"encoding/json"
-	admindef "liapoldus.local/server-plugin/contracts/definitions/admin"
-	httpdef "liapoldus.local/server-plugin/contracts/definitions/http"
-	plugindef "liapoldus.local/server-plugin/contracts/definitions/plugin"
-	settingsdef "liapoldus.local/server-plugin/contracts/definitions/settings"
-	sitedef "liapoldus.local/server-plugin/contracts/definitions/site"
+	admindef "liapoldus.local/server-service/contracts/definitions/admin"
+	httpdef "liapoldus.local/server-service/contracts/definitions/http"
+	servicedef "liapoldus.local/server-service/contracts/definitions/service"
+	settingsdef "liapoldus.local/server-service/contracts/definitions/settings"
+	sitedef "liapoldus.local/server-service/contracts/definitions/site"
 )
 
 func Documents() map[string]any {
@@ -22,11 +22,12 @@ func Documents() map[string]any {
 		"artifact-metadata.schema.json":         sitedef.ArtifactMetadataSchema(),
 		"artifact-operation-result.schema.json": sitedef.ArtifactOperationResultSchema(),
 		"http-dispatch.json":                    httpdef.HTTPDispatch(),
+		"http-request-parameters.schema.json":   httpdef.HTTPRequestParametersSchema(),
 		"http-response-action.schema.json":      httpdef.HTTPResponseActionSchema(),
 		"http-stream-vectors.json":              httpdef.HTTPStreamVectors(),
 		"http-stream.json":                      httpdef.HTTPStream(),
 		"http-stream.schema.json":               httpdef.HTTPStreamSchema(),
-		"plugin.json":                           plugindef.Plugin(),
+		"service.json":                          servicedef.Service(),
 		"settings-semantics.json":               settingsdef.SettingsSemantics(),
 		"settings-vectors.json":                 settingsdef.SettingsVectors(),
 		"settings.schema.json":                  settingsdef.SettingsSchema(),

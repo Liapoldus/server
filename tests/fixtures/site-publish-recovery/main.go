@@ -17,9 +17,9 @@ import (
 	"path/filepath"
 	"time"
 
-	siteapp "liapoldus.local/server-plugin/internal/application/site"
-	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
-	"liapoldus.local/server-plugin/internal/infrastructure/site"
+	siteapp "liapoldus.local/server-service/internal/application/site"
+	sitemodel "liapoldus.local/server-service/internal/domain/models/site"
+	"liapoldus.local/server-service/internal/infrastructure/site"
 )
 
 type outcome struct {

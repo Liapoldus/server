@@ -1,25 +1,25 @@
-package plugin
+package service
 
-type PluginDocumentConfiguration struct {
+type ServiceDocumentConfiguration struct {
 	VersionField       string `json:"versionField"`
 	RuntimeConfigField string `json:"runtimeConfigField"`
 	SchemaVersion      int    `json:"schemaVersion"`
 }
 
-type PluginDocumentConfigSchemaFieldsItem struct {
+type ServiceDocumentConfigSchemaFieldsItem struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	Description string `json:"description"`
 	Required    bool   `json:"required"`
 }
 
-type PluginDocumentConfigSchema struct {
-	Semantics          string                                 `json:"semantics"`
-	ConformanceVectors string                                 `json:"conformanceVectors"`
-	Fields             []PluginDocumentConfigSchemaFieldsItem `json:"fields"`
+type ServiceDocumentConfigSchema struct {
+	Semantics          string                                  `json:"semantics"`
+	ConformanceVectors string                                  `json:"conformanceVectors"`
+	Fields             []ServiceDocumentConfigSchemaFieldsItem `json:"fields"`
 }
 
-type PluginDocumentAdminSurface struct {
+type ServiceDocumentAdminSurface struct {
 	Descriptor         string `json:"descriptor"`
 	Schema             string `json:"schema"`
 	Actions            string `json:"actions"`
@@ -28,29 +28,29 @@ type PluginDocumentAdminSurface struct {
 	Version            int    `json:"version"`
 }
 
-type PluginDocument struct {
-	AdminSurface  PluginDocumentAdminSurface  `json:"adminSurface"`
-	Configuration PluginDocumentConfiguration `json:"configuration"`
-	Name          string                      `json:"name"`
-	ConfigSchema  PluginDocumentConfigSchema  `json:"configSchema"`
+type ServiceDocument struct {
+	AdminSurface  ServiceDocumentAdminSurface  `json:"adminSurface"`
+	Configuration ServiceDocumentConfiguration `json:"configuration"`
+	Name          string                       `json:"name"`
+	ConfigSchema  ServiceDocumentConfigSchema  `json:"configSchema"`
 }
 
-func Plugin() PluginDocument {
-	return PluginDocument{
+func Service() ServiceDocument {
+	return ServiceDocument{
 		Name: "server",
-		Configuration: PluginDocumentConfiguration{
+		Configuration: ServiceDocumentConfiguration{
 			SchemaVersion:      int(1),
 			VersionField:       "schemaVersion",
 			RuntimeConfigField: "config",
 		},
-		ConfigSchema: PluginDocumentConfigSchema{
+		ConfigSchema: ServiceDocumentConfigSchema{
 			Semantics:          "contracts/v1/settings-semantics.json",
 			ConformanceVectors: "contracts/v1/settings-vectors.json",
-			Fields: []PluginDocumentConfigSchemaFieldsItem{{
+			Fields: []ServiceDocumentConfigSchemaFieldsItem{{
 				Name:        "listeners",
 				Type:        "array",
 				Required:    true,
-				Description: "Public HTTP and HTTPS listeners. Validate the complete settings revision against the plugin-owned settings.schema.json contract.",
+				Description: "Public HTTP and HTTPS listeners. Validate the complete settings revision against the service-owned settings.schema.json contract.",
 			}, {
 				Name:        "routes",
 				Type:        "array",
@@ -58,7 +58,7 @@ func Plugin() PluginDocument {
 				Description: "Ordered terminal HTTP routes. Native Caddy JSON and Caddyfile input are not accepted.",
 			}},
 		},
-		AdminSurface: PluginDocumentAdminSurface{
+		AdminSurface: ServiceDocumentAdminSurface{
 			Version:            int(1),
 			Descriptor:         "contracts/v1/admin-surface.json",
 			Schema:             "contracts/v1/admin-surface.schema.json",

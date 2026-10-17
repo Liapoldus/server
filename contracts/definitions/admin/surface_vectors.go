@@ -1,6 +1,6 @@
 package admin
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 type AdminSurfaceVectorsDocumentScenariosItemInputEntriesItem struct {
 	Type *string `json:"type,omitempty"`
@@ -37,7 +37,7 @@ type AdminSurfaceVectorsDocumentScenariosItemInput struct {
 type AdminSurfaceVectorsDocumentScenariosItemExpected struct {
 	SurfaceValid        *bool   `json:"surfaceValid,omitempty"`
 	Core                *string `json:"core,omitempty"`
-	Plugin              *string `json:"plugin,omitempty"`
+	Service             *string `json:"service,omitempty"`
 	EffectiveTarEntries *int    `json:"effectiveTarEntries,omitempty"`
 }
 
@@ -104,7 +104,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				ArtifactBytes: schema.Value(int(0)),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("reject-before-durable-acceptance"),
+				Service: schema.Value("reject-before-durable-acceptance"),
 			},
 		}, {
 			ID: "admin-publish-rejects-expanded-size-over-limit",
@@ -112,7 +112,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				ExpandedBytes: schema.Value(int(536870913)),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-file-count-over-limit",
@@ -120,7 +120,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				FileCount: schema.Value(int(10001)),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-counts-explicit-directories-toward-entry-limit",
@@ -130,7 +130,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				ImplicitParentDirectories: schema.Value(int(0)),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin:              schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service:             schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 				EffectiveTarEntries: schema.Value(int(10001)),
 			},
 		}, {
@@ -140,7 +140,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				CompressedBytes: schema.Value(int(1024)),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-allows-concatenated-gzip-members",
@@ -149,7 +149,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				ExpandedStream: schema.Value("one-valid-tar"),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept"),
+				Service: schema.Value("accept"),
 			},
 		}, {
 			ID: "admin-publish-rejects-corrupt-gzip-member",
@@ -157,7 +157,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				GzipMemberIntegrity: schema.Value("invalid-crc-or-size"),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-truncated-gzip-member",
@@ -165,7 +165,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				GzipMember: schema.Value("truncated-before-trailer"),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-non-gzip-trailing-bytes",
@@ -174,7 +174,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				TrailingCompressedData: schema.Value("not-a-gzip-member"),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-allows-zero-tar-padding",
@@ -183,7 +183,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				PostTerminatorBytes: schema.Value("zero-only"),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept"),
+				Service: schema.Value("accept"),
 			},
 		}, {
 			ID: "admin-publish-rejects-nonzero-tar-trailing-data",
@@ -192,7 +192,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				PostTerminatorBytes: schema.Value("contains-nonzero-data"),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-unsafe-archive-entry",
@@ -203,7 +203,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				}}),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-duplicate-path",
@@ -215,7 +215,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				}}),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-case-collision",
@@ -227,7 +227,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				}}),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-unicode-nfc-collision",
@@ -239,7 +239,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				}}),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-rejects-link-entry",
@@ -250,7 +250,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				}}),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
+				Service: schema.Value("accept-then-fail-operation-before-current-pointer-change"),
 			},
 		}, {
 			ID: "admin-publish-reuses-idempotent-operation",
@@ -260,7 +260,7 @@ func AdminSurfaceVectors() AdminSurfaceVectorsDocument {
 				SameArtifactDigest: schema.Value(true),
 			},
 			Expected: AdminSurfaceVectorsDocumentScenariosItemExpected{
-				Plugin: schema.Value("return-existing-operation-without-duplicate-effect"),
+				Service: schema.Value("return-existing-operation-without-duplicate-effect"),
 			},
 		}, {
 			ID: "admin-common-settings-live-in-core",

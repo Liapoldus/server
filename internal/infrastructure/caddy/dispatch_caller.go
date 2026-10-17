@@ -5,10 +5,10 @@ import (
 	"io"
 	"sync"
 
-	"github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
+	"github.com/Liapoldus/wool/v3/presentation/peer"
 )
 
-// DispatchCaller resolves every invocation through the plugin-owned Core peer
+// DispatchCaller resolves every invocation through the service-owned Core peer
 // directory. The Server runtime receives no peer endpoint or credential data.
 type DispatchCaller interface {
 	Call(context.Context, string, string, []byte) ([]byte, error)

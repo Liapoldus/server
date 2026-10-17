@@ -2,7 +2,7 @@ package contracts
 
 import (
 	"errors"
-	httpdef "liapoldus.local/server-plugin/contracts/definitions/http"
+	httpdef "liapoldus.local/server-service/contracts/definitions/http"
 )
 
 type HTTPDispatch struct {

@@ -18,20 +18,18 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/caddyserver/certmagic"
-	"liapoldus.local/server-plugin/contracts"
-	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
+	"github.com/gofrs/flock"
+	"liapoldus.local/server-service/contracts"
+	sitemodel "liapoldus.local/server-service/internal/domain/models/site"
 )
-
-const releaseMutationLockName = "server-site-release-mutations"
 
 // ReleaseStore keeps immutable site releases and their durable operation journal
 // on one filesystem so a generation pointer rename is atomic.
 type ReleaseStore struct {
-	locks    *certmagic.FileStorage
-	contract contracts.SiteOperationContract
-	root     string
-	mu       sync.Mutex
+	mutationLock *flock.Flock
+	contract     contracts.SiteOperationContract
+	root         string
+	mu           sync.Mutex
 }
 
 type persistedOperation struct {
@@ -79,7 +77,7 @@ func NewReleaseStore(root string) (*ReleaseStore, error) {
 	}
 	return &ReleaseStore{
 		root: root, contract: contract,
-		locks: &certmagic.FileStorage{Path: filepath.Join(root, "coordination")},
+		mutationLock: flock.New(filepath.Join(root, "coordination", "release-mutations.lock")),
 	}, nil
 }
 
@@ -430,20 +428,21 @@ func (store *ReleaseStore) rollbackSiteLocked(ctx context.Context, input sitemod
 }
 
 func (store *ReleaseStore) acquireMutationLock(ctx context.Context) error {
-	if store == nil || store.locks == nil || ctx == nil {
+	if store == nil || store.mutationLock == nil || ctx == nil {
 		return sitemodel.ErrInvalidSitePublisher
 	}
-	if err := store.locks.Lock(ctx, releaseMutationLockName); err != nil {
+	locked, err := store.mutationLock.TryLockContext(ctx, 25*time.Millisecond)
+	if err != nil || !locked {
 		return sitemodel.ErrInvalidSitePublisher
 	}
 	return nil
 }
 
 func (store *ReleaseStore) releaseMutationLock() error {
-	if store == nil || store.locks == nil {
+	if store == nil || store.mutationLock == nil {
 		return sitemodel.ErrInvalidSitePublisher
 	}
-	if err := store.locks.Unlock(context.Background(), releaseMutationLockName); err != nil {
+	if err := store.mutationLock.Unlock(); err != nil {
 		return sitemodel.ErrInvalidSitePublisher
 	}
 	return nil

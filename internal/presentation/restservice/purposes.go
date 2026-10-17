@@ -1,4 +1,4 @@
-package restplugin
+package restservice
 
 // SettingsSecretPurpose is the immutable grant scope for a Server settings
 // reference. The SDK boundary receives its exact string value.

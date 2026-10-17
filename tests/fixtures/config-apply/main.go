@@ -6,9 +6,9 @@ import (
 	"io"
 	"os"
 
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 type fakeRuntime struct{ active []byte }

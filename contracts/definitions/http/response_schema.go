@@ -1,12 +1,12 @@
 package http
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func HTTPResponseActionSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/plugins/server/contracts/v1/http-response-action.schema.json",
-		Title:                "Server plugin HTTP response action",
+		ID:                   "https://liapoldus.github.io/services/server/contracts/v1/http-response-action.schema.json",
+		Title:                "Server service HTTP response action",
 		Type:                 "object",
 		AdditionalProperties: false,
 		Required:             schema.Value([]string{"status"}),

@@ -196,6 +196,12 @@ func compilePathMatcher(source pathMatcher) (*compiledPath, error) {
 			}
 			compiled.pattern = pattern
 		}
+	case "template":
+		pattern, _, err := compileAPIPath(source.Value)
+		if err != nil {
+			return nil, errUnsupportedSettings
+		}
+		compiled.pattern = pattern
 	case "regex":
 		pattern, err := regexp.Compile(source.Value)
 		if err != nil {
@@ -267,6 +273,8 @@ func (matcher *compiledPath) matches(value string) bool {
 	case "regex":
 		indices := matcher.pattern.FindStringIndex(value)
 		return indices != nil && indices[0] == 0 && indices[1] == len(value)
+	case "template":
+		return matcher.pattern != nil && matcher.pattern.MatchString(value)
 	default:
 		return false
 	}

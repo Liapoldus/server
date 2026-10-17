@@ -1,6 +1,6 @@
 package site
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 type SiteManifestVectorsDocumentScenariosItemInputEntriesItem struct {
 	Path string `json:"path"`

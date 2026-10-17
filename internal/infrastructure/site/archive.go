@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
-	"liapoldus.local/server-plugin/contracts"
+	"liapoldus.local/server-service/contracts"
 )
 
 var ErrInvalidArchive = errors.New("invalid site archive")

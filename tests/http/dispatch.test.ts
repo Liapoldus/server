@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-describe("Caddy plugin HTTP dispatch", () => {
+describe("Caddy service HTTP dispatch", () => {
   it("forwards unary requests and streams request/response bodies through the generic peer stream", () => {
     const output = execFileSync("go", ["run", "./tests/fixtures/http-dispatch"], {
       cwd: root,
@@ -19,13 +19,17 @@ describe("Caddy plugin HTTP dispatch", () => {
       revision: "revision-1",
       status: 202,
       contentType: "text/plain",
-      body: "plugin-response",
+      body: "service-response",
       setCookie: expect.arrayContaining([
         expect.stringContaining("session=ordinary-value") as unknown,
         expect.stringContaining("auth=http-only-value") as unknown,
       ]),
       method: "POST",
       path: "/submit",
+      typedRequestVersion: "server-http/v1",
+      typedQueryText: "typed-value",
+      invalidInputStatus: 400,
+      echoServiceCalls: 1,
       cookieForwarded: true,
       receivedCookies: [
         { name: "session", value: "allowed-value" },
@@ -50,5 +54,7 @@ describe("Caddy plugin HTTP dispatch", () => {
     });
     expect(result.streamBytesRead).toBeGreaterThan(0);
     expect(result.streamBytesRead).toBeLessThanOrEqual(1_048_576 + 10);
+    expect(result.invalidInputStatus).toBe(400);
+    expect(result.echoServiceCalls).toBe(1);
   }, 60_000);
 });

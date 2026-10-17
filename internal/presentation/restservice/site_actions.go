@@ -1,4 +1,4 @@
-package restplugin
+package restservice
 
 import (
 	"bytes"
@@ -7,11 +7,11 @@ import (
 	"errors"
 	"io"
 
-	sdkpresentation "github.com/Liapoldus/plugin-sdk/v2/presentation"
-	"liapoldus.local/server-plugin/contracts"
-	siteapp "liapoldus.local/server-plugin/internal/application/site"
-	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
-	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
+	sdkpresentation "github.com/Liapoldus/service-sdk/v2/presentation"
+	"liapoldus.local/server-service/contracts"
+	siteapp "liapoldus.local/server-service/internal/application/site"
+	certificatemodel "liapoldus.local/server-service/internal/domain/models/certificate"
+	sitemodel "liapoldus.local/server-service/internal/domain/models/site"
 )
 
 type artifactReceipt struct {

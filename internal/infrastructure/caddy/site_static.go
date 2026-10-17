@@ -12,7 +12,7 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	caddyhttp "github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
+	sitemodel "liapoldus.local/server-service/internal/domain/models/site"
 )
 
 const siteFileServerModule = "liapoldus_site_file_server"

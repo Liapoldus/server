@@ -2,8 +2,8 @@ package definitions
 
 import (
 	"encoding/json"
-	admin "liapoldus.local/server-plugin/contracts/definitions/admin"
-	httpdef "liapoldus.local/server-plugin/contracts/definitions/http"
+	admin "liapoldus.local/server-service/contracts/definitions/admin"
+	httpdef "liapoldus.local/server-service/contracts/definitions/http"
 	"os"
 	"path/filepath"
 	"reflect"

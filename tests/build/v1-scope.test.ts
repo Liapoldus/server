@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-describe("Server plugin v1 excludes public L4", () => {
+describe("Server service v1 excludes public L4", () => {
   it("does not ship Caddy-L4 or declare TCP/UDP listener contracts", async () => {
     const [moduleFile, runtimeFile, schemaFile] = await Promise.all([
       readFile(new URL("../../go.mod", import.meta.url), "utf8"),

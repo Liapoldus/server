@@ -16,7 +16,7 @@ var (
 
 // SitePublishInput is the product metadata and stream accepted by the site
 // publish action. Core identity and idempotency context is supplied separately
-// by the trusted Plugin SDK invocation.
+// by the trusted Service SDK invocation.
 type SitePublishInput struct {
 	Body           io.Reader
 	ContentType    string

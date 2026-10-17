@@ -3,7 +3,7 @@ package contracts
 import (
 	"encoding/json"
 	"errors"
-	"liapoldus.local/server-plugin/contracts/definitions"
+	"liapoldus.local/server-service/contracts/definitions"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"

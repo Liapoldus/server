@@ -18,7 +18,7 @@ describe("Caddy site archive manifest v1", () => {
 
     expect(link).toEqual({
       version: 1,
-      plugin: "server",
+      service: "server",
       publishCapability: "server.sites.publish",
       rollbackCapability: "server.sites.rollback",
       archiveEntry: "site-manifest.json",

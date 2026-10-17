@@ -21,11 +21,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	"github.com/Liapoldus/wool/v3/presentation/peer"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 const backpressureTotalChunks = 4096
@@ -176,13 +176,13 @@ func main() {
 		"config": map[string]any{
 			"listeners": []any{map[string]any{"id": "web", "kind": "http", "address": address, "hostnames": []string{}, "protocols": []string{"http1"}, "tls": map[string]any{"mode": "disabled"}}},
 			"routes": []any{
-				map[string]any{"id": "events", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/slow"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
-				map[string]any{"id": "idle", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/idle"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
-				map[string]any{"id": "maximum", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/maximum"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
-				map[string]any{"id": "sse", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/events"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.events", "mode": "sse", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
-				map[string]any{"id": "sse-invalid", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/events-invalid"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.events", "mode": "sse", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
-				map[string]any{"id": "overflow", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/overflow"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 5000, "maxDurationMillis": 30000}}},
-				map[string]any{"id": "backpressure", "listenerId": "web", "match": map[string]any{"path": map[string]any{"type": "exact", "value": "/backpressure"}}, "handler": map[string]any{"type": "plugin", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 20000, "maxDurationMillis": 30000}}},
+				map[string]any{"id": "events", "listenerId": "web", "api": serviceAPI("GET", "/slow"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
+				map[string]any{"id": "idle", "listenerId": "web", "api": serviceAPI("GET", "/idle"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
+				map[string]any{"id": "maximum", "listenerId": "web", "api": serviceAPI("GET", "/maximum"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
+				map[string]any{"id": "sse", "listenerId": "web", "api": serviceAPI("GET", "/events"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.events", "mode": "sse", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
+				map[string]any{"id": "sse-invalid", "listenerId": "web", "api": serviceAPI("GET", "/events-invalid"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.events", "mode": "sse", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 1000, "maxDurationMillis": 1800}}},
+				map[string]any{"id": "overflow", "listenerId": "web", "api": serviceAPI("GET", "/overflow"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 5000, "maxDurationMillis": 30000}}},
+				map[string]any{"id": "backpressure", "listenerId": "web", "api": serviceAPI("GET", "/backpressure"), "handler": map[string]any{"type": "service", "instanceId": "forms", "capability": "forms.events", "mode": "http_stream", "streamLimits": map[string]any{"maxConcurrency": 1, "idleTimeoutMillis": 20000, "maxDurationMillis": 30000}}},
 			},
 		},
 	})
@@ -246,6 +246,13 @@ func main() {
 	check(err)
 	check(backpressureResponse.Body.Close())
 	check(json.NewEncoder(os.Stdout).Encode(map[string]any{"slow": slow, "slowElapsedMillis": slowElapsed, "concurrent": map[string]int{"status": concurrent.StatusCode}, "idle": idle, "idleElapsedMillis": idleElapsed, "maximum": maximum, "maximumElapsedMillis": maxElapsed, "sse": responseResult{Status: sseResponse.StatusCode, ContentType: sseResponse.Header.Get("Content-Type"), Body: string(sseBody)}, "invalidSSE": responseResult{Status: invalidSSEResponse.StatusCode, Body: string(invalidSSEBody)}, "afterStartOverflow": overflow, "backpressure": map[string]any{"status": backpressureResponse.StatusCode, "completed": backpressureCompleted.Load(), "queueFull": backpressureQueueFull.Load(), "pausedSentChunks": pausedSentChunks, "totalChunks": backpressureTotalChunks, "bodyBytes": backpressureBytes}}))
+}
+
+func serviceAPI(method, path string) map[string]any {
+	return map[string]any{
+		"version": "server-http/v1", "method": method, "path": path,
+		"responses": []any{map[string]any{"status": 200, "contentType": "text/plain", "schema": map[string]any{}, "example": "ok"}},
+	}
 }
 
 func sendMessage(stream peer.Stream, value any) error {

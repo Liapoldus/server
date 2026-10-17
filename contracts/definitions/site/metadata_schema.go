@@ -1,11 +1,11 @@
 package site
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func ArtifactMetadataSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/plugins/server/v1/artifact-metadata.schema.json",
+		ID:                   "https://liapoldus.github.io/services/server/v1/artifact-metadata.schema.json",
 		Type:                 "object",
 		AdditionalProperties: false,
 		Required:             schema.Value([]string{"version", "artifact", "payload"}),

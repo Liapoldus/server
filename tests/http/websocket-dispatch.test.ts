@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-describe("WebSocket plugin dispatch runtime", () => {
-  it("lets the plugin accept or reject before upgrade and preserves text/binary message boundaries", () => {
+describe("WebSocket service dispatch runtime", () => {
+  it("lets the service accept or reject before upgrade and preserves text/binary message boundaries", () => {
     const output = execFileSync("go", ["run", "./tests/fixtures/websocket-dispatch"], {
       cwd: root,
       env: { ...process.env, GOWORK: "off" },
@@ -40,6 +40,6 @@ describe("WebSocket plugin dispatch runtime", () => {
     });
     expect(result.invalidSubprotocol).toEqual({ status: 502, upgraded: false });
     expect(result.invalidCookie).toEqual({ status: 502, setCookie: [], upgraded: false });
-    expect(result.oversizedMessage).toEqual({ closeCode: 1009, pluginReceivesOversizedMessage: false });
+    expect(result.oversizedMessage).toEqual({ closeCode: 1009, serviceReceivesOversizedMessage: false });
   }, 60_000);
 });

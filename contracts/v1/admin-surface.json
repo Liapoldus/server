@@ -4,7 +4,7 @@
       "capability": "server.sites.list",
       "id": "sites",
       "permissions": [
-        "plugins.server.read"
+        "services.server.read"
       ],
       "sections": [
         {
@@ -154,7 +154,7 @@
       "capability": "server.certificates.list",
       "id": "certificates",
       "permissions": [
-        "plugins.server.tls.read"
+        "services.server.tls.read"
       ],
       "sections": [
         {
@@ -198,7 +198,6 @@
       "title": "Сертификаты"
     }
   ],
-  "plugin": "server",
   "requiredCapabilities": [
     "admin.surface.get",
     "server.sites.list",
@@ -210,5 +209,6 @@
     "server.certificates.list",
     "server.certificates.get"
   ],
+  "service": "server",
   "version": 1
 }

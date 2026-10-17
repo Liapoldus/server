@@ -7,7 +7,7 @@ import (
 	"sort"
 )
 
-var ErrInvalidSettings = errors.New("invalid Caddy plugin settings")
+var ErrInvalidSettings = errors.New("invalid Caddy service settings")
 
 type Settings struct {
 	RuntimeConfig json.RawMessage

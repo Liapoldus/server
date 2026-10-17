@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-const base='/Users/docup/Projects/Liapoldus Engine/plugins/server/';
+const base='/Users/docup/Projects/Liapoldus Engine/services/server/';
 let patch='*** Begin Patch\n';
 function put(file,old,next){if(old===next)return;patch+=`*** ${old===null?'Add':'Update'} File: ${base+file}\n`+(old===null?'':'@@\n'+old.trimEnd().split('\n').map(l=>'-'+l).join('\n')+'\n')+next.trimEnd().split('\n').map(l=>'+'+l).join('\n')+'\n';}
 const files=fs.readdirSync('contracts/v1').filter(f=>f.endsWith('.json'));

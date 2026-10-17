@@ -12,7 +12,7 @@ const runtimeFixtures = [
   "http2-http3",
   "http-dispatch",
   "http-stream-limits",
-  "plugin-sdk-reload",
+  "service-sdk-reload",
   "site-publish",
   "settings-vectors",
   "upstream-ca",

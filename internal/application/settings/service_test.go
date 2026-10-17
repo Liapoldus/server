@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
 type settingsTestRuntime struct {

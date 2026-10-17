@@ -47,7 +47,7 @@
           "const": "action"
         },
         "ownership": {
-          "const": "plugin-admin-surface-action"
+          "const": "service-admin-surface-action"
         },
         "preconditions": {
           "items": {
@@ -248,7 +248,7 @@
           "type": "object"
         },
         "ownership": {
-          "const": "plugin-admin-surface-action"
+          "const": "service-admin-surface-action"
         },
         "receiptSchema": {
           "const": "contracts/v1/artifact-operation-result.schema.json"
@@ -260,7 +260,7 @@
           "$ref": "#/$defs/surfaceBinding"
         },
         "transport": {
-          "const": "plugin-sdk.rest.artifact-stream"
+          "const": "service-sdk.rest.artifact-stream"
         }
       },
       "required": [
@@ -396,7 +396,7 @@
     "operationStatus": {
       "additionalProperties": false,
       "properties": {
-        "coreControlUsesPluginSdkRest": {
+        "coreControlUsesServiceSdkRest": {
           "const": true
         },
         "coreResource": {
@@ -411,7 +411,7 @@
             "degraded"
           ]
         },
-        "pluginStates": {
+        "serviceStates": {
           "const": [
             "accepted",
             "running",
@@ -419,7 +419,7 @@
             "failed"
           ]
         },
-        "pluginStatusCapability": {
+        "serviceStatusCapability": {
           "const": "server.operations.get"
         },
         "stateMapping": {
@@ -439,11 +439,11 @@
       "required": [
         "coreResource",
         "workerPollMilliseconds",
-        "pluginStatusCapability",
-        "pluginStates",
+        "serviceStatusCapability",
+        "serviceStates",
         "coreStates",
         "stateMapping",
-        "coreControlUsesPluginSdkRest"
+        "coreControlUsesServiceSdkRest"
       ],
       "type": "object"
     },
@@ -484,7 +484,7 @@
           "const": "query"
         },
         "ownership": {
-          "const": "plugin-admin-surface-capability"
+          "const": "service-admin-surface-capability"
         },
         "requestSchema": {
           "$ref": "#/$defs/jsonSchema"
@@ -525,7 +525,7 @@
           "const": "validate-complete-staged-release-before-activation"
         },
         "storage": {
-          "const": "plugin-owned-persistent-filesystem"
+          "const": "service-owned-persistent-filesystem"
         }
       },
       "required": [
@@ -580,7 +580,7 @@
       "type": "object"
     }
   },
-  "$id": "https://liapoldus.github.io/plugins/server/admin-ui/v1/actions.schema.json",
+  "$id": "https://liapoldus.github.io/services/server/admin-ui/v1/actions.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -630,14 +630,14 @@
       ],
       "type": "object"
     },
-    "plugin": {
-      "const": "server"
-    },
     "publishOperation": {
       "$ref": "#/$defs/publishOperation"
     },
     "releaseLifecycle": {
       "$ref": "#/$defs/releaseLifecycle"
+    },
+    "service": {
+      "const": "server"
     },
     "version": {
       "const": 1
@@ -645,13 +645,13 @@
   },
   "required": [
     "version",
-    "plugin",
+    "service",
     "archive",
     "releaseLifecycle",
     "publishOperation",
     "operationStatus",
     "operations"
   ],
-  "title": "Server plugin Admin Surface action catalog v1",
+  "title": "Server service Admin Surface action catalog v1",
   "type": "object"
 }

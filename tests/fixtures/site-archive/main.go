@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"liapoldus.local/server-plugin/internal/infrastructure/site"
+	"liapoldus.local/server-service/internal/infrastructure/site"
 )
 
 type testInput struct {

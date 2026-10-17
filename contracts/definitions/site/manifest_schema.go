@@ -1,11 +1,11 @@
 package site
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func SiteManifestSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/plugins/server/site-publish/v1/site-manifest.schema.json",
+		ID:                   "https://liapoldus.github.io/services/server/site-publish/v1/site-manifest.schema.json",
 		Title:                "Server site archive manifest v1",
 		Type:                 "object",
 		AdditionalProperties: false,

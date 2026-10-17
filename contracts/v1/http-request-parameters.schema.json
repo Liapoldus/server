@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "parameterMap": {
+      "additionalProperties": {
+        "$ref": "#/$defs/parameterValue"
+      },
+      "type": "object"
+    },
+    "parameterValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/scalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/scalar"
+          },
+          "type": "array"
+        }
+      ]
+    },
+    "scalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    }
+  },
+  "$id": "https://liapoldus.github.io/services/server/http-request-parameters/v1/schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Normalized, bounded values extracted and validated by Server from a route's server-http/v1 request contract before dispatch. The HTTP envelope may also retain raw path/query fields for request context; consumers should use this typed object for configured parameters.",
+  "properties": {
+    "body": {},
+    "headers": {
+      "$ref": "#/$defs/parameterMap"
+    },
+    "path": {
+      "$ref": "#/$defs/parameterMap"
+    },
+    "query": {
+      "$ref": "#/$defs/parameterMap"
+    },
+    "version": {
+      "const": "server-http/v1"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "Server service typed HTTP request parameters v1",
+  "type": "object"
+}

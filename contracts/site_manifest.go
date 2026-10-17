@@ -3,8 +3,8 @@ package contracts
 import (
 	"encoding/json"
 	"io/fs"
-	"liapoldus.local/server-plugin/contracts/definitions"
-	sitedef "liapoldus.local/server-plugin/contracts/definitions/site"
+	"liapoldus.local/server-service/contracts/definitions"
+	sitedef "liapoldus.local/server-service/contracts/definitions/site"
 	"path"
 	"strings"
 	"sync"

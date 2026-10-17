@@ -1,10 +1,10 @@
-package restplugin
+package restservice
 
 import (
 	"errors"
 	"testing"
 
-	"liapoldus.local/server-plugin/contracts"
+	"liapoldus.local/server-service/contracts"
 )
 
 func TestSettingsAdapterErrorsPreservation(t *testing.T) {

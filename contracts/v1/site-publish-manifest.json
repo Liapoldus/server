@@ -1,10 +1,10 @@
 {
   "archiveEntry": "site-manifest.json",
-  "plugin": "server",
   "publishCapability": "server.sites.publish",
   "rollbackCapability": "server.sites.rollback",
   "schema": "contracts/v1/site-manifest.schema.json",
   "semantics": "contracts/v1/site-manifest-semantics.json",
+  "service": "server",
   "vectors": "contracts/v1/site-manifest-vectors.json",
   "version": 1
 }

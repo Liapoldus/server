@@ -1,5 +1,5 @@
 import fs from 'node:fs';import ts from 'typescript';
-const base='/Users/docup/Projects/Liapoldus Engine/plugins/server/';let patch='*** Begin Patch\n';
+const base='/Users/docup/Projects/Liapoldus Engine/services/server/';let patch='*** Begin Patch\n';
 for(const file of fs.readdirSync('tests').filter(f=>f.endsWith('.ts')&&new RegExp(process.argv[2]??'.').test(f))){
  const old=fs.readFileSync('tests/'+file,'utf8');let next=old;
  const ast=ts.createSourceFile(file,next,ts.ScriptTarget.Latest,true);const changes=[];

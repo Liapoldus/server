@@ -1,14 +1,17 @@
-module liapoldus.local/server-plugin
+module liapoldus.local/server-service
 
 go 1.26.0
 
-replace github.com/Liapoldus/plugin-sdk/v2 => ../../plugin-sdk
+replace github.com/Liapoldus/service-sdk/v2 => ../../service-sdk
+
+replace github.com/Liapoldus/wool/v3 => ../../wool
 
 require (
-	github.com/Liapoldus/plugin-sdk/v2 v2.0.0
-	github.com/Liapoldus/pluginprotocol/v3 v3.0.0
+	github.com/Liapoldus/service-sdk/v2 v2.0.0
+	github.com/Liapoldus/wool/v3 v3.0.0
 	github.com/caddyserver/caddy/v2 v2.11.4
 	github.com/caddyserver/certmagic v0.25.3
+	github.com/gofrs/flock v0.12.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/quic-go/quic-go v0.59.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3

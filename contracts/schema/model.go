@@ -8,6 +8,8 @@ type Definition struct {
 	Ref                  string                `json:"$ref,omitempty"`
 	Title                string                `json:"title,omitempty"`
 	Description          string                `json:"description,omitempty"`
+	StudioJSONDocument   bool                  `json:"x-studio-json-document,omitempty"`
+	StudioJSONValue      bool                  `json:"x-studio-json-value,omitempty"`
 	Format               string                `json:"format,omitempty"`
 	Pattern              string                `json:"pattern,omitempty"`
 	MinLength            *int                  `json:"minLength,omitempty"`
@@ -32,6 +34,7 @@ type Definition struct {
 	Then                 *Definition           `json:"then,omitempty"`
 	Else                 *Definition           `json:"else,omitempty"`
 	Not                  *Definition           `json:"not,omitempty"`
+	AnyOf                []Definition          `json:"anyOf,omitempty"`
 	OneOf                []Definition          `json:"oneOf,omitempty"`
 	AllOf                []Definition          `json:"allOf,omitempty"`
 }

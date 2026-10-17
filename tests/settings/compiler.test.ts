@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { Ajv2020 } from "ajv/dist/2020.js";
+import { settingsAjv } from "../support/settings-ajv.js";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -48,13 +48,13 @@ describe("strict settings to Caddy runtime compilation", () => {
   it("rejects a schema-valid unsupported candidate without replacing the active Caddy revision", async () => {
     const port = await freePort();
     const candidateSettings = httpSettings(port, {
-      type: "plugin",
-      instanceId: "unconfigured-plugin",
+      type: "service",
+      instanceId: "unconfigured-service",
       capability: "forms.submit",
       mode: "http_stream",
     });
     const schema = readContract('settings.schema.json');
-    expect(new Ajv2020({ allErrors: true }).compile(schema)(candidateSettings)).toBe(true);
+    expect(settingsAjv().compile(schema)(candidateSettings)).toBe(true);
     const result = await runActivation({
       port,
       settings: httpSettings(port, { type: "static", siteId: "frontend" }),
@@ -84,8 +84,22 @@ function httpSettings(port: number, handler: Record<string, unknown>) {
         protocols: ["http1"],
         tls: { mode: "disabled" },
       }],
-      routes: [{ id: "route", listenerId: "web", handler }],
+      routes: [{
+        id: "route",
+        listenerId: "web",
+        handler,
+        ...(handler.type === "service" ? { api: serviceAPI() } : {}),
+      }],
     },
+  };
+}
+
+function serviceAPI() {
+  return {
+    version: "server-http/v1",
+    method: "GET",
+    path: "/service",
+    responses: [{ status: 200, contentType: "application/json", schema: {}, example: null }],
   };
 }
 

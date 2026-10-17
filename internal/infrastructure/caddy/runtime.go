@@ -16,7 +16,7 @@ import (
 
 	caddycore "github.com/caddyserver/caddy/v2"
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
-	certificatemodel "liapoldus.local/server-plugin/internal/domain/models/certificate"
+	certificatemodel "liapoldus.local/server-service/internal/domain/models/certificate"
 )
 
 type Runtime struct {

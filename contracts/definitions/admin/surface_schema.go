@@ -1,19 +1,19 @@
 package admin
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func AdminSurfaceSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/plugins/server/admin-ui/v1/schema.json",
-		Title:                "Server plugin Admin Surface v1",
-		Description:          "Strict declarative plugin administration surface. It contains no executable UI, URL, listener, or secret value.",
+		ID:                   "https://liapoldus.github.io/services/server/admin-ui/v1/schema.json",
+		Title:                "Server service Admin Surface v1",
+		Description:          "Strict declarative service administration surface. It contains no executable UI, URL, listener, or secret value.",
 		Type:                 "object",
 		AdditionalProperties: false,
-		Required:             schema.Value([]string{"version", "plugin", "requiredCapabilities", "pages"}),
+		Required:             schema.Value([]string{"version", "service", "requiredCapabilities", "pages"}),
 		Properties: map[string]schema.Definition{"version": {
 			Const: 1,
-		}, "plugin": {
+		}, "service": {
 			Const: "server",
 		}, "requiredCapabilities": {
 			Type:        "array",

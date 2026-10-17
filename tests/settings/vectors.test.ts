@@ -6,13 +6,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createServer } from "node:http";
-import { Ajv2020 } from "ajv/dist/2020.js";
+import { settingsAjv } from "../support/settings-ajv.js";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const vectors = readContract('settings-vectors.json');
 const schema = readContract('settings.schema.json');
-const validateSchema = new Ajv2020({ allErrors: true }).compile(schema);
+const validateSchema = settingsAjv().compile(schema);
 const selected = new Map(vectors.scenarios.map((scenario) => [scenario.id, scenario] as const));
 
 describe("executable settings vectors", () => {

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
 
-describe("Server plugin-owned Admin Surface v1", () => {
+describe("Server service-owned Admin Surface v1", () => {
 	it("treats synchronous admin-action idempotency keys as correlation only", async () => {
 		const actions = readContract('admin-actions.json');
 		const rollback = actions.operations["server.sites.rollback"];
@@ -34,15 +34,15 @@ describe("Server plugin-owned Admin Surface v1", () => {
 		expect(surface.requiredCapabilities).toContain("server.certificates.get");
 	});
 
-	it("publishes a strict surface fixture and action catalog through the plugin contract", async () => {
-    const plugin = readContract('plugin.json');
+	it("publishes a strict surface fixture and action catalog through the service contract", async () => {
+    const service = readContract('service.json');
     const schema = readContract('admin-surface.schema.json');
     const surface = readContract('admin-surface.json');
     const actionsSchema = readContract('admin-actions.schema.json');
     const actions = readContract('admin-actions.json');
     const ajv = new Ajv2020({ allErrors: true, strict: false });
 
-    expect(plugin.adminSurface).toMatchObject({
+    expect(service.adminSurface).toMatchObject({
       version: 1,
       descriptor: "contracts/v1/admin-surface.json",
       schema: "contracts/v1/admin-surface.schema.json",
@@ -202,7 +202,7 @@ describe("Server plugin-owned Admin Surface v1", () => {
       rowInput: { operationId: "operationId" },
     }));
     expect(actions.operations["server.sites.publish"]).toMatchObject({
-      transport: "plugin-sdk.rest.artifact-stream",
+      transport: "service-sdk.rest.artifact-stream",
       multipart: { parts: ["metadata", "artifact"], artifactFilenameForwarded: false },
       acceptedHttpStatus: 202,
       receiptSchema: "contracts/v1/artifact-operation-result.schema.json",
@@ -237,10 +237,10 @@ describe("Server plugin-owned Admin Surface v1", () => {
     expect(archiveVectors.scenarios).toContainEqual(expect.objectContaining({
       id: "admin-publish-counts-explicit-directories-toward-entry-limit",
       input: { regularFileEntries: 2, explicitDirectoryEntries: 9999, implicitParentDirectories: 0 },
-      expected: { effectiveTarEntries: 10001, plugin: "accept-then-fail-operation-before-current-pointer-change" },
+      expected: { effectiveTarEntries: 10001, service: "accept-then-fail-operation-before-current-pointer-change" },
     }));
     expect(actions.releaseLifecycle).toMatchObject({
-      storage: "plugin-owned-persistent-filesystem",
+      storage: "service-owned-persistent-filesystem",
       activation: "atomic-current-previous-pointer-swap-only-after-successful-terminal-operation",
       failure: "keep-current-and-previous-unchanged",
     });
@@ -251,13 +251,13 @@ describe("Server plugin-owned Admin Surface v1", () => {
       currentPointer: "changes-only-after-all-archive-and-manifest-validation-succeeds",
     });
     expect(actions.operationStatus).toMatchObject({
-      pluginStatusCapability: "server.operations.get",
+      serviceStatusCapability: "server.operations.get",
       coreResource: "GET /api/operations/{id}",
-      coreControlUsesPluginSdkRest: true,
+      coreControlUsesServiceSdkRest: true,
       stateMapping: { accepted: "pending", running: "running", completed: "succeeded", failed: "failed" },
     });
     expect(actions.operationStatus.coreStates).toContain("degraded");
-    expect(actions.operations["server.operations.get"].ownership).toBe("plugin-admin-surface-action");
+    expect(actions.operations["server.operations.get"].ownership).toBe("service-admin-surface-action");
   });
 
 	it("declares read-only per-domain certificate readiness without manual renew or revoke", async () => {

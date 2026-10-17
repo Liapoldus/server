@@ -40,7 +40,7 @@
       "expected": {
         "forwardedBytes": "maxRequestBytes",
         "requestEndSent": true,
-        "response": "plugin-response"
+        "response": "service-response"
       },
       "id": "http-stream-chunked-at-limit",
       "mode": "http_stream",
@@ -108,9 +108,9 @@
         "status": 101,
         "subprotocol": "forms.v1"
       },
-      "id": "websocket-plugin-accepts-before-upgrade-and-selects-offered-subprotocol",
+      "id": "websocket-service-accepts-before-upgrade-and-selects-offered-subprotocol",
       "mode": "websocket",
-      "pluginDecision": {
+      "serviceDecision": {
         "accept": true,
         "subprotocol": "forms.v1"
       }
@@ -120,9 +120,9 @@
         "status": 403,
         "upgraded": false
       },
-      "id": "websocket-plugin-rejects-before-upgrade",
+      "id": "websocket-service-rejects-before-upgrade",
       "mode": "websocket",
-      "pluginDecision": {
+      "serviceDecision": {
         "accept": false,
         "status": 403
       }
@@ -137,7 +137,7 @@
       },
       "id": "websocket-unoffered-subprotocol-is-rejected-before-upgrade",
       "mode": "websocket",
-      "pluginDecision": {
+      "serviceDecision": {
         "accept": true,
         "subprotocol": "forms.private"
       }
@@ -173,7 +173,7 @@
     {
       "expected": {
         "closeCode": 1009,
-        "pluginReceivesOversizedMessage": false
+        "serviceReceivesOversizedMessage": false
       },
       "id": "websocket-message-over-limit-closes-with-1009",
       "messageBytes": "maxMessageBytes+1",

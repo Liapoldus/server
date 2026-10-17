@@ -1,6 +1,6 @@
 package admin
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 type AdminSurfaceDocumentPagesItemSectionsItemActionsItemArtifactInput struct {
 	MediaTypes                []string `json:"mediaTypes"`
@@ -38,7 +38,7 @@ type AdminSurfaceDocumentPagesItem struct {
 }
 
 type AdminSurfaceDocument struct {
-	Plugin               string                          `json:"plugin"`
+	Service              string                          `json:"service"`
 	RequiredCapabilities []string                        `json:"requiredCapabilities"`
 	Pages                []AdminSurfaceDocumentPagesItem `json:"pages"`
 	Version              int                             `json:"version"`
@@ -47,13 +47,13 @@ type AdminSurfaceDocument struct {
 func AdminSurface() AdminSurfaceDocument {
 	return AdminSurfaceDocument{
 		Version:              int(1),
-		Plugin:               "server",
+		Service:              "server",
 		RequiredCapabilities: []string{"admin.surface.get", "server.sites.list", "server.sites.releases.list", "server.sites.rollback", "server.sites.publish", "server.operations.list", "server.operations.get", "server.certificates.list", "server.certificates.get"},
 		Pages: []AdminSurfaceDocumentPagesItem{{
 			ID:          "sites",
 			Title:       "Сайты и релизы",
 			Capability:  "server.sites.list",
-			Permissions: []string{"plugins.server.read"},
+			Permissions: []string{"services.server.read"},
 			Sections: []AdminSurfaceDocumentPagesItemSectionsItem{{
 				ID:             "sites",
 				Kind:           "table",
@@ -154,7 +154,7 @@ func AdminSurface() AdminSurfaceDocument {
 			ID:          "certificates",
 			Title:       "Сертификаты",
 			Capability:  "server.certificates.list",
-			Permissions: []string{"plugins.server.tls.read"},
+			Permissions: []string{"services.server.tls.read"},
 			Sections: []AdminSurfaceDocumentPagesItemSectionsItem{{
 				ID:             "domains",
 				Kind:           "table",

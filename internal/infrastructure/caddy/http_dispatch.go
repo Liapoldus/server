@@ -14,11 +14,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Liapoldus/pluginprotocol/v3/presentation/peer"
+	"github.com/Liapoldus/wool/v3/presentation/peer"
 	caddycore "github.com/caddyserver/caddy/v2"
 	caddyhttp "github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/gorilla/websocket"
-	"liapoldus.local/server-plugin/contracts"
+	"liapoldus.local/server-service/contracts"
 )
 
 type dispatchInstance struct {
@@ -45,9 +45,10 @@ type httpDispatchHandler struct {
 	binding               *dispatchBinding
 	streams               chan struct{}
 	allowedRequestCookies map[string]struct{}
-	Capability            string `json:"capability,omitempty"`
-	Mode                  string `json:"mode,omitempty"`
-	Instance              string `json:"instance,omitempty"`
+	API                   apiContract `json:"api"`
+	Capability            string      `json:"capability,omitempty"`
+	Mode                  string      `json:"mode,omitempty"`
+	Instance              string      `json:"instance,omitempty"`
 	contract              contracts.HTTPDispatch
 	RequestCookieNames    []string `json:"requestCookieNames,omitempty"`
 	MaxDurationMillis     int      `json:"maxDurationMillis,omitempty"`
@@ -55,17 +56,19 @@ type httpDispatchHandler struct {
 	MaxConcurrentStreams  int      `json:"maxConcurrentStreams,omitempty"`
 	idleTimeout           time.Duration
 	maxDuration           time.Duration
+	compiledAPI           *compiledAPIContract
 }
 
 type httpRequestPayload struct {
-	Headers    map[string]string `json:"headers,omitempty"`
-	Method     string            `json:"method"`
-	Path       string            `json:"path"`
-	Query      string            `json:"query,omitempty"`
-	RequestID  string            `json:"requestId"`
-	RemoteAddr string            `json:"remoteAddr,omitempty"`
-	Cookies    []cookiePair      `json:"cookies,omitempty"`
-	Body       []byte            `json:"body,omitempty"`
+	Headers    map[string]string       `json:"headers,omitempty"`
+	Method     string                  `json:"method"`
+	Path       string                  `json:"path"`
+	Query      string                  `json:"query,omitempty"`
+	RequestID  string                  `json:"requestId"`
+	RemoteAddr string                  `json:"remoteAddr,omitempty"`
+	Cookies    []cookiePair            `json:"cookies,omitempty"`
+	Body       []byte                  `json:"body,omitempty"`
+	Parameters *typedRequestParameters `json:"parameters,omitempty"`
 }
 
 type cookiePair struct {
@@ -196,6 +199,11 @@ func (handler *httpDispatchHandler) Provision(ctx caddycore.Context) error {
 	}
 	handler.allowedRequestCookies = allowedCookies
 	handler.binding = binding
+	compiledAPI, err := compileAPIContract(handler.API, handler.Instance, handler.Mode)
+	if err != nil {
+		return errUnsupportedSettings
+	}
+	handler.compiledAPI = compiledAPI
 	if handler.Mode == "http_stream" || handler.Mode == "websocket" || handler.Mode == "sse" {
 		if handler.MaxConcurrentStreams == 0 {
 			handler.MaxConcurrentStreams = contract.MaxStreamConcurrencyPerInstance
@@ -239,7 +247,7 @@ func (handler *httpDispatchHandler) ServeHTTP(writer http.ResponseWriter, reques
 		blocked[http.CanonicalHeaderKey(name)] = struct{}{}
 	}
 	// Never forward the raw Cookie header. Only values selected by this route's
-	// explicit requestCookieNames allow-list cross the plugin boundary below.
+	// explicit requestCookieNames allow-list cross the service boundary below.
 	blocked[http.CanonicalHeaderKey(handler.contract.CookieHeader)] = struct{}{}
 	headers := make(map[string]string, len(request.Header))
 	for name, values := range request.Header {
@@ -248,20 +256,31 @@ func (handler *httpDispatchHandler) ServeHTTP(writer http.ResponseWriter, reques
 		}
 		headers[name] = strings.Join(values, ",")
 	}
-	if handler.Mode == "websocket" {
-		return handler.serveWebSocket(writer, request, headers)
-	}
-	if handler.Mode == "http_stream" || handler.Mode == "sse" {
-		return handler.serveStream(writer, request, headers)
+	if handler.Mode == "websocket" || handler.Mode == "http_stream" || handler.Mode == "sse" {
+		parameters, status := handler.compiledAPI.validateRequest(request, nil)
+		if status != 0 {
+			writer.WriteHeader(status)
+			return nil
+		}
+		if handler.Mode == "websocket" {
+			return handler.serveWebSocket(writer, request, headers, parameters)
+		}
+		return handler.serveStream(writer, request, headers, parameters)
 	}
 	body, err := io.ReadAll(io.LimitReader(request.Body, handler.contract.MaxRequestBytes+1))
 	if err != nil || int64(len(body)) > handler.contract.MaxRequestBytes {
 		writer.WriteHeader(handler.contract.RequestTooLargeStatus)
 		return nil
 	}
+	parameters, status := handler.compiledAPI.validateRequest(request, body)
+	if status != 0 {
+		writer.WriteHeader(status)
+		return nil
+	}
 	payload, err := json.Marshal(httpRequestPayload{
 		Method: request.Method, Path: request.URL.EscapedPath(), Query: request.URL.RawQuery,
-		Headers: headers, Cookies: handler.requestCookies(request), Body: body, RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr,
+		Headers: headers, Cookies: handler.requestCookies(request), Body: body, Parameters: &parameters,
+		RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr,
 	})
 	if err != nil {
 		writer.WriteHeader(handler.contract.InvalidRequestStatus)
@@ -290,7 +309,7 @@ func (handler *httpDispatchHandler) ServeHTTP(writer http.ResponseWriter, reques
 	return nil
 }
 
-func (handler *httpDispatchHandler) serveWebSocket(writer http.ResponseWriter, request *http.Request, headers map[string]string) error {
+func (handler *httpDispatchHandler) serveWebSocket(writer http.ResponseWriter, request *http.Request, headers map[string]string, parameters typedRequestParameters) error {
 	contract := handler.contract.Stream
 	ws := contract.WebSocket
 	if !websocket.IsWebSocketUpgrade(request) || request.Method != http.MethodGet {
@@ -321,7 +340,8 @@ func (handler *httpDispatchHandler) serveWebSocket(writer http.ResponseWriter, r
 	}
 	defer func() { _ = streamCloser.Close() }()
 	requestPayload := httpRequestPayload{Method: request.Method, Path: request.URL.EscapedPath(), Query: request.URL.RawQuery,
-		Headers: headers, Cookies: handler.requestCookies(request), RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr}
+		Headers: headers, Cookies: handler.requestCookies(request), Parameters: &parameters,
+		RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr}
 	start, err := json.Marshal(map[string]any{
 		contract.KindField:    contract.RequestStartKind,
 		contract.RequestField: requestPayload,
@@ -626,7 +646,7 @@ func relayWebSocketRequest(connection *websocket.Conn, stream peer.Stream, contr
 	}
 }
 
-func (handler *httpDispatchHandler) serveStream(writer http.ResponseWriter, request *http.Request, headers map[string]string) error {
+func (handler *httpDispatchHandler) serveStream(writer http.ResponseWriter, request *http.Request, headers map[string]string, parameters typedRequestParameters) error {
 	contract := handler.contract.Stream
 	defer request.Body.Close()
 	select {
@@ -652,7 +672,8 @@ func (handler *httpDispatchHandler) serveStream(writer http.ResponseWriter, requ
 	}
 	defer func() { _ = streamCloser.Close() }()
 	requestPayload := httpRequestPayload{Method: request.Method, Path: request.URL.EscapedPath(), Query: request.URL.RawQuery,
-		Headers: headers, Cookies: handler.requestCookies(request), RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr}
+		Headers: headers, Cookies: handler.requestCookies(request), Parameters: &parameters,
+		RequestID: request.Header.Get(handler.contract.RequestIDHeader), RemoteAddr: request.RemoteAddr}
 	start, err := json.Marshal(map[string]any{contract.KindField: contract.RequestStartKind, contract.RequestField: requestPayload})
 	if err != nil || len(start) > contract.MaxFrameBytes || sendPeerMessage(stream, peer.Message{Payload: start}) != nil {
 		writer.WriteHeader(handler.contract.InvalidRequestStatus)

@@ -1,12 +1,12 @@
 package settings
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func SettingsSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/plugins/server/settings/v1/schema.json",
-		Title:                "Server plugin settings v1",
+		ID:                   "https://liapoldus.github.io/services/server/settings/v1/schema.json",
+		Title:                "Server service settings v1",
 		Description:          "Strict Liapoldus configuration compiled privately into the Caddy runtime. Native Caddy JSON and Caddyfile input are not accepted.",
 		Type:                 "object",
 		AdditionalProperties: false,
@@ -42,7 +42,7 @@ func SettingsSchema() schema.Definition {
 			}},
 		}, "tlsCustom": {
 			Type:                 "object",
-			Description:          "Uses the referenced certificate/key pair. The plugin resolves references only through the scoped secret-grant boundary and validates the pair before activation. Effective TLS bounds are TLS 1.2 minimum and TLS 1.3 maximum.",
+			Description:          "Uses the referenced certificate/key pair. The service resolves references only through the scoped secret-grant boundary and validates the pair before activation. Effective TLS bounds are TLS 1.2 minimum and TLS 1.3 maximum.",
 			AdditionalProperties: false,
 			Required:             schema.Value([]string{"mode", "certificateRef", "privateKeyRef"}),
 			Properties: map[string]schema.Definition{"mode": {
@@ -144,7 +144,7 @@ func SettingsSchema() schema.Definition {
 		}, "listener": {
 			Ref: "#/$defs/httpListener",
 		}, "pathMatcher": {
-			Description: "Exactly one path mode compares against the canonical request path without query. Before matching, the request path rejects malformed percent-encoding, NUL/control and invalid UTF-8, percent-decodes exactly once, removes dot segments, collapses repeated slashes and preserves a trailing slash (including paths ending in /. or /..). exact is equality and prefix is case-sensitive prefix matching; glob and regex are full-match. exact/prefix/glob configured values are already-decoded canonical absolute paths: Reload rejects repeated slashes and literal dot segments and never percent-decodes settings. Glob tokens are read left-to-right using the longest token (** before *), so *** means ** followed by *; * matches any number of non-slash characters, ** any characters including slash, and ? exactly one non-slash character; character classes and escaping are not supported. Regex uses Go RE2 full-match over the canonical request path; its source is compiled but not path-normalized. Reload validates configured paths and compiles regex before activation.",
+			Description: "Exactly one path mode compares against the canonical request path without query. Before matching, the request path rejects malformed percent-encoding, NUL/control and invalid UTF-8, percent-decodes exactly once, removes dot segments, collapses repeated slashes and preserves a trailing slash (including paths ending in /. or /..). exact is equality and prefix is case-sensitive prefix matching; glob and regex are full-match. exact/prefix/glob configured values are already-decoded canonical absolute paths: Reload rejects repeated slashes and literal dot segments and never percent-decodes settings. Named templates are generated internally only from a service's versioned API contract, not supplied in match. Glob tokens are read left-to-right using the longest token (** before *), so *** means ** followed by *; * matches any number of non-slash characters, ** any characters including slash, and ? exactly one non-slash character; character classes and escaping are not supported. Regex uses Go RE2 full-match over the canonical request path; its source is compiled but not path-normalized. Reload validates configured paths and compiles regex before activation.",
 			OneOf: []schema.Definition{{
 				Type:                 "object",
 				AdditionalProperties: false,
@@ -273,12 +273,12 @@ func SettingsSchema() schema.Definition {
 					Ref: "#/$defs/upstream",
 				}),
 			}},
-		}, "pluginHandler": {
+		}, "serviceHandler": {
 			Type:                 "object",
 			AdditionalProperties: false,
 			Required:             schema.Value([]string{"type", "instanceId", "capability", "mode"}),
 			Properties: map[string]schema.Definition{"type": {
-				Const: "plugin",
+				Const: "service",
 			}, "instanceId": {
 				Ref: "#/$defs/nonEmptyString",
 			}, "capability": {
@@ -291,7 +291,7 @@ func SettingsSchema() schema.Definition {
 					MinLength: schema.Value(int(1)),
 					Pattern:   "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$",
 				}),
-				Description: "Only these request Cookie names are included in the plugin request context; all other cookies are omitted.",
+				Description: "Only these request Cookie names are included in the service request context; all other cookies are omitted.",
 			}, "mode": {
 				Enum:        []any{"call", "http_stream", "websocket", "sse"},
 				Description: "Selects a Server-supported invocation mode. Target method availability is determined by the generic peer call at invocation time; Core does not inspect product capabilities.",
@@ -332,7 +332,7 @@ func SettingsSchema() schema.Definition {
 			}, {
 				Ref: "#/$defs/reverseProxyHandler",
 			}, {
-				Ref: "#/$defs/pluginHandler",
+				Ref: "#/$defs/serviceHandler",
 			}},
 		}, "httpRoute": {
 			Type:                 "object",
@@ -347,6 +347,50 @@ func SettingsSchema() schema.Definition {
 				Ref: "#/$defs/httpMatch",
 			}, "handler": {
 				Ref: "#/$defs/httpHandler",
+			}, "api": {
+				Ref: "#/$defs/serviceAPIContract",
+			}},
+			AllOf: []schema.Definition{{
+				If: schema.Value(schema.Definition{
+					Properties: map[string]schema.Definition{"handler": {
+						Type: "object",
+						Properties: map[string]schema.Definition{"type": {
+							Const: "service",
+						}},
+						Required: schema.Value([]string{"type"}),
+					}},
+					Required: schema.Value([]string{"handler"}),
+				}),
+				Then: schema.Value(schema.Definition{
+					Required: schema.Value([]string{"api"}),
+					Properties: map[string]schema.Definition{"match": {
+						Not: schema.Value(schema.Definition{
+							AnyOf: []schema.Definition{{Type: "object", Required: schema.Value([]string{"path"})}, {Type: "object", Required: schema.Value([]string{"methods"})}},
+						}),
+					}},
+				}),
+				Else: schema.Value(schema.Definition{
+					Not: schema.Value(schema.Definition{Required: schema.Value([]string{"api"})}),
+				}),
+			}, {
+				If: schema.Value(schema.Definition{
+					Properties: map[string]schema.Definition{"handler": {
+						Type: "object",
+						Properties: map[string]schema.Definition{"mode": {
+							Enum: []any{"http_stream", "websocket", "sse"},
+						}},
+						Required: schema.Value([]string{"mode"}),
+					}},
+					Required: schema.Value([]string{"handler"}),
+				}),
+				Then: schema.Value(schema.Definition{
+					Properties: map[string]schema.Definition{"api": {
+						Type: "object",
+						Properties: map[string]schema.Definition{"body": {
+							Not: schema.Value(schema.Definition{}),
+						}},
+					}},
+				}),
 			}},
 		}, "route": {
 			Ref: "#/$defs/httpRoute",
@@ -365,6 +409,127 @@ func SettingsSchema() schema.Definition {
 				Items: schema.Value(schema.Definition{
 					Ref: "#/$defs/route",
 				}),
+			}},
+		}, "apiParameter": {
+			Type:                 "object",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"name", "type", "repeated", "required"}),
+			Properties: map[string]schema.Definition{"name": {
+				Type:      "string",
+				MinLength: schema.Value(int(1)),
+				MaxLength: schema.Value(int(64)),
+				Pattern:   "^[A-Za-z][A-Za-z0-9_.-]*$",
+			}, "type": {
+				Enum: []any{"string", "integer", "number", "boolean", "string[]", "integer[]", "number[]", "boolean[]"},
+			}, "repeated": {
+				Enum: []any{"single", "first", "last", "repeat", "commaDelimited"},
+			}, "required": {
+				Type: "boolean",
+			}, "enum": {
+				Type:        "array",
+				MinItems:    schema.Value(int(1)),
+				MaxItems:    schema.Value(int(64)),
+				UniqueItems: schema.Value(true),
+				Items:       schema.Value(schema.Definition{Type: "string", MaxLength: schema.Value(int(8192))}),
+			}, "minLength": {
+				Type:    "integer",
+				Minimum: schema.Value(int(0)),
+				Maximum: schema.Value(int(8192)),
+			}, "maxLength": {
+				Type:    "integer",
+				Minimum: schema.Value(int(0)),
+				Maximum: schema.Value(int(8192)),
+			}, "minimum": {
+				Type: "number",
+			}, "maximum": {
+				Type: "number",
+			}, "minItems": {
+				Type:    "integer",
+				Minimum: schema.Value(int(0)),
+				Maximum: schema.Value(int(64)),
+			}, "maxItems": {
+				Type:    "integer",
+				Minimum: schema.Value(int(0)),
+				Maximum: schema.Value(int(64)),
+			}},
+		}, "apiRequestBody": {
+			Type:                 "object",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"required", "schema"}),
+			Properties: map[string]schema.Definition{"required": {
+				Type: "boolean",
+			}, "maxBytes": {
+				Type:    "integer",
+				Minimum: schema.Value(int(1)),
+				Maximum: schema.Value(int(1048576)),
+			}, "schema": {
+				Type:                 "object",
+				AdditionalProperties: true,
+				StudioJSONDocument:   true,
+			}},
+		}, "apiResponse": {
+			Type:                 "object",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"status", "contentType", "schema", "example"}),
+			Properties: map[string]schema.Definition{"status": {
+				Type:    "integer",
+				Minimum: schema.Value(int(200)),
+				Maximum: schema.Value(int(599)),
+			}, "contentType": {
+				Type:      "string",
+				MinLength: schema.Value(int(1)),
+				MaxLength: schema.Value(int(255)),
+			}, "schema": {
+				Type:                 "object",
+				AdditionalProperties: true,
+				StudioJSONDocument:   true,
+			}, "example": {
+				// An empty schema accepts any JSON value; the runtime validates the
+				// example against the sibling response schema during candidate apply.
+				StudioJSONValue: true,
+			}},
+		}, "serviceAPIContract": {
+			Type:                 "object",
+			AdditionalProperties: false,
+			Description:          "Typed Server-owned request contract. Query, path and declared header values are parsed and validated before service dispatch. Response schemas validate examples at candidate apply and are documentation only at runtime.",
+			Required:             schema.Value([]string{"version", "method", "path", "responses"}),
+			Properties: map[string]schema.Definition{"version": {
+				Const: "server-http/v1",
+			}, "method": {
+				Type:      "string",
+				MinLength: schema.Value(int(1)),
+				MaxLength: schema.Value(int(32)),
+				Pattern:   "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$",
+			}, "path": {
+				Type:      "string",
+				MinLength: schema.Value(int(1)),
+				MaxLength: schema.Value(int(2048)),
+				Pattern:   "^/",
+			}, "pathParameters": {
+				Type:     "array",
+				MaxItems: schema.Value(int(64)),
+				Items:    schema.Value(schema.Definition{Ref: "#/$defs/apiParameter"}),
+			}, "queryParameters": {
+				Type:     "array",
+				MaxItems: schema.Value(int(64)),
+				Items:    schema.Value(schema.Definition{Ref: "#/$defs/apiParameter"}),
+			}, "headerParameters": {
+				Type:     "array",
+				MaxItems: schema.Value(int(64)),
+				Items:    schema.Value(schema.Definition{Ref: "#/$defs/apiParameter"}),
+			}, "allowUnknownQuery": {
+				Type:    "boolean",
+				Default: true,
+			}, "allowUnknownHeaders": {
+				Type:    "boolean",
+				Default: true,
+			}, "body": {
+				Ref: "#/$defs/apiRequestBody",
+			}, "responses": {
+				Type:     "array",
+				MinItems: schema.Value(int(1)),
+				MaxItems: schema.Value(int(32)),
+				Items:    schema.Value(schema.Definition{Ref: "#/$defs/apiResponse"}),
 			}},
 		}},
 	}

@@ -1,12 +1,12 @@
 package http
 
-import "liapoldus.local/server-plugin/contracts/schema"
+import "liapoldus.local/server-service/contracts/schema"
 
 func HTTPStreamSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
 		ID:                   "https://liapoldus.github.io/spec/server/http-stream.v1.schema.json",
-		Title:                "Server plugin HTTP stream envelope contract",
+		Title:                "Server service HTTP stream envelope contract",
 		Type:                 "object",
 		AdditionalProperties: false,
 		Required:             schema.Value([]string{"version", "kindField", "dataField", "requestField", "statusField", "headersField", "maxChunkBytes", "maxFrameBytes", "requestStartKind", "requestChunkKind", "requestEndKind", "responseStartKind", "responseChunkKind", "responseEndKind", "websocket", "sse"}),

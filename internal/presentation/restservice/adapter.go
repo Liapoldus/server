@@ -1,4 +1,4 @@
-package restplugin
+package restservice
 
 import (
 	"context"
@@ -8,21 +8,23 @@ import (
 	"net/http"
 	"time"
 
-	sdkapp "github.com/Liapoldus/plugin-sdk/v2/application"
-	sdkinterfaces "github.com/Liapoldus/plugin-sdk/v2/domain/interfaces"
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
-	sdkinfra "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
-	sdkpresentation "github.com/Liapoldus/plugin-sdk/v2/presentation"
-	"liapoldus.local/server-plugin/contracts"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	siteapp "liapoldus.local/server-plugin/internal/application/site"
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
+	sdkapp "github.com/Liapoldus/service-sdk/v2/application"
+	sdkinterfaces "github.com/Liapoldus/service-sdk/v2/domain/interfaces"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
+	sdkinfra "github.com/Liapoldus/service-sdk/v2/infrastructure"
+	sdkpresentation "github.com/Liapoldus/service-sdk/v2/presentation"
+	"liapoldus.local/server-service/contracts"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	siteapp "liapoldus.local/server-service/internal/application/site"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
+
+const ServiceVersion = "1.1.6"
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
 
 // Adapter is the Server-owned metadata publisher and configuration applier.
-// The Plugin SDK sees settings as opaque bytes until this adapter validates and
+// The Service SDK sees settings as opaque bytes until this adapter validates and
 // applies them through the Server's own contracts and runtime.
 type Adapter struct {
 	configuration *settingsapp.Configuration
@@ -57,11 +59,88 @@ func New(configuration *settingsapp.Configuration, publisher *siteapp.SitePublis
 	if err != nil {
 		return nil, err
 	}
-	manifest, err := sdkpresentation.NewManifestProvider(sdkmodels.ManifestDescriptor{ID: "server", Version: "1.1.4"}, schema)
+	manifest, err := sdkpresentation.NewManifestProvider(sdkmodels.ManifestDescriptor{
+		ID: "server", Version: ServiceVersion, ConfigurationUI: serverConfigurationUI(), Resources: serverResources(),
+	}, schema)
 	if err != nil {
 		return nil, err
 	}
 	return &Adapter{configuration: configuration, publisher: publisher, manifest: manifest}, nil
+}
+
+func serverResources() []sdkmodels.ResourceDescriptor {
+	return []sdkmodels.ResourceDescriptor{{
+		ID: "sites", Kind: "site", Provider: sdkmodels.ResourceProviderServiceAdmin,
+		PageID: "sites", QueryResource: "sites", ValuePointer: "/siteId", LabelPointer: "/siteId",
+		Publication: &sdkmodels.ResourcePublicationDescriptor{PageID: "sites", ActionID: "publish"},
+	}}
+}
+
+func serverConfigurationUI() *sdkmodels.ConfigurationUIDescriptor {
+	text := func(ru, en string) sdkmodels.ConfigurationUIText {
+		return sdkmodels.ConfigurationUIText{RU: ru, EN: en}
+	}
+	field := func(path, ru, en, widget string, order int) sdkmodels.ConfigurationUIField {
+		return sdkmodels.ConfigurationUIField{Path: path, Label: text(ru, en), Widget: widget, Order: order}
+	}
+	siteResourceField := field("/config/routes/*/handler/siteId", "Сайт", "Site", "resource", 100)
+	siteResourceField.ResourceKind = "site"
+	siteResourceField.ResourceID = "sites"
+	return &sdkmodels.ConfigurationUIDescriptor{
+		Version: sdkmodels.ConfigurationUIVersion,
+		Groups: []sdkmodels.ConfigurationUIGroup{
+			{
+				ID: "listeners", Title: text("Слушатели", "Listeners"),
+				Description: &sdkmodels.ConfigurationUIText{RU: "HTTP-bind и протоколы. TLS references остаются под управлением Core и не раскрываются в UI.", EN: "HTTP binds and protocols. TLS references remain Core-managed and are never exposed in the UI."},
+				Order:       10, Fields: []sdkmodels.ConfigurationUIField{
+					field("/config/listeners/*/id", "ID слушателя", "Listener ID", "text", 10),
+					field("/config/listeners/*/address", "Адрес bind", "Bind address", "text", 20),
+					field("/config/listeners/*/hostnames", "Имена хостов", "Hostnames", "array", 30),
+					field("/config/listeners/*/protocols", "HTTP-протоколы", "HTTP protocols", "array", 40),
+					field("/config/listeners/*/tls/mode", "Режим TLS", "TLS mode", "select", 50),
+					field("/config/listeners/*/redirectToListenerId", "Listener для redirect", "Redirect target listener", "text", 60),
+				},
+			},
+			{
+				ID: "service-routes", Title: text("Маршруты сервисов", "Service routes"),
+				Description: &sdkmodels.ConfigurationUIText{RU: "HTTP endpoints маршрутизируют запросы к независимому сервису по instance ID и capability.", EN: "HTTP endpoints route requests to an independent service by instance ID and capability."},
+				Order:       20, Fields: []sdkmodels.ConfigurationUIField{
+					field("/config/routes/*/id", "ID маршрута", "Route ID", "text", 10),
+					field("/config/routes/*/listenerId", "Слушатель", "Listener", "text", 20),
+					field("/config/routes/*/handler/type", "Тип обработчика", "Handler type", "select", 30),
+					field("/config/routes/*/handler/instanceId", "ID экземпляра сервиса", "Service instance ID", "text", 40),
+					field("/config/routes/*/handler/capability", "Capability", "Capability", "text", 50),
+					field("/config/routes/*/handler/mode", "Режим вызова", "Invocation mode", "select", 60),
+					field("/config/routes/*/handler/requestCookieNames", "Разрешённые Cookie", "Allowed cookies", "array", 70),
+					siteResourceField,
+					field("/config/routes/*/api/method", "HTTP method", "HTTP method", "text", 80),
+					field("/config/routes/*/api/path", "Шаблон пути", "Path template", "text", 90),
+				},
+			},
+			{
+				ID: "request-contract", Title: text("Контракт запроса", "Request contract"),
+				Description: &sdkmodels.ConfigurationUIText{RU: "Типизированные параметры проверяются до вызова целевого сервиса.", EN: "Typed parameters are validated before the target service is called."},
+				Order:       30, Fields: []sdkmodels.ConfigurationUIField{
+					field("/config/routes/*/api/pathParameters/*/name", "Имя path-параметра", "Path parameter name", "text", 10),
+					field("/config/routes/*/api/pathParameters/*/type", "Тип path-параметра", "Path parameter type", "select", 20),
+					field("/config/routes/*/api/queryParameters/*/name", "Имя query-параметра", "Query parameter name", "text", 30),
+					field("/config/routes/*/api/queryParameters/*/type", "Тип query-параметра", "Query parameter type", "select", 40),
+					field("/config/routes/*/api/queryParameters/*/repeated", "Правило повторения", "Repetition policy", "select", 50),
+					field("/config/routes/*/api/queryParameters/*/required", "Обязательный query", "Required query parameter", "toggle", 60),
+					field("/config/routes/*/api/headerParameters/*/name", "Имя header", "Header name", "text", 70),
+					field("/config/routes/*/api/headerParameters/*/type", "Тип header", "Header type", "select", 80),
+					field("/config/routes/*/api/headerParameters/*/repeated", "Правило повторения header", "Header repetition policy", "select", 90),
+					field("/config/routes/*/api/headerParameters/*/required", "Обязательный header", "Required header", "toggle", 100),
+					field("/config/routes/*/api/allowUnknownQuery", "Разрешать неизвестные query", "Allow unknown query parameters", "toggle", 110),
+					field("/config/routes/*/api/allowUnknownHeaders", "Разрешать неизвестные headers", "Allow unknown headers", "toggle", 120),
+					field("/config/routes/*/api/body/required", "Обязательный JSON body", "Required JSON body", "toggle", 130),
+					field("/config/routes/*/api/body/maxBytes", "Максимальный JSON body", "Maximum JSON body", "slider", 140),
+					field("/config/routes/*/api/responses/*/status", "HTTP status ответа", "Response HTTP status", "slider", 150),
+					field("/config/routes/*/api/responses/*/contentType", "Content-Type ответа", "Response Content-Type", "text", 160),
+				},
+			},
+		},
+	}
 }
 
 func (adapter *Adapter) Manifest(ctx context.Context) ([]byte, error) {
@@ -142,7 +221,7 @@ func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings settingsm
 	return adapter.configuration.ApplyWithSecrets(settings, generation, values)
 }
 
-// NewHandler creates the Plugin SDK REST lifecycle handler and its use case.
+// NewHandler creates the Service SDK REST lifecycle handler and its use case.
 // It does not bind a socket or infer transport identity; callers must inject
 // those separately through the SDK's transport constructors.
 func NewHandler(
@@ -212,7 +291,7 @@ func NewHandler(
 		}
 		adapter.SetSecretProvider(secrets)
 	}
-	metadata := sdkinterfaces.PluginMetadata(adapter)
+	metadata := sdkinterfaces.ServiceMetadata(adapter)
 	handler, err := sdkpresentation.NewHandlerSet(sdkpresentation.HandlerConfiguration{
 		Contracts:    presentationContracts(contract),
 		Lifecycle:    lifecycle,
@@ -250,7 +329,7 @@ func (sink collectorMetricsSink) SetReady(ready bool) {
 	sink.collector.SetReady(ready)
 }
 
-// NewMutualTLSServer builds the SDK-owned Core↔plugin REST server. The Core
+// NewMutualTLSServer builds the SDK-owned Core↔service REST server. The Core
 // identity, credential provider and revocation source are required inputs and
 // are never discovered from request data or product settings.
 func NewMutualTLSServer(
@@ -325,57 +404,57 @@ func presentationContracts(contract sdkinfra.HTTPContract) sdkpresentation.Contr
 		ConfigSchemaEndpoint: endpoint("configSchema"), HealthEndpoint: endpoint("health"),
 		ReadyEndpoint: endpoint("ready"), ReloadEndpoint: endpoint("reload"),
 		MetricsEndpoint: endpoint("metrics"),
-		HealthStatus:    contract.Plugin.Responses.Health.Status,
-		HealthBody:      cloneStringMap(contract.Plugin.Responses.Health.Body),
+		HealthStatus:    contract.Service.Responses.Health.Status,
+		HealthBody:      cloneStringMap(contract.Service.Responses.Health.Body),
 		ContentTypes: sdkpresentation.ContentTypes{
-			JSON: contract.Plugin.Responses.ContentTypes.JSON, Metrics: contract.Plugin.Responses.ContentTypes.Metrics,
+			JSON: contract.Service.Responses.ContentTypes.JSON, Metrics: contract.Service.Responses.ContentTypes.Metrics,
 		},
-		ReloadRequest:         document(contract.Plugin.ReloadRequest),
-		ReloadAcknowledgement: document(contract.Plugin.ReloadAcknowledgement),
-		Readiness:             document(contract.Plugin.Readiness), Manifest: document(contract.Plugin.Manifest),
-		ConfigurationSchema:    document(contract.Plugin.ConfigurationSchema),
+		ReloadRequest:         document(contract.Service.ReloadRequest),
+		ReloadAcknowledgement: document(contract.Service.ReloadAcknowledgement),
+		Readiness:             document(contract.Service.Readiness), Manifest: document(contract.Service.Manifest),
+		ConfigurationSchema:    document(contract.Service.ConfigurationSchema),
 		ArtifactStreamEndpoint: endpoint("artifactStream"), AdminSurfaceEndpoint: endpoint("adminSurface"),
 		AdminActionEndpoint: endpoint("adminAction"),
 		ArtifactStream: sdkpresentation.ArtifactStreamContract{
-			MediaType:                     contract.Plugin.ArtifactStream.MediaType,
-			MetadataMediaType:             contract.Plugin.ArtifactStream.MetadataMediaType,
-			Parts:                         append([]string(nil), contract.Plugin.ArtifactStream.Parts...),
-			PartOrder:                     append([]string(nil), contract.Plugin.ArtifactStream.PartOrder...),
-			MaximumArtifactBytes:          contract.Plugin.ArtifactStream.MaximumArtifactBytes,
-			MinimumArtifactBytes:          contract.Plugin.ArtifactStream.MinimumArtifactBytes,
-			MaximumMetadataBytes:          contract.Plugin.ArtifactStream.MaximumMetadataBytes,
-			MaximumMultipartOverheadBytes: contract.Plugin.ArtifactStream.MaximumMultipartOverheadBytes,
-			MaximumRequestBytes:           contract.Plugin.ArtifactStream.MaximumRequestBytes,
-			MaximumReceiptBytes:           contract.Plugin.ArtifactStream.MaximumReceiptBytes,
-			AcceptedStatus:                contract.Plugin.ArtifactStream.AcceptedStatus,
+			MediaType:                     contract.Service.ArtifactStream.MediaType,
+			MetadataMediaType:             contract.Service.ArtifactStream.MetadataMediaType,
+			Parts:                         append([]string(nil), contract.Service.ArtifactStream.Parts...),
+			PartOrder:                     append([]string(nil), contract.Service.ArtifactStream.PartOrder...),
+			MaximumArtifactBytes:          contract.Service.ArtifactStream.MaximumArtifactBytes,
+			MinimumArtifactBytes:          contract.Service.ArtifactStream.MinimumArtifactBytes,
+			MaximumMetadataBytes:          contract.Service.ArtifactStream.MaximumMetadataBytes,
+			MaximumMultipartOverheadBytes: contract.Service.ArtifactStream.MaximumMultipartOverheadBytes,
+			MaximumRequestBytes:           contract.Service.ArtifactStream.MaximumRequestBytes,
+			MaximumReceiptBytes:           contract.Service.ArtifactStream.MaximumReceiptBytes,
+			AcceptedStatus:                contract.Service.ArtifactStream.AcceptedStatus,
 			Deadline:                      time.Duration(contract.Deadlines.ArtifactStreamSeconds) * time.Second,
-			FilenameForwarded:             contract.Plugin.ArtifactStream.FilenameForwarded,
+			FilenameForwarded:             contract.Service.ArtifactStream.FilenameForwarded,
 			InvocationContext: sdkpresentation.ArtifactInvocationContract{
-				MaximumBytes: contract.Plugin.ArtifactStream.InvocationContext.MaximumBytes,
-				Required:     append([]string(nil), contract.Plugin.ArtifactStream.InvocationContext.Required...),
-				Optional:     append([]string(nil), contract.Plugin.ArtifactStream.InvocationContext.Optional...),
-				Headers:      cloneStringMap(contract.Plugin.ArtifactStream.InvocationContext.Headers),
+				MaximumBytes: contract.Service.ArtifactStream.InvocationContext.MaximumBytes,
+				Required:     append([]string(nil), contract.Service.ArtifactStream.InvocationContext.Required...),
+				Optional:     append([]string(nil), contract.Service.ArtifactStream.InvocationContext.Optional...),
+				Headers:      cloneStringMap(contract.Service.ArtifactStream.InvocationContext.Headers),
 			},
 		},
-		AdminSurface: document(contract.Plugin.AdminSurface),
+		AdminSurface: document(contract.Service.AdminSurface),
 		AdminAction: sdkpresentation.AdminActionContract{
-			MediaType:            contract.Plugin.AdminAction.MediaType,
-			MaximumRequestBytes:  contract.Plugin.AdminAction.MaximumRequestBytes,
-			MaximumResponseBytes: contract.Plugin.AdminAction.MaximumResponseBytes,
-			MaximumPageIDBytes:   contract.Plugin.AdminAction.MaximumPageIDBytes,
-			MaximumActionIDBytes: contract.Plugin.AdminAction.MaximumActionIDBytes,
-			PathSegmentPattern:   contract.Plugin.AdminAction.PathSegmentPattern,
+			MediaType:            contract.Service.AdminAction.MediaType,
+			MaximumRequestBytes:  contract.Service.AdminAction.MaximumRequestBytes,
+			MaximumResponseBytes: contract.Service.AdminAction.MaximumResponseBytes,
+			MaximumPageIDBytes:   contract.Service.AdminAction.MaximumPageIDBytes,
+			MaximumActionIDBytes: contract.Service.AdminAction.MaximumActionIDBytes,
+			PathSegmentPattern:   contract.Service.AdminAction.PathSegmentPattern,
 			ResponseStatus: sdkpresentation.StatusRangeContract{
-				Minimum: contract.Plugin.AdminAction.ResponseStatus.Minimum,
-				Maximum: contract.Plugin.AdminAction.ResponseStatus.Maximum,
+				Minimum: contract.Service.AdminAction.ResponseStatus.Minimum,
+				Maximum: contract.Service.AdminAction.ResponseStatus.Maximum,
 			},
-			Deadline: time.Duration(contract.Plugin.AdminAction.DeadlineSeconds) * time.Second,
+			Deadline: time.Duration(contract.Service.AdminAction.DeadlineSeconds) * time.Second,
 			InvocationContext: sdkpresentation.AdminInvocationContract{
-				MaximumBytes:        contract.Plugin.AdminAction.InvocationContext.MaximumBytes,
-				UnknownHeaderPrefix: contract.Plugin.AdminAction.InvocationContext.UnknownHeaderPrefix,
-				Required:            append([]string(nil), contract.Plugin.AdminAction.InvocationContext.Required...),
-				Optional:            append([]string(nil), contract.Plugin.AdminAction.InvocationContext.Optional...),
-				Headers:             cloneStringMap(contract.Plugin.AdminAction.InvocationContext.Headers),
+				MaximumBytes:        contract.Service.AdminAction.InvocationContext.MaximumBytes,
+				UnknownHeaderPrefix: contract.Service.AdminAction.InvocationContext.UnknownHeaderPrefix,
+				Required:            append([]string(nil), contract.Service.AdminAction.InvocationContext.Required...),
+				Optional:            append([]string(nil), contract.Service.AdminAction.InvocationContext.Optional...),
+				Headers:             cloneStringMap(contract.Service.AdminAction.InvocationContext.Headers),
 			},
 		},
 		Registration: document(sdkinfra.DocumentContract{
@@ -383,8 +462,8 @@ func presentationContracts(contract sdkinfra.HTTPContract) sdkpresentation.Contr
 			MaximumBytes: contract.Identity.Registration.MaximumBytes,
 			Required:     contract.Identity.Registration.Required,
 		}),
-		MaximumMetadataBytes: contract.Plugin.MaximumMetadataBytes,
-		ReadinessDeadline:    time.Duration(contract.Deadlines.PluginReadinessSeconds) * time.Second,
+		MaximumMetadataBytes: contract.Service.MaximumMetadataBytes,
+		ReadinessDeadline:    time.Duration(contract.Deadlines.ServiceReadinessSeconds) * time.Second,
 		Problems:             problems, Errors: errors,
 		OutcomeProblems: cloneStringMap(contract.OutcomeProblems),
 		SuccessOutcomes: append([]string(nil), contract.SuccessOutcomes...),
@@ -399,5 +478,5 @@ func cloneStringMap(source map[string]string) map[string]string {
 	return copy
 }
 
-var _ sdkinterfaces.PluginMetadata = (*Adapter)(nil)
+var _ sdkinterfaces.ServiceMetadata = (*Adapter)(nil)
 var _ sdkinterfaces.ConfigurationApplier = (*Adapter)(nil)

@@ -48,7 +48,7 @@
     ]
   },
   "operationStatus": {
-    "coreControlUsesPluginSdkRest": true,
+    "coreControlUsesServiceSdkRest": true,
     "coreResource": "GET /api/operations/{id}",
     "coreStates": [
       "pending",
@@ -57,13 +57,13 @@
       "failed",
       "degraded"
     ],
-    "pluginStates": [
+    "serviceStates": [
       "accepted",
       "running",
       "completed",
       "failed"
     ],
-    "pluginStatusCapability": "server.operations.get",
+    "serviceStatusCapability": "server.operations.get",
     "stateMapping": {
       "accepted": "pending",
       "completed": "succeeded",
@@ -94,7 +94,7 @@
       },
       "httpStatus": 200,
       "kind": "action",
-      "ownership": "plugin-admin-surface-action",
+      "ownership": "service-admin-surface-action",
       "requestSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -197,7 +197,7 @@
       },
       "httpStatus": 200,
       "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
+      "ownership": "service-admin-surface-capability",
       "requestSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -312,7 +312,7 @@
       },
       "httpStatus": 200,
       "kind": "action",
-      "ownership": "plugin-admin-surface-action",
+      "ownership": "service-admin-surface-action",
       "requestSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -413,7 +413,7 @@
       },
       "httpStatus": 200,
       "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
+      "ownership": "service-admin-surface-capability",
       "requestSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -531,7 +531,7 @@
       },
       "httpStatus": 200,
       "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
+      "ownership": "service-admin-surface-capability",
       "requestSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -681,7 +681,7 @@
         "required": true,
         "sameInput": "return-existing-operation-without-duplicate-effect",
         "scope": [
-          "plugin-instance",
+          "service-instance",
           "capability",
           "idempotency-key"
         ]
@@ -698,7 +698,7 @@
           "artifact"
         ]
       },
-      "ownership": "plugin-admin-surface-action",
+      "ownership": "service-admin-surface-action",
       "receiptSchema": "contracts/v1/artifact-operation-result.schema.json",
       "revisionPrecondition": "if current exists, expectedCurrentRevision is required and must match; for a new site, expectedCurrentRevision must be omitted",
       "surfaceBinding": {
@@ -706,7 +706,7 @@
         "page": "sites",
         "section": "sites"
       },
-      "transport": "plugin-sdk.rest.artifact-stream"
+      "transport": "service-sdk.rest.artifact-stream"
     },
     "server.sites.releases.list": {
       "errors": {
@@ -729,7 +729,7 @@
       },
       "httpStatus": 200,
       "kind": "query",
-      "ownership": "plugin-admin-surface-capability",
+      "ownership": "service-admin-surface-capability",
       "requestSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -836,14 +836,14 @@
         "repeat": "invoke-again",
         "required": true,
         "scope": [
-          "plugin-instance",
+          "service-instance",
           "capability",
           "idempotency-key"
         ],
         "semantics": "correlation-only"
       },
       "kind": "action",
-      "ownership": "plugin-admin-surface-action",
+      "ownership": "service-admin-surface-action",
       "requestSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -902,7 +902,6 @@
       }
     }
   },
-  "plugin": "server",
   "publishOperation": {
     "acceptance": "after-validated-metadata-and-bounded-artifact-bytes-are-durably-stored-and-sha256-matches",
     "archiveValidation": "asynchronous-durable-operation-before-release-activation",
@@ -916,7 +915,8 @@
     "immutableRevisions": true,
     "publishStatus": 202,
     "staging": "validate-complete-staged-release-before-activation",
-    "storage": "plugin-owned-persistent-filesystem"
+    "storage": "service-owned-persistent-filesystem"
   },
+  "service": "server",
   "version": 1
 }

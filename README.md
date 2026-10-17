@@ -1,13 +1,16 @@
-# Server plugin
+# Server service
 
-Отдельный HTTP/HTTPS plugin service на базе Caddy. Core не содержит Caddy
+Отдельный HTTP/HTTPS сервис на базе Caddy. Core не содержит Caddy
 runtime: оператор независимо устанавливает и запускает оба бинарника, а Core
-подключается к фиксированному endpoint Server plugin.
+подключается к фиксированному endpoint Server service.
 
-Общий lifecycle работает через Plugin SDK REST: Core вызывает `Reload`, plugin
+Общий lifecycle работает через Service SDK REST: Core вызывает `Reload`, service
 pull-ит точное поколение конфигурации из Core и подтверждает digest после
-успешной атомарной активации. `pluginprotocol` применяется только для
-настраиваемой generic plugin↔plugin связи.
+успешной атомарной активации. `wool` применяется только для
+настраиваемой generic service↔service связи через Wool.
+
+Control plane: Studio → CLI → Core → Service SDK REST. Data plane:
+независимые сервисы → Wool; Core не проксирует application traffic.
 
 Оператор запускает `cmd/server` с обязательными `--instance-id`,
 `--replica-id`, `--rest-listen`, `--core-url` и абсолютными путями
@@ -19,13 +22,13 @@ pull-ит точное поколение конфигурации из Core и 
 роли отдельно задаются `--core-uri` и `--core-client-uri`. Продуктовая
 конфигурация не передаётся через CLI или environment.
 
-Server не получает адреса соседних plugins из CLI или environment. Для
+Server не получает адреса соседних services из CLI или environment. Для
 аутентифицированных прямых вызовов он использует локальную peer identity
 (`--peer-identity`, `--peer-ca-file`, `--peer-cert`, `--peer-key`), а разрешённый
 endpoint и ожидаемую identity каждый раз разрешает по peer directory, выданному
 Core. Caddy settings содержат только opaque instance ID и capability; трафик
-идёт напрямую Server → `pluginprotocol` → plugin без proxy со стороны Core или
-CLI. Ни один plugin не требует знать реализации соседнего plugin.
+идёт напрямую Server → `wool` → service без proxy со стороны Core или
+CLI. Ни один service не требует знать реализации соседнего service.
 
 v1 включает HTTP/HTTPS, TLS/ACME, HTTP/2/3, статические сайты и reverse proxy.
 Публичный TCP/UDP relay и Caddy-L4 исключены из binary и settings schema и
@@ -35,5 +38,5 @@ v1 включает HTTP/HTTPS, TLS/ACME, HTTP/2/3, статические са�
 или контейнерами ни в одной версии.
 
 Полные границы и acceptance см. в
-[целевой архитектуре Core](../../liapoldus.github.io/core/architecture/target)
+[целевой архитектуре Core](https://liapoldus.github.io/core/architecture/target)
 и [TODO](TODO.md).

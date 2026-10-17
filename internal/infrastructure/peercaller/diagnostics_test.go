@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
 )
 
 func TestSummarizePeerDirectoryIncludesOnlySafeEligibilityMetadata(t *testing.T) {

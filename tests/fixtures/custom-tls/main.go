@@ -20,15 +20,15 @@ import (
 	"path/filepath"
 	"time"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
-	sdkpresentation "github.com/Liapoldus/plugin-sdk/v2/presentation"
-	"liapoldus.local/server-plugin/contracts"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	siteapp "liapoldus.local/server-plugin/internal/application/site"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/internal/infrastructure/site"
-	"liapoldus.local/server-plugin/internal/presentation/restplugin"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
+	sdkpresentation "github.com/Liapoldus/service-sdk/v2/presentation"
+	"liapoldus.local/server-service/contracts"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	siteapp "liapoldus.local/server-service/internal/application/site"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/internal/infrastructure/site"
+	"liapoldus.local/server-service/internal/presentation/restservice"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 const (
@@ -128,7 +128,7 @@ func main() {
 	check(err)
 	publisher, err := siteapp.NewSitePublisher(releaseStore)
 	check(err)
-	adapter, err := restplugin.New(configuration, publisher)
+	adapter, err := restservice.New(configuration, publisher)
 	check(err)
 	queryAction, err := contracts.AdminQueryActionID()
 	check(err)
@@ -139,7 +139,7 @@ func main() {
 	check(json.NewEncoder(os.Stdout).Encode(output))
 }
 
-func callAdminAction(adapter *restplugin.Adapter, pageID, actionID string, body []byte) adminResult {
+func callAdminAction(adapter *restservice.Adapter, pageID, actionID string, body []byte) adminResult {
 	response, err := adapter.HandleAdminAction(context.Background(), sdkpresentation.AdminActionInput{
 		Invocation: sdkmodels.AdminActionInvocation{CallerID: "fixture", InstanceID: "server", PageID: pageID,
 			ActionID: actionID, SurfaceDigest: "fixture-digest", RequestID: "fixture-request"},

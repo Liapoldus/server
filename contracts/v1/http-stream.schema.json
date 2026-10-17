@@ -227,6 +227,6 @@
     "websocket",
     "sse"
   ],
-  "title": "Server plugin HTTP stream envelope contract",
+  "title": "Server service HTTP stream envelope contract",
   "type": "object"
 }

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	settingsmodel "liapoldus.local/server-plugin/internal/domain/models/settings"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
 // Preserve the values captured from the runtime metadata parser before removal.
@@ -13,7 +13,7 @@ func TestSettingsDefinitionPreservation(t *testing.T) {
 	if settingsmodel.SettingsSchemaVersion != 1 || settingsmodel.SettingsVersionField != "schemaVersion" || settingsmodel.SettingsRuntimeConfigField != "config" {
 		t.Fatal("internal settings definition changed")
 	}
-	contents, err := PluginManifest()
+	contents, err := ServiceManifest()
 	if err != nil {
 		t.Fatal(err)
 	}

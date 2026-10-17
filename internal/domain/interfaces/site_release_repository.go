@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
+	sitemodel "liapoldus.local/server-service/internal/domain/models/site"
 )
 
 // SiteReleaseRepository persists accepted site actions, immutable releases and

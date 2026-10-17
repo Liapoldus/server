@@ -6,13 +6,13 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { Ajv2020 } from "ajv/dist/2020.js";
+import { settingsAjv } from "../support/settings-ajv.js";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const vectors = readContract('settings-vectors.json');
 const settingsSchema = readContract('settings.schema.json');
-const validateSettings = new Ajv2020({ allErrors: true }).compile(settingsSchema);
+const validateSettings = settingsAjv().compile(settingsSchema);
 
 describe("Caddy strict HTTP route matching", () => {
   it("matches canonical paths, hosts and methods in order and forwards the canonical path", async () => {

@@ -18,16 +18,15 @@ import (
 	"syscall"
 	"time"
 
-	sdkmodels "github.com/Liapoldus/plugin-sdk/v2/domain/models"
-	pluginsdk "github.com/Liapoldus/plugin-sdk/v2/infrastructure"
-	"liapoldus.local/server-plugin/contracts"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	siteapp "liapoldus.local/server-plugin/internal/application/site"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/internal/infrastructure/peercaller"
-	"liapoldus.local/server-plugin/internal/infrastructure/site"
-	publicapi "liapoldus.local/server-plugin/internal/presentation/publicapi"
-	pluginadapter "liapoldus.local/server-plugin/internal/presentation/restplugin"
+	sdkmodels "github.com/Liapoldus/service-sdk/v2/domain/models"
+	servicesdk "github.com/Liapoldus/service-sdk/v2/infrastructure"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	siteapp "liapoldus.local/server-service/internal/application/site"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/internal/infrastructure/peercaller"
+	"liapoldus.local/server-service/internal/infrastructure/site"
+	publicapi "liapoldus.local/server-service/internal/presentation/publicapi"
+	serviceadapter "liapoldus.local/server-service/internal/presentation/restservice"
 )
 
 type options struct {
@@ -75,12 +74,12 @@ func run(args []string) (runErr error) {
 		return err
 	}
 	stage = "sdk-contract"
-	contract, err := pluginsdk.LoadHTTPContract()
+	contract, err := servicesdk.LoadHTTPContract()
 	if err != nil {
 		return err
 	}
 	stage = "credentials"
-	credentials, err := pluginsdk.NewFileCredentialsProvider(contract, pluginsdk.CredentialsMaterial{
+	credentials, err := servicesdk.NewFileCredentialsProvider(contract, servicesdk.CredentialsMaterial{
 		CAFile:                settings.caFile,
 		ServerCertificateFile: settings.serverCert, ServerKeyFile: settings.serverKey,
 		ClientCertificateFile: settings.clientCert, ClientKeyFile: settings.clientKey,
@@ -94,7 +93,7 @@ func run(args []string) (runErr error) {
 		return err
 	}
 	stage = "replica-identity"
-	replicaContract, err := pluginsdk.LoadReplicaLifecycleContract()
+	replicaContract, err := servicesdk.LoadReplicaLifecycleContract()
 	if err != nil {
 		return err
 	}
@@ -106,12 +105,12 @@ func run(args []string) (runErr error) {
 	if placementID == "" {
 		placementID = "local-" + settings.replicaID
 	}
-	replicaIdentity, err := pluginsdk.ReplicaIdentityFromClientCertificate(replicaContract, clientCertificate.Leaf, settings.instanceID, settings.replicaID, placementID)
+	replicaIdentity, err := servicesdk.ReplicaIdentityFromClientCertificate(replicaContract, clientCertificate.Leaf, settings.instanceID, settings.replicaID, placementID)
 	if err != nil {
 		return fmt.Errorf("read SDK replica identity from client certificate: %w", err)
 	}
 	stage = "revocation"
-	revocation, err := pluginsdk.NewRevocation(pluginsdk.RevocationConfiguration{
+	revocation, err := servicesdk.NewRevocation(servicesdk.RevocationConfiguration{
 		Authorities: material.TrustAuthorities(), Files: []string{settings.crlFile},
 	})
 	if err != nil {
@@ -131,7 +130,7 @@ func run(args []string) (runErr error) {
 		return err
 	}
 	stage = "control-client"
-	controlClient, err := pluginsdk.NewMutualTLSClient(contract, credentials, pluginsdk.MutualTLSClientConfig{
+	controlClient, err := servicesdk.NewMutualTLSClient(contract, credentials, servicesdk.MutualTLSClientConfig{
 		Peer: corePeer, ServerName: settings.coreServerName, Revocation: revocation,
 	})
 	if err != nil {
@@ -140,12 +139,12 @@ func run(args []string) (runErr error) {
 	defer controlClient.CloseIdleConnections()
 	var publicServer *http.Server
 	stage = "config-source"
-	source, err := pluginsdk.NewCoreConfigurationSource(contract, settings.coreURL, controlClient)
+	source, err := servicesdk.NewCoreConfigurationSource(contract, settings.coreURL, controlClient)
 	if err != nil {
 		return err
 	}
 	stage = "secret-broker"
-	secretBroker, err := pluginsdk.NewCoreSecretBroker(contract, settings.coreURL, controlClient, 1024)
+	secretBroker, err := servicesdk.NewCoreSecretBroker(contract, settings.coreURL, controlClient, 1024)
 	if err != nil {
 		return err
 	}
@@ -164,17 +163,17 @@ func run(args []string) (runErr error) {
 	if !peerRoots.AppendCertsFromPEM(peerRootsPEM) {
 		return errors.New("invalid peer trust roots")
 	}
-	peerContract, err := pluginsdk.LoadPeerDirectoryPollContract()
+	peerContract, err := servicesdk.LoadPeerDirectoryPollContract()
 	if err != nil {
 		return err
 	}
 	// The data plane resolves every peer through Core's mTLS-issued directory.
 	// Caddy settings carry only opaque target IDs and methods, never endpoints.
-	directory, err := pluginsdk.NewPeerDirectoryClient(peerContract, settings.coreURL, controlClient, replicaIdentity)
+	directory, err := servicesdk.NewPeerDirectoryClient(peerContract, settings.coreURL, controlClient, replicaIdentity)
 	if err != nil {
 		return err
 	}
-	peerLogger, err := pluginsdk.NewJSONLogger(contract, os.Stderr)
+	peerLogger, err := servicesdk.NewJSONLogger(contract, os.Stderr)
 	if err != nil {
 		return err
 	}
@@ -205,12 +204,8 @@ func run(args []string) (runErr error) {
 	if err := caddyruntime.SetSiteDocumentReader(publisher); err != nil {
 		return err
 	}
-	siteOperations, err := contracts.LoadSiteOperationContract()
-	if err != nil {
-		return err
-	}
 	stage = "sdk-rest-server"
-	server, lifecycle, collector, err := pluginadapter.NewMutualTLSServer(configuration, publisher, pluginadapter.LifecycleOptions{
+	server, lifecycle, collector, err := serviceadapter.NewMutualTLSServer(configuration, publisher, serviceadapter.LifecycleOptions{
 		Source: source, Broker: secretBroker, Identity: identity, Credentials: credentials, CorePeer: coreClientPeer,
 		Revocation: revocation, ErrorLog: log.New(io.Discard, "", 0), LogOutput: os.Stdout,
 	})
@@ -218,7 +213,7 @@ func run(args []string) (runErr error) {
 		return err
 	}
 	if settings.publicListen != "" {
-		observability, err := pluginadapter.NewPublicObservabilityHandler(contract, collector)
+		observability, err := serviceadapter.NewPublicObservabilityHandler(contract, collector)
 		if err != nil {
 			return err
 		}
@@ -226,7 +221,7 @@ func run(args []string) (runErr error) {
 		go func() { _ = publicServer.ListenAndServe() }()
 		defer func() { _ = publicServer.Close() }()
 	}
-	replicaClient, err := pluginsdk.NewReplicaLifecycleClient(replicaContract, settings.coreURL, controlClient, replicaIdentity)
+	replicaClient, err := servicesdk.NewReplicaLifecycleClient(replicaContract, settings.coreURL, controlClient, replicaIdentity)
 	if err != nil {
 		return err
 	}
@@ -234,7 +229,7 @@ func run(args []string) (runErr error) {
 	workerContext, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	workerResult := make(chan error, 1)
-	go func() { workerResult <- publisher.RunWorker(workerContext, siteOperations.WorkerPollInterval) }()
+	go func() { workerResult <- publisher.RunWorker(workerContext) }()
 	serveResult := make(chan error, 1)
 	go func() { serveResult <- server.ListenAndServe(settings.restListen) }()
 	serveContext, stopServe := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -245,21 +240,18 @@ func run(args []string) (runErr error) {
 		Identity:            replicaIdentity,
 		RestEndpoint:        settings.restAdvertise,
 		PeerEndpoints:       peerEndpoints,
-		Release:             sdkmodels.ReplicaRelease{Version: "1.1.4", SHA256: executableDigest()},
+		Release:             sdkmodels.ReplicaRelease{Version: serviceadapter.ServiceVersion, SHA256: executableDigest()},
 		AdvertisedContracts: []sdkmodels.ContractVersion{},
 		AcceptedContracts:   []sdkmodels.ContractRange{},
 		AppliedGeneration:   lifecycle.Readiness().Generation,
 		Ready:               lifecycle.Readiness().Ready,
 	}
-	registerContext, registerCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	_, err = replicaClient.Register(registerContext, registration)
-	registerCancel()
-	if err != nil {
-		return err
-	}
 	leaseResult := make(chan error, 1)
 	go func() {
-		leaseResult <- renewLease(serveContext, replicaClient, replicaContract, registration.Identity, lifecycle)
+		leaseResult <- servicesdk.MaintainReplicaLease(serveContext, servicesdk.ReplicaLeaseMaintenance{
+			Client: replicaClient, Registration: registration, Readiness: lifecycle.Readiness,
+			RenewInterval: time.Duration(replicaContract.Lease.RenewIntervalSeconds) * time.Second,
+		})
 	}()
 	select {
 	case <-serveContext.Done():
@@ -281,26 +273,6 @@ func run(args []string) (runErr error) {
 	defer cancel()
 	_, _ = replicaClient.Deregister(shutdownContext, sdkmodels.ReplicaDeregistrationRequest{ContractVersion: replicaContract.ContractVersion, Identity: registration.Identity})
 	return server.GracefulShutdown(shutdownContext)
-}
-
-func renewLease(ctx context.Context, client *pluginsdk.ReplicaLifecycleClient, contract pluginsdk.ReplicaLifecycleContract, identity sdkmodels.PeerReplicaID, lifecycle interface{ Readiness() sdkmodels.Readiness }) error {
-	ticker := time.NewTicker(time.Duration(contract.Lease.RenewIntervalSeconds) * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			readiness := lifecycle.Readiness()
-			request := sdkmodels.ReplicaRenewalRequest{ContractVersion: contract.ContractVersion, Identity: identity, AppliedGeneration: readiness.Generation, Ready: readiness.Ready}
-			callContext, cancel := context.WithTimeout(ctx, time.Duration(contract.Deadlines.RenewSeconds)*time.Second)
-			_, err := client.Renew(callContext, request)
-			cancel()
-			if err != nil {
-				return err
-			}
-		}
-	}
 }
 
 func executableDigest() string {

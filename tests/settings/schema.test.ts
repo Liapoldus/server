@@ -2,13 +2,13 @@ import { readContract } from '../support/contracts.js';
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { Ajv2020 } from "ajv/dist/2020.js";
+import { settingsAjv } from "../support/settings-ajv.js";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const schema = readContract('settings.schema.json');
-const pluginContract = readContract('plugin.json');
-const validate = new Ajv2020({ allErrors: true }).compile(schema);
+const serviceContract = readContract('service.json');
+const validate = settingsAjv().compile(schema);
 
 const httpListener = {
   id: "web",
@@ -24,6 +24,12 @@ const httpRoute = {
   match: { hosts: ["api.example.test"], methods: ["GET", "POST"], path: { type: "prefix", value: "/v1" } },
   handler: { type: "static", siteId: "frontend" },
 };
+const serviceAPI = (method = "GET", routePath = "/v1/echo") => ({
+  version: "server-http/v1",
+  method,
+  path: routePath,
+  responses: [{ status: 200, contentType: "application/json", schema: {}, example: null }],
+});
 
 function settings(config: Record<string, unknown>) {
   return { schemaVersion: 1, config };
@@ -33,10 +39,10 @@ function accepts(candidate: unknown): boolean {
   return validate(candidate) as boolean;
 }
 
-describe("Server plugin strict settings schema v1", () => {
-  it("advertises the plugin-owned listener and route fields", () => {
-    expect(pluginContract.configuration).toMatchObject({ schemaVersion: 1, versionField: "schemaVersion", runtimeConfigField: "config" });
-    expect(pluginContract.configSchema.fields).toEqual([
+describe("Server service strict settings schema v1", () => {
+  it("advertises the service-owned listener and route fields", () => {
+    expect(serviceContract.configuration).toMatchObject({ schemaVersion: 1, versionField: "schemaVersion", runtimeConfigField: "config" });
+    expect(serviceContract.configSchema.fields).toEqual([
       expect.objectContaining({ name: "listeners", type: "array", required: true }) as unknown,
       expect.objectContaining({ name: "routes", type: "array", required: true }) as unknown,
     ]);
@@ -86,7 +92,7 @@ describe("Server plugin strict settings schema v1", () => {
     expect(schema.$defs.hostname.description).toContain("lowercase A-label");
   });
 
-  it("accepts all path matchers and supported terminal HTTP handlers", () => {
+  it("accepts all path matchers for non-service handlers and typed service contracts", () => {
     const paths = [
       { type: "exact", value: "/exact" },
       { type: "prefix", value: "/prefix" },
@@ -98,23 +104,58 @@ describe("Server plugin strict settings schema v1", () => {
     const handlers = [
       { type: "static", siteId: "frontend" },
       { type: "reverseProxy", upstreams: [{ origin: "https://origin.example.test" }] },
-      { type: "plugin", instanceId: "identity", capability: "identity.login", mode: "call" },
-      { type: "plugin", instanceId: "forms", capability: "forms.submit", mode: "http_stream" },
-      { type: "plugin", instanceId: "socket", capability: "events.socket", mode: "websocket" },
-      { type: "plugin", instanceId: "events", capability: "events.subscribe", mode: "sse" },
     ];
     for (const path of paths) for (const handler of handlers) {
       expect(accepts(settings({ listeners: [httpListener], routes: [{ ...httpRoute, match: { path }, handler }] }))).toBe(true);
     }
+    const serviceHandlers = [
+      { type: "service", instanceId: "identity", capability: "identity.login", mode: "call" },
+      { type: "service", instanceId: "forms", capability: "forms.submit", mode: "http_stream" },
+      { type: "service", instanceId: "socket", capability: "events.socket", mode: "websocket" },
+      { type: "service", instanceId: "events", capability: "events.subscribe", mode: "sse" },
+    ];
+    for (const [index, handler] of serviceHandlers.entries()) {
+      expect(accepts(settings({ listeners: [httpListener], routes: [{
+        id: `service-${index}`,
+        listenerId: "web",
+        match: { hosts: ["api.example.test"] },
+        api: serviceAPI(index === 0 ? "POST" : "GET", `/v1/service-${index}`),
+        handler,
+      }] }))).toBe(true);
+    }
     expect(schema.$defs.pathMatcher.description).toContain("percent-decodes exactly once");
     expect(schema.$defs.pathMatcher.description).toContain("Go RE2 full-match");
     expect(schema.$defs.httpRoute.description).toContain("first matching route is terminal");
+    expect(schema.$defs.serviceAPIContract.description).toContain("validated before service dispatch");
+    expect(schema.$defs.apiParameter.properties.repeated.enum).toEqual(["single", "first", "last", "repeat", "commaDelimited"]);
     expect(schema.$defs.staticHandler.description).toContain("active current release for siteId");
+  });
+
+  it("accepts service dispatch and rejects the removed runtime handler name", () => {
+    const handler = { type: "service", instanceId: "forms", capability: "forms.submit", mode: "call" };
+    const candidate = (type: string) => settings({
+      listeners: [httpListener],
+      routes: [{ id: "typed-api", listenerId: "web", api: serviceAPI("POST", "/submit"), handler: { ...handler, type } }],
+    });
+    expect(accepts(candidate("service"))).toBe(true);
+    expect(accepts(candidate("plugin"))).toBe(false);
+    expect(readContract('http-dispatch.json').module).toBe("http.handlers.liapoldus_service");
+    expect(serviceContract.name).toBe("server");
+  });
+
+  it("rejects legacy untyped service endpoints and ambiguous matchers", () => {
+    const handler = { type: "service", instanceId: "echo", capability: "echo.handle", mode: "call" };
+    expect(accepts(settings({ listeners: [httpListener], routes: [{
+      id: "legacy", listenerId: "web", match: { methods: ["GET"], path: { type: "exact", value: "/echo" } }, handler,
+    }] }))).toBe(false);
+    expect(accepts(settings({ listeners: [httpListener], routes: [{
+      id: "duplicate-path-source", listenerId: "web", match: { path: { type: "exact", value: "/ignored" } }, api: serviceAPI(), handler,
+    }] }))).toBe(false);
   });
 
   it("publishes exact path, glob, address, and explicit redirect semantics", () => {
     const semantics = readContract('settings-semantics.json');
-    expect(pluginContract.configSchema.semantics).toBe("contracts/v1/settings-semantics.json");
+    expect(serviceContract.configSchema.semantics).toBe("contracts/v1/settings-semantics.json");
     expect(semantics.path).toMatchObject({
       requestPath: {
         percentDecode: "strictly once, after splitting the query",
@@ -163,7 +204,7 @@ describe("Server plugin strict settings schema v1", () => {
 
   it("publishes conformance vectors for Caddy settings runtime semantics", () => {
     const vectors = readContract('settings-vectors.json');
-    expect(pluginContract.configSchema.conformanceVectors).toBe("contracts/v1/settings-vectors.json");
+    expect(serviceContract.configSchema.conformanceVectors).toBe("contracts/v1/settings-vectors.json");
     expect(vectors).toMatchObject({ version: 1, semantics: "settings-semantics.json" });
     expect(vectors.scenarios.map((scenario: { id: string }) => scenario.id)).toEqual(expect.arrayContaining([
       "request-path-decodes-once-and-normalizes-dot-segments",
@@ -255,12 +296,12 @@ describe("Server plugin strict settings schema v1", () => {
     for (const match of matchers) expect(accepts(settings({ listeners: [httpListener], routes: [{ ...httpRoute, match }] }))).toBe(false);
   });
 
-  it("rejects malformed route and handler variants and invalid plugin modes", () => {
+  it("rejects malformed route and handler variants and invalid service modes", () => {
     const cases = [
       { ...httpRoute, handler: { type: "static" } },
       { ...httpRoute, handler: { type: "redirect", location: "https://example.test" } },
-      { ...httpRoute, handler: { type: "plugin", instanceId: "x", capability: "x", mode: "unknown" } },
-      { ...httpRoute, handler: { type: "plugin", instanceId: "x", capability: "x", mode: "tcp" } },
+      { ...httpRoute, handler: { type: "service", instanceId: "x", capability: "x", mode: "unknown" } },
+      { ...httpRoute, handler: { type: "service", instanceId: "x", capability: "x", mode: "tcp" } },
       { ...httpRoute, handler: { type: "l4Relay", target: { host: "db.internal", port: 5432 } } },
     ];
     for (const route of cases) {

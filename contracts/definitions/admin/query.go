@@ -3,7 +3,7 @@ package admin
 type AdminQueryDocument struct {
 	PageResources               map[string][]string `json:"pageResources"`
 	Resources                   map[string]string   `json:"resources"`
-	Plugin                      string              `json:"plugin"`
+	Service                     string              `json:"service"`
 	FallbackCapability          string              `json:"fallbackCapability"`
 	ActionID                    string              `json:"actionId"`
 	CertificateStatusCapability string              `json:"certificateStatusCapability"`
@@ -14,7 +14,7 @@ type AdminQueryDocument struct {
 func AdminQuery() AdminQueryDocument {
 	return AdminQueryDocument{
 		Version:                     int(1),
-		Plugin:                      "server",
+		Service:                     "server",
 		DefaultLimit:                int(50),
 		FallbackCapability:          "server.sites.list",
 		ActionID:                    "query",

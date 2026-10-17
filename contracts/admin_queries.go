@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"liapoldus.local/server-plugin/contracts/definitions"
-	admindef "liapoldus.local/server-plugin/contracts/definitions/admin"
+	"liapoldus.local/server-service/contracts/definitions"
+	admindef "liapoldus.local/server-service/contracts/definitions/admin"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -48,7 +48,7 @@ func AdminProblem(capability, category string) (int, string, error) {
 	return problem.HTTP, category, nil
 }
 
-// ResolveAdminQuery validates the plugin-owned query discriminator, resolves
+// ResolveAdminQuery validates the service-owned query discriminator, resolves
 // its capability from the catalog and validates the remaining fields against
 // that capability's existing request schema.
 func ResolveAdminQuery(pageID string, contents []byte) (AdminQuery, error) {
@@ -139,7 +139,7 @@ func validateAgainstSchema(schemaContents, value []byte, name string) error {
 		ID string `json:"$id"`
 	}
 	if json.Unmarshal(schemaContents, &metadata) != nil || metadata.ID == "" {
-		metadata.ID = fmt.Sprintf("https://liapoldus.github.io/plugins/server/v1/%s.schema.json", name)
+		metadata.ID = fmt.Sprintf("https://liapoldus.github.io/services/server/v1/%s.schema.json", name)
 	}
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)

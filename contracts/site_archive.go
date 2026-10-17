@@ -1,7 +1,7 @@
 package contracts
 
 import (
-	admindef "liapoldus.local/server-plugin/contracts/definitions/admin"
+	admindef "liapoldus.local/server-service/contracts/definitions/admin"
 )
 
 type SiteArchiveLimits struct {

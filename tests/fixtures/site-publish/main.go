@@ -13,13 +13,13 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"liapoldus.local/server-plugin/contracts"
-	settingsapp "liapoldus.local/server-plugin/internal/application/settings"
-	siteapp "liapoldus.local/server-plugin/internal/application/site"
-	sitemodel "liapoldus.local/server-plugin/internal/domain/models/site"
-	caddyruntime "liapoldus.local/server-plugin/internal/infrastructure/caddy"
-	"liapoldus.local/server-plugin/internal/infrastructure/site"
-	"liapoldus.local/server-plugin/tests/fixtures/shared"
+	"liapoldus.local/server-service/contracts"
+	settingsapp "liapoldus.local/server-service/internal/application/settings"
+	siteapp "liapoldus.local/server-service/internal/application/site"
+	sitemodel "liapoldus.local/server-service/internal/domain/models/site"
+	caddyruntime "liapoldus.local/server-service/internal/infrastructure/caddy"
+	"liapoldus.local/server-service/internal/infrastructure/site"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 type input struct {
