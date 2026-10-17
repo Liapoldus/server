@@ -21,7 +21,8 @@
   ran low while linking fixture binaries. OrbStack was started with `orbctl
   start` for the ACME Pebble test and Docker reports 29.8.2.
 - Server runtime release is `1.1.8`. Its owner source and contract changes are
-  ready for commit/push. The matching Server Editor `0.3.59` package passes
+  committed and pushed as `2bc9f56`; the central documentation source pin is
+  published. The matching Server Editor `0.3.59` package passes
   73/73 tests and Studio's package inspector, but it has not been installed;
   exact digest `682bd7af7b2d61c312403628b7407fda7a621b9d9d565e65fa7004849cd9094f`
   still needs the normal native Studio trust confirmation.
