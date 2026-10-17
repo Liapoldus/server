@@ -39,7 +39,7 @@ func Service() ServiceDocument {
 	return ServiceDocument{
 		Name: "server",
 		Configuration: ServiceDocumentConfiguration{
-			SchemaVersion:      int(1),
+			SchemaVersion:      int(2),
 			VersionField:       "schemaVersion",
 			RuntimeConfigField: "config",
 		},

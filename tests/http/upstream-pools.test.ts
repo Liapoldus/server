@@ -166,7 +166,7 @@ describe("Caddy upstream pool conformance", () => {
 
 function httpSettings(port: number, upstreams: Array<{ origin: string; weight: number }>) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     config: {
       listeners: [{
         id: "web",

@@ -8,12 +8,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 describe("production settings-schema boundary", () => {
   it("validates strict Liapoldus settings before the runtime adapter and preserves the active revision on rejection", () => {
-    const validSettings = { schemaVersion: 1, config: { listeners: [], routes: [] } };
+    const validSettings = { schemaVersion: 2, config: { listeners: [], routes: [] } };
     const input = {
       calls: [
         { revision: "revision-1", settings: validSettings },
         { revision: "revision-2", settings: { ...validSettings, config: { listeners: [], routes: [], unknown: true } } },
-        { revision: "revision-3", settings: { schemaVersion: 1, config: { listeners: [] } } },
+        { revision: "revision-3", settings: { schemaVersion: 2, config: { listeners: [] } } },
       ],
     };
     const output = execFileSync("go", ["run", "./tests/fixtures/config-apply-schema"], {

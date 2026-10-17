@@ -51,7 +51,7 @@ describe("automatic TLS lifecycle", () => {
           httpChallengePort: challengePort,
           forceRenew: true,
           settings: {
-            schemaVersion: 1,
+            schemaVersion: 2,
             config: {
               listeners: [{
                 id: "automatic-tls",
@@ -64,7 +64,7 @@ describe("automatic TLS lifecycle", () => {
               routes: [{
                 id: "site",
                 listenerId: "automatic-tls",
-                handler: { type: "static", siteId: "frontend" },
+                handler: { type: "static", siteId: "frontend", releaseId: `sha256:${"0".repeat(64)}`, mountPrefix: "/" },
               }],
             },
           },

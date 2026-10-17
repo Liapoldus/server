@@ -27,7 +27,7 @@
   },
   "configuration": {
     "runtimeConfigField": "config",
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "versionField": "schemaVersion"
   },
   "name": "server"

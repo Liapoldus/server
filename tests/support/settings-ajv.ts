@@ -6,5 +6,7 @@ export function settingsAjv(): Ajv2020 {
   const ajv = new Ajv2020({ allErrors: true });
   ajv.addKeyword({ keyword: "x-studio-json-document", schemaType: "boolean", valid: true });
   ajv.addKeyword({ keyword: "x-studio-json-value", schemaType: "boolean", valid: true });
+  ajv.addKeyword({ keyword: "x-studio-secret-purpose", schemaType: "string", valid: true });
+  ajv.addKeyword({ keyword: "x-liapoldus-secret-reference", schemaType: "boolean", valid: true });
   return ajv;
 }

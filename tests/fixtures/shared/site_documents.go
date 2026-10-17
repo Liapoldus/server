@@ -20,7 +20,7 @@ func RegisterSiteDirectoryReader() error {
 
 type siteDirectoryReader struct{}
 
-func (siteDirectoryReader) OpenSiteDocument(_ context.Context, siteID, requestPath string) (io.ReadCloser, error) {
+func (siteDirectoryReader) OpenPinnedSiteDocument(_ context.Context, siteID, _ string, requestPath string) (io.ReadCloser, error) {
 	root, err := caddyruntime.SiteRoot(siteID)
 	if err != nil || !strings.HasPrefix(requestPath, "/") || strings.Contains(requestPath, `\`) {
 		return nil, errors.New("")

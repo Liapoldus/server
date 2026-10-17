@@ -11,7 +11,7 @@ const validate = settingsAjv().compile(schema);
 
 function settings(requestCookieNames: string[]) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     config: {
       listeners: [{ id: "web", kind: "http", address: "127.0.0.1:8080", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }],
       routes: [{

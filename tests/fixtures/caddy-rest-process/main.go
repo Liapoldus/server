@@ -38,6 +38,7 @@ import (
 	sdkinfra "github.com/Liapoldus/service-sdk/v2/infrastructure"
 	"liapoldus.local/server-service/contracts"
 	"liapoldus.local/server-service/internal/presentation/restservice"
+	"liapoldus.local/server-service/tests/fixtures/shared"
 )
 
 const generation = "generation-rest-1"
@@ -118,9 +119,24 @@ func run() error {
 	if err := secureListener.Close(); err != nil {
 		return err
 	}
-	configBytes, err := json.Marshal(settings(trafficPort, securePort))
-	if err != nil || contracts.ValidateSettings(configBytes) != nil {
-		return errors.New("test Caddy settings are invalid")
+	archive, err := siteArchive()
+	if err != nil {
+		return err
+	}
+	initialArchive, err := shared.FixtureSiteArchive("rest-site", "previous-site")
+	if err != nil {
+		return err
+	}
+	releaseID, err := shared.PublishFixtureSite(context.Background(), filepath.Join(rootDirectory, "caddy", "liapoldus"), "rest-site", initialArchive)
+	if err != nil {
+		return err
+	}
+	configBytes, err := json.Marshal(settings(trafficPort, securePort, releaseID))
+	if err != nil {
+		return fmt.Errorf("marshal test Caddy settings: %w", err)
+	}
+	if err := contracts.ValidateSettings(configBytes); err != nil {
+		return fmt.Errorf("test Caddy settings are invalid: %w", err)
 	}
 	digest := sha256.Sum256(configBytes)
 	digestHex := hex.EncodeToString(digest[:])
@@ -143,12 +159,12 @@ func run() error {
 		_, _ = writer.Write(configBytes)
 	})
 	secretValues := map[string][]byte{
-		"fixture-certificate": issued.replica.certificatePEM,
-		"fixture-private-key": issued.replica.privateKeyPEM,
+		"ssr:v1:00000000000000000000000000000001": issued.replica.certificatePEM,
+		"ssr:v1:00000000000000000000000000000002": issued.replica.privateKeyPEM,
 	}
 	secretPurpose := map[string]string{
-		"fixture-certificate": string(restservice.SettingsCertificatePurpose),
-		"fixture-private-key": string(restservice.SettingsPrivateKeyPurpose),
+		"ssr:v1:00000000000000000000000000000001": string(restservice.SettingsCertificatePurpose),
+		"ssr:v1:00000000000000000000000000000002": string(restservice.SettingsPrivateKeyPurpose),
 	}
 	var grantsLock sync.Mutex
 	grants := map[string][]byte{}
@@ -384,10 +400,6 @@ func run() error {
 			}
 		}
 	}
-	archive, err := siteArchive()
-	if err != nil {
-		return err
-	}
 	queryInvocation := sdkmodels.AdminActionInvocation{
 		CallerID: "test operator", InstanceID: "server", PageID: "certificates", ActionID: "query",
 		SurfaceDigest: surface.SHA256, RequestID: "cross-page-query",
@@ -402,7 +414,7 @@ func run() error {
 	metadata, err := json.Marshal(map[string]any{
 		"version":  1,
 		"artifact": map[string]any{"mediaType": "application/gzip", "byteLength": len(archive), "sha256": "sha256:" + hex.EncodeToString(archiveDigest[:])},
-		"payload":  map[string]any{"siteId": "rest-site"},
+		"payload":  map[string]any{"siteId": "rest-site", "expectedCurrentRevision": releaseID},
 	})
 	if err != nil {
 		return err
@@ -476,10 +488,10 @@ func run() error {
 	}
 	body, readErr := io.ReadAll(response.Body)
 	_ = response.Body.Close()
-	if readErr != nil || response.StatusCode != http.StatusOK || string(body) != "published-site" {
+	if readErr != nil || response.StatusCode != http.StatusOK || string(body) != "previous-site" {
 		_ = child.Process.Kill()
 		_ = child.Wait()
-		return errors.New("Caddy data-plane response did not match active config")
+		return errors.New("publishing a new release changed the route pinned to the previous immutable release")
 	}
 	// A static site must serve the manifest-selected release rather than any
 	// bootstrap directory. The archive root manifest is never public content.
@@ -628,9 +640,9 @@ func sourceFile() string {
 	return file
 }
 
-func settings(port, securePort int) map[string]any {
+func settings(port, securePort int, releaseID string) map[string]any {
 	return map[string]any{
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"config": map[string]any{
 			"listeners": []any{map[string]any{
 				"id": "web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", port),
@@ -638,12 +650,12 @@ func settings(port, securePort int) map[string]any {
 			}, map[string]any{
 				"id": "secure-web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", securePort),
 				"hostnames": []string{"localhost"}, "protocols": []string{"http1", "http2", "http3"},
-				"tls": map[string]any{"mode": "custom", "certificateRef": "fixture-certificate", "privateKeyRef": "fixture-private-key"},
+				"tls": map[string]any{"mode": "custom", "certificateRef": "ssr:v1:00000000000000000000000000000001", "privateKeyRef": "ssr:v1:00000000000000000000000000000002"},
 			}},
 			"routes": []any{map[string]any{
-				"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "rest-site"},
+				"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "rest-site", "releaseId": releaseID, "mountPrefix": "/"},
 			}, map[string]any{
-				"id": "secure-site", "listenerId": "secure-web", "handler": map[string]any{"type": "static", "siteId": "rest-site"},
+				"id": "secure-site", "listenerId": "secure-web", "handler": map[string]any{"type": "static", "siteId": "rest-site", "releaseId": releaseID, "mountPrefix": "/"},
 			}},
 		},
 	}

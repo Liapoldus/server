@@ -144,7 +144,7 @@ func main() {
 	check(err)
 	defer func() { _ = configuration.Stop() }()
 	settings, err := json.Marshal(map[string]any{
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"config": map[string]any{
 			"listeners": []any{map[string]any{
 				"id": "web", "kind": "http", "address": publicAddress,

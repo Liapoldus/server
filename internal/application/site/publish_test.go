@@ -44,11 +44,31 @@ func (*workerRepository) ListSiteReleases(context.Context, string, int, string) 
 	panic("unexpected ListSiteReleases call")
 }
 
+type pinnedReleaseRepository struct{ workerRepository }
+
+func (*pinnedReleaseRepository) ListSiteReleases(_ context.Context, siteID string, _ int, _ string) (sitemodel.SitePage[sitemodel.SiteReleaseSummary], error) {
+	return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{Items: []sitemodel.SiteReleaseSummary{{SiteID: siteID, RevisionID: "sha256:" + strings.Repeat("a", 64), State: "available"}}}, nil
+}
+
+func TestValidatePinnedReleaseRequiresRevisionBelongingToSite(t *testing.T) {
+	publisher, err := NewSitePublisher(&pinnedReleaseRepository{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := "sha256:" + strings.Repeat("a", 64)
+	if err := publisher.ValidatePinnedRelease(context.Background(), "docs", revision); err != nil {
+		t.Fatalf("valid pinned release was rejected: %v", err)
+	}
+	if err := publisher.ValidatePinnedRelease(context.Background(), "docs", "sha256:"+strings.Repeat("b", 64)); err == nil {
+		t.Fatal("accepted a release absent from the selected site")
+	}
+}
+
 func (*workerRepository) ListSiteOperations(context.Context, string, int, string) (sitemodel.SitePage[sitemodel.SiteOperationSummary], error) {
 	panic("unexpected ListSiteOperations call")
 }
 
-func (*workerRepository) OpenSiteDocument(context.Context, string, string) (io.ReadCloser, error) {
+func (*workerRepository) OpenSiteDocument(context.Context, string, string, string) (io.ReadCloser, error) {
 	panic("unexpected OpenSiteDocument call")
 }
 

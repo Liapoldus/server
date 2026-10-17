@@ -73,7 +73,7 @@ function requiredVector(id: string) {
 
 function settingsForAddress(address: string) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     config: {
       listeners: [{
         id: "web", kind: "http", address, hostnames: [], protocols: ["http1"], tls: { mode: "disabled" },
@@ -86,7 +86,7 @@ function settingsForAddress(address: string) {
 function redirectSettings(sourcePort: number, targetPort: number) {
   const vector = requiredVector("automatic-https-redirect-preserves-method-and-query");
   const settings = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     config: {
       listeners: [
         {

@@ -566,16 +566,12 @@ func (store *ReleaseStore) ListSiteOperations(ctx context.Context, state string,
 	return paginate(items, limit, cursor, func(item sitemodel.SiteOperationSummary) string { return item.OperationID })
 }
 
-func (store *ReleaseStore) OpenSiteDocument(_ context.Context, siteID, requestPath string) (io.ReadCloser, error) {
-	if store == nil || !validSiteIdentifier(siteID) {
+func (store *ReleaseStore) OpenSiteDocument(_ context.Context, siteID, releaseID, requestPath string) (io.ReadCloser, error) {
+	if store == nil || !validSiteIdentifier(siteID) || !validRevisionID(releaseID) {
 		return nil, sitemodel.ErrDocumentNotFound
 	}
 	siteRoot := filepath.Join(store.root, "sites", siteID)
-	generation, err := store.readActiveGeneration(siteRoot)
-	if err != nil || !validRevisionID(generation.Current) {
-		return nil, sitemodel.ErrDocumentNotFound
-	}
-	releaseRoot := filepath.Join(siteRoot, "releases", strings.TrimPrefix(generation.Current, "sha256:"))
+	releaseRoot := filepath.Join(siteRoot, "releases", strings.TrimPrefix(releaseID, "sha256:"))
 	manifest, err := ValidateStagedManifest(releaseRoot, siteID)
 	if err != nil {
 		return nil, sitemodel.ErrDocumentNotFound
@@ -612,6 +608,10 @@ func (store *ReleaseStore) OpenSiteDocument(_ context.Context, siteID, requestPa
 		return nil, sitemodel.ErrDocumentNotFound
 	}
 	return file, nil
+}
+
+func (store *ReleaseStore) OpenPinnedSiteDocument(ctx context.Context, siteID, releaseID, requestPath string) (io.ReadCloser, error) {
+	return store.OpenSiteDocument(ctx, siteID, releaseID, requestPath)
 }
 
 func (store *ReleaseStore) activate(operation persistedOperation) error {

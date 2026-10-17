@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	certificateRef = "fixture-certificate"
-	privateKeyRef  = "fixture-private-key"
+	certificateRef = "ssr:v1:00000000000000000000000000000001"
+	privateKeyRef  = "ssr:v1:00000000000000000000000000000002"
 	settingsRev    = "http2-http3-revision"
 	hostname       = "custom.example.test"
 )
@@ -93,7 +93,7 @@ func main() {
 
 func makeSettings(port int) []byte {
 	contents, err := json.Marshal(map[string]any{
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"config": map[string]any{
 			"listeners": []any{map[string]any{
 				"id": "secure-web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", port),
@@ -104,7 +104,7 @@ func makeSettings(port int) []byte {
 			}},
 			"routes": []any{map[string]any{
 				"id": "secure-site", "listenerId": "secure-web",
-				"handler": map[string]any{"type": "static", "siteId": "http2-http3-fixture"},
+				"handler": map[string]any{"type": "static", "siteId": "http2-http3-fixture", "releaseId": "sha256:0000000000000000000000000000000000000000000000000000000000000000", "mountPrefix": "/"},
 			}},
 		},
 	})

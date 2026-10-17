@@ -14,15 +14,15 @@ func TestDecodeSettingsPreservation(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"empty object", `{"schemaVersion":1,"config":{}}`, `{}`},
-		{"raw bytes", `{"config":{ "routes" : [], "listeners": [] }, "schemaVersion":1}`, `{ "routes" : [], "listeners": [] }`},
+		{"empty object", `{"schemaVersion":2,"config":{}}`, `{}`},
+		{"raw bytes", `{"config":{ "routes" : [], "listeners": [] }, "schemaVersion":2}`, `{ "routes" : [], "listeners": [] }`},
 		{"invalid JSON", `{"schemaVersion":1`, ""},
 		{"null envelope", `null`, ""},
 		{"array envelope", `[]`, ""},
 		{"missing version", `{"config":{}}`, ""},
 		{"missing config", `{"schemaVersion":1}`, ""},
 		{"unknown field", `{"schemaVersion":1,"config":{},"extra":true}`, ""},
-		{"wrong version", `{"schemaVersion":2,"config":{}}`, ""},
+		{"wrong version", `{"schemaVersion":1,"config":{}}`, ""},
 		{"string version", `{"schemaVersion":"1","config":{}}`, ""},
 		{"fractional version", `{"schemaVersion":1.5,"config":{}}`, ""},
 		{"null config", `{"schemaVersion":1,"config":null}`, ""},
@@ -39,7 +39,7 @@ func TestDecodeSettingsPreservation(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || settings.SchemaVersion != 1 || string(settings.RuntimeConfig) != tc.want {
+			if err != nil || settings.SchemaVersion != 2 || string(settings.RuntimeConfig) != tc.want {
 				t.Fatal("decoded version or exact runtime config bytes changed")
 			}
 		})

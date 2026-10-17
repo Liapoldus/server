@@ -2,6 +2,7 @@ package restservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -60,7 +61,9 @@ func New(configuration *settingsapp.Configuration, publisher *siteapp.SitePublis
 		return nil, err
 	}
 	manifest, err := sdkpresentation.NewManifestProvider(sdkmodels.ManifestDescriptor{
-		ID: "server", Version: ServiceVersion, ConfigurationUI: serverConfigurationUI(), Resources: serverResources(),
+		ID: "server", Version: ServiceVersion, SecretPurposes: []string{
+			string(SettingsHTTPAuthPurpose), string(SettingsCertificatePurpose), string(SettingsPrivateKeyPurpose), string(SettingsUpstreamCAPurpose),
+		}, ConfigurationUI: serverConfigurationUI(), Resources: serverResources(),
 		EditorButtons: &sdkmodels.ServiceEditorButtonsDescriptor{Version: sdkmodels.ServiceEditorButtonsVersion, Buttons: []sdkmodels.ServiceEditorButton{
 			sdkmodels.NewServiceEditorButton("server", "endpoints", sdkmodels.ConfigurationUIText{RU: "Редактор эндпоинтов", EN: "Endpoint editor"}, sdkmodels.ConfigurationUIText{RU: "Открыть редактор эндпоинтов Server", EN: "Open the Server endpoint editor"}),
 		}},
@@ -76,6 +79,9 @@ func serverResources() []sdkmodels.ResourceDescriptor {
 		ID: "sites", Kind: "site", Provider: sdkmodels.ResourceProviderServiceAdmin,
 		PageID: "sites", QueryResource: "sites", ValuePointer: "/siteId", LabelPointer: "/siteId",
 		Publication: &sdkmodels.ResourcePublicationDescriptor{PageID: "sites", ActionID: "publish"},
+	}, {
+		ID: "site-releases", Kind: "site-release", Provider: sdkmodels.ResourceProviderServiceAdmin,
+		PageID: "sites", QueryResource: "releases", ValuePointer: "/revisionId", LabelPointer: "/revisionId",
 	}}
 }
 
@@ -89,12 +95,29 @@ func serverConfigurationUI() *sdkmodels.ConfigurationUIDescriptor {
 	siteResourceField := field("/config/routes/*/handler/siteId", "Сайт", "Site", "resource", 100)
 	siteResourceField.ResourceKind = "site"
 	siteResourceField.ResourceID = "sites"
+	releaseResourceField := field("/config/routes/*/handler/releaseId", "Неизменяемый релиз", "Immutable release", "resource", 130)
+	releaseResourceField.ResourceKind = "site-release"
+	releaseResourceField.ResourceID = "site-releases"
+	authSecretField := field("/config/routes/*/features/auth/secretRef", "Секрет HTTP-аутентификации", "HTTP authentication secret", "secret", 140)
+	authSecretField.SecretPurpose = string(SettingsHTTPAuthPurpose)
+	authDefaultSecretFields := make([]sdkmodels.ConfigurationUIField, 0, 4)
+	for _, routeType := range []string{"service", "static", "reverseProxy", "redirect"} {
+		secretField := field("/config/defaults/"+routeType+"/auth/secretRef", "Секрет HTTP-аутентификации", "HTTP authentication secret", "secret", 140)
+		secretField.SecretPurpose = string(SettingsHTTPAuthPurpose)
+		authDefaultSecretFields = append(authDefaultSecretFields, secretField)
+	}
+	certificateSecretField := field("/config/listeners/*/tls/certificateRef", "Сертификат TLS", "TLS certificate", "secret", 70)
+	certificateSecretField.SecretPurpose = string(SettingsCertificatePurpose)
+	privateKeySecretField := field("/config/listeners/*/tls/privateKeyRef", "Закрытый ключ TLS", "TLS private key", "secret", 80)
+	privateKeySecretField.SecretPurpose = string(SettingsPrivateKeyPurpose)
+	upstreamCASecretField := field("/config/routes/*/handler/upstreams/*/caRef", "Доверенный CA upstream", "Trusted upstream CA", "secret", 150)
+	upstreamCASecretField.SecretPurpose = string(SettingsUpstreamCAPurpose)
 	return &sdkmodels.ConfigurationUIDescriptor{
 		Version: sdkmodels.ConfigurationUIVersion,
 		Groups: []sdkmodels.ConfigurationUIGroup{
 			{
 				ID: "listeners", Title: text("Слушатели", "Listeners"),
-				Description: &sdkmodels.ConfigurationUIText{RU: "HTTP-bind и протоколы. TLS references остаются под управлением Core и не раскрываются в UI.", EN: "HTTP binds and protocols. TLS references remain Core-managed and are never exposed in the UI."},
+				Description: &sdkmodels.ConfigurationUIText{RU: "HTTP-bind, протоколы и TLS. Studio показывает только подписи и opaque references; значения остаются в локальном системном хранилище.", EN: "HTTP binds, protocols and TLS. Studio shows only labels and opaque references; values remain in the local system vault."},
 				Order:       10, Fields: []sdkmodels.ConfigurationUIField{
 					field("/config/listeners/*/id", "ID слушателя", "Listener ID", "text", 10),
 					field("/config/listeners/*/address", "Адрес bind", "Bind address", "text", 20),
@@ -102,6 +125,7 @@ func serverConfigurationUI() *sdkmodels.ConfigurationUIDescriptor {
 					field("/config/listeners/*/protocols", "HTTP-протоколы", "HTTP protocols", "array", 40),
 					field("/config/listeners/*/tls/mode", "Режим TLS", "TLS mode", "select", 50),
 					field("/config/listeners/*/redirectToListenerId", "Listener для redirect", "Redirect target listener", "text", 60),
+					certificateSecretField, privateKeySecretField,
 				},
 			},
 			{
@@ -116,9 +140,16 @@ func serverConfigurationUI() *sdkmodels.ConfigurationUIDescriptor {
 					field("/config/routes/*/handler/mode", "Режим вызова", "Invocation mode", "select", 60),
 					field("/config/routes/*/handler/requestCookieNames", "Разрешённые Cookie", "Allowed cookies", "array", 70),
 					siteResourceField,
+					releaseResourceField,
 					field("/config/routes/*/api/method", "HTTP method", "HTTP method", "text", 80),
 					field("/config/routes/*/api/path", "Шаблон пути", "Path template", "text", 90),
+					authSecretField, upstreamCASecretField,
 				},
+			},
+			{
+				ID: "route-defaults", Title: text("Общие значения маршрутов", "Route defaults"),
+				Description: &sdkmodels.ConfigurationUIText{RU: "Общие значения по типам маршрутов. Параметры секретов содержат только opaque references.", EN: "Shared values by route type. Secret fields contain only opaque references."},
+				Order:       15, Fields: authDefaultSecretFields,
 			},
 			{
 				ID: "request-contract", Title: text("Контракт запроса", "Request contract"),
@@ -171,6 +202,9 @@ func (adapter *Adapter) ValidateConfiguration(ctx context.Context, contents []by
 	if err != nil {
 		return settingsmodel.ErrInvalidSettings
 	}
+	if err := adapter.validateStaticRouteReleases(ctx, settings.RuntimeConfig); err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
 	return adapter.configuration.Validate(settings)
 }
 
@@ -186,6 +220,9 @@ func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configurat
 	if err != nil {
 		return settingsmodel.ErrInvalidSettings
 	}
+	if err := adapter.validateStaticRouteReleases(ctx, settings.RuntimeConfig); err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
 	references, err := settings.ConfigSecretReferences()
 	if err != nil {
 		return settingsmodel.ErrInvalidSettings
@@ -194,6 +231,36 @@ func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configurat
 		return adapter.applyWithSecrets(ctx, settings, incoming.Generation)
 	}
 	return adapter.configuration.Apply(settings, incoming.Generation)
+}
+
+func (adapter *Adapter) validateStaticRouteReleases(ctx context.Context, runtimeConfig []byte) error {
+	if adapter == nil || ctx == nil || ctx.Err() != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	var candidate struct {
+		Routes []struct {
+			Handler struct {
+				Type      string `json:"type"`
+				SiteID    string `json:"siteId"`
+				ReleaseID string `json:"releaseId"`
+			} `json:"handler"`
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(runtimeConfig, &candidate); err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	for _, route := range candidate.Routes {
+		if route.Handler.Type != "static" {
+			continue
+		}
+		if adapter.publisher == nil {
+			return settingsmodel.ErrInvalidSettings
+		}
+		if err := adapter.publisher.ValidatePinnedRelease(ctx, route.Handler.SiteID, route.Handler.ReleaseID); err != nil {
+			return settingsmodel.ErrInvalidSettings
+		}
+	}
+	return nil
 }
 
 func (adapter *Adapter) SetSecretProvider(provider SecretProvider) {
@@ -225,6 +292,8 @@ func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings settingsm
 			purpose = SettingsPrivateKeyPurpose
 		case settingsmodel.SecretReferenceUpstreamCA:
 			purpose = SettingsUpstreamCAPurpose
+		case settingsmodel.SecretReferenceHTTPAuth:
+			purpose = SettingsHTTPAuthPurpose
 		default:
 			return settingsmodel.ErrInvalidSettings
 		}

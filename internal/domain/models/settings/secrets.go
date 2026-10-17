@@ -11,6 +11,7 @@ const (
 	SecretReferenceCertificate SecretReferenceKind = iota + 1
 	SecretReferencePrivateKey
 	SecretReferenceUpstreamCA
+	SecretReferenceHTTPAuth
 )
 
 func (settings Settings) ConfigSecretReferences() ([]string, error) {
@@ -39,16 +40,62 @@ func (settings Settings) ConfigSecretReferenceKinds() (map[string]SecretReferenc
 				PrivateKeyRef  string `json:"privateKeyRef"`
 			} `json:"tls"`
 		} `json:"listeners"`
+		Routes []struct {
+			Handler struct {
+				Type string `json:"type"`
+			} `json:"handler"`
+			Features struct {
+				Auth struct {
+					Mode      string `json:"mode"`
+					SecretRef string `json:"secretRef"`
+				} `json:"auth"`
+			} `json:"features"`
+		} `json:"routes"`
+		Defaults struct {
+			Service struct {
+				Auth struct {
+					Mode      string `json:"mode"`
+					SecretRef string `json:"secretRef"`
+				} `json:"auth"`
+			} `json:"service"`
+			Static struct {
+				Auth struct {
+					Mode      string `json:"mode"`
+					SecretRef string `json:"secretRef"`
+				} `json:"auth"`
+			} `json:"static"`
+			ReverseProxy struct {
+				Auth struct {
+					Mode      string `json:"mode"`
+					SecretRef string `json:"secretRef"`
+				} `json:"auth"`
+			} `json:"reverseProxy"`
+			Redirect struct {
+				Auth struct {
+					Mode      string `json:"mode"`
+					SecretRef string `json:"secretRef"`
+				} `json:"auth"`
+			} `json:"redirect"`
+		} `json:"defaults"`
 	}
 	if err := json.Unmarshal(settings.RuntimeConfig, &config); err != nil {
 		return nil, ErrInvalidSettings
 	}
 	references := make(map[string]SecretReferenceKind, len(upstreamReferences)+len(config.Listeners)*2)
-	for _, reference := range upstreamReferences {
-		if previous, exists := references[reference]; exists && previous != SecretReferenceUpstreamCA {
-			return nil, ErrInvalidSettings
+	addReference := func(reference string, kind SecretReferenceKind) error {
+		if reference == "" {
+			return ErrInvalidSettings
 		}
-		references[reference] = SecretReferenceUpstreamCA
+		if previous, exists := references[reference]; exists && previous != kind {
+			return ErrInvalidSettings
+		}
+		references[reference] = kind
+		return nil
+	}
+	for _, reference := range upstreamReferences {
+		if err := addReference(reference, SecretReferenceUpstreamCA); err != nil {
+			return nil, err
+		}
 	}
 	for _, listener := range config.Listeners {
 		if listener.TLS.Mode != "custom" {
@@ -57,14 +104,53 @@ func (settings Settings) ConfigSecretReferenceKinds() (map[string]SecretReferenc
 		if listener.TLS.CertificateRef == "" || listener.TLS.PrivateKeyRef == "" {
 			return nil, ErrInvalidSettings
 		}
-		if previous, exists := references[listener.TLS.CertificateRef]; exists && previous != SecretReferenceCertificate {
+		if err := addReference(listener.TLS.CertificateRef, SecretReferenceCertificate); err != nil {
+			return nil, err
+		}
+		if err := addReference(listener.TLS.PrivateKeyRef, SecretReferencePrivateKey); err != nil {
+			return nil, err
+		}
+	}
+	defaultsForType := func(routeType string) struct {
+		Mode      string `json:"mode"`
+		SecretRef string `json:"secretRef"`
+	} { switch routeType {
+	case "service":
+		return config.Defaults.Service.Auth
+	case "static":
+		return config.Defaults.Static.Auth
+	case "reverseProxy":
+		return config.Defaults.ReverseProxy.Auth
+	case "redirect":
+		return config.Defaults.Redirect.Auth
+	default:
+		return struct {
+			Mode      string `json:"mode"`
+			SecretRef string `json:"secretRef"`
+		}{}
+	} }
+	for _, route := range config.Routes {
+		defaults := defaultsForType(route.Handler.Type)
+		mode := route.Features.Auth.Mode
+		if mode == "" || mode == "inherit" {
+			mode = defaults.Mode
+		}
+		if mode == "" {
+			mode = "disabled"
+		}
+		if mode != "enabled" && mode != "disabled" {
 			return nil, ErrInvalidSettings
 		}
-		if previous, exists := references[listener.TLS.PrivateKeyRef]; exists && previous != SecretReferencePrivateKey {
-			return nil, ErrInvalidSettings
+		if mode != "enabled" {
+			continue
 		}
-		references[listener.TLS.CertificateRef] = SecretReferenceCertificate
-		references[listener.TLS.PrivateKeyRef] = SecretReferencePrivateKey
+		reference := route.Features.Auth.SecretRef
+		if reference == "" {
+			reference = defaults.SecretRef
+		}
+		if err := addReference(reference, SecretReferenceHTTPAuth); err != nil {
+			return nil, err
+		}
 	}
 	return references, nil
 }

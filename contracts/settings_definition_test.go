@@ -7,10 +7,9 @@ import (
 	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
-// Preserve the values captured from the runtime metadata parser before removal.
-// The published manifest remains a public artifact and must keep these values.
+// Keep the code-owned envelope definition synchronized with published metadata.
 func TestSettingsDefinitionPreservation(t *testing.T) {
-	if settingsmodel.SettingsSchemaVersion != 1 || settingsmodel.SettingsVersionField != "schemaVersion" || settingsmodel.SettingsRuntimeConfigField != "config" {
+	if settingsmodel.SettingsSchemaVersion != 2 || settingsmodel.SettingsVersionField != "schemaVersion" || settingsmodel.SettingsRuntimeConfigField != "config" {
 		t.Fatal("internal settings definition changed")
 	}
 	contents, err := ServiceManifest()

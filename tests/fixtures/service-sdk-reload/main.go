@@ -127,12 +127,11 @@ func main() {
 	configuration, err := settingsapp.NewConfiguration(activationProbe)
 	check(err)
 	defer func() { _ = configuration.Stop() }()
-	siteRoot, err := caddyruntime.SiteRoot("frontend")
+	fixtureArchive, err := shared.FixtureSiteArchive("frontend", "sdk-caddy-active")
 	check(err)
-	check(os.MkdirAll(siteRoot, 0o700))
-	check(os.WriteFile(filepath.Join(siteRoot, "index.html"), []byte("sdk-caddy-active"), 0o600))
-
-	activeSettings := addCustomTLS(settings(request.Port), ephemeralPort())
+	releaseID, err := shared.PublishFixtureSite(context.Background(), filepath.Join(storageDirectory, "caddy", "liapoldus"), "frontend", fixtureArchive)
+	check(err)
+	activeSettings := addCustomTLS(settings(request.Port, releaseID), ephemeralPort(), releaseID)
 	activeBytes := marshal(activeSettings)
 	activeDigest := digest(activeBytes)
 
@@ -148,7 +147,7 @@ func main() {
 		check(err)
 		candidatePort = candidateListener.Addr().(*net.TCPAddr).Port
 	}
-	failedBytes := marshal(settings(candidatePort))
+	failedBytes := marshal(settings(candidatePort, releaseID))
 	check(contracts.ValidateSettings(failedBytes))
 	failedDigest := digest(failedBytes)
 
@@ -199,15 +198,15 @@ func main() {
 	check(err)
 	identity, err := sdkmodels.NewReplicaIdentity("server", "replica-1")
 	check(err)
-	releaseStore, err := site.NewReleaseStore(filepath.Join(storageDirectory, "server-actions"))
+	releaseStore, err := site.NewReleaseStore(caddyruntime.SiteDataRoot())
 	check(err)
 	publisher, err := siteapp.NewSitePublisher(releaseStore)
 	check(err)
 	secretBroker := &fixtureSecretBroker{
-		values: map[string][]byte{"fixture-certificate": ids.serviceServer.certificatePEM, "fixture-private-key": ids.serviceServer.privateKeyPEM},
+		values: map[string][]byte{"ssr:v1:00000000000000000000000000000001": ids.serviceServer.certificatePEM, "ssr:v1:00000000000000000000000000000002": ids.serviceServer.privateKeyPEM},
 		permissions: map[string]string{
-			"fixture-certificate": string(restservice.SettingsCertificatePurpose),
-			"fixture-private-key": string(restservice.SettingsPrivateKeyPurpose),
+			"ssr:v1:00000000000000000000000000000001": string(restservice.SettingsCertificatePurpose),
+			"ssr:v1:00000000000000000000000000000002": string(restservice.SettingsPrivateKeyPurpose),
 		},
 		grants: make(map[string][]byte),
 	}
@@ -235,8 +234,13 @@ func main() {
 	check(err)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	if err := publisher.ValidatePinnedRelease(ctx, "frontend", releaseID); err != nil {
+		fail("fixture release was not visible to runtime publisher: " + err.Error())
+	}
 	firstAck, err := serviceClient.Reload(ctx, sdkmodels.Reload{Generation: "generation-1", SHA256: activeDigest, SchemaVersion: "1"})
-	check(err)
+	if err != nil {
+		fail("initial configuration reload rejected: " + err.Error() + "; service logs: " + serviceLogs.String())
+	}
 	ready, err := serviceClient.Readiness(ctx)
 	check(err)
 	registration, err := serviceClient.Identity(ctx)
@@ -258,12 +262,12 @@ func main() {
 	responseAfterReject := requestDataPlane(request.Port)
 	redactionPassed := !strings.Contains(serviceLogs.String(), string(ids.serviceServer.privateKeyPEM)) &&
 		!strings.Contains(serviceLogs.String(), string(ids.serviceServer.certificatePEM)) &&
-		!strings.Contains(serviceLogs.String(), "fixture-certificate") &&
-		!strings.Contains(serviceLogs.String(), "fixture-private-key") &&
+		!strings.Contains(serviceLogs.String(), "ssr:v1:00000000000000000000000000000001") &&
+		!strings.Contains(serviceLogs.String(), "ssr:v1:00000000000000000000000000000002") &&
 		!strings.Contains(metrics, string(ids.serviceServer.privateKeyPEM)) &&
 		!strings.Contains(metrics, string(ids.serviceServer.certificatePEM)) &&
-		!strings.Contains(metrics, "fixture-certificate") &&
-		!strings.Contains(metrics, "fixture-private-key") &&
+		!strings.Contains(metrics, "ssr:v1:00000000000000000000000000000001") &&
+		!strings.Contains(metrics, "ssr:v1:00000000000000000000000000000002") &&
 		!strings.Contains(serviceLogs.String(), "fixture-grant-") &&
 		!strings.Contains(metrics, "fixture-grant-")
 	failureStage := ""
@@ -289,18 +293,18 @@ func main() {
 	check(json.NewEncoder(os.Stdout).Encode(result))
 }
 
-func addCustomTLS(settings map[string]any, port int) map[string]any {
+func addCustomTLS(settings map[string]any, port int, releaseID string) map[string]any {
 	configuration := settings["config"].(map[string]any)
 	listeners := configuration["listeners"].([]any)
 	listeners = append(listeners, map[string]any{
 		"id": "custom-web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", port),
 		"hostnames": []string{"localhost"}, "protocols": []string{"http1"},
-		"tls": map[string]any{"mode": "custom", "certificateRef": "fixture-certificate", "privateKeyRef": "fixture-private-key"},
+		"tls": map[string]any{"mode": "custom", "certificateRef": "ssr:v1:00000000000000000000000000000001", "privateKeyRef": "ssr:v1:00000000000000000000000000000002"},
 	})
 	configuration["listeners"] = listeners
 	routes := configuration["routes"].([]any)
 	routes = append(routes, map[string]any{
-		"id": "custom-site", "listenerId": "custom-web", "handler": map[string]any{"type": "static", "siteId": "frontend"},
+		"id": "custom-site", "listenerId": "custom-web", "handler": map[string]any{"type": "static", "siteId": "frontend", "releaseId": releaseID, "mountPrefix": "/"},
 	})
 	configuration["routes"] = routes
 	return settings
@@ -353,16 +357,16 @@ func (probe *activationProbe) ActivateWithSecrets(configuration []byte, secrets 
 
 func (probe *activationProbe) Stop() error { return probe.runtime.Stop() }
 
-func settings(port int) map[string]any {
+func settings(port int, releaseID string) map[string]any {
 	return map[string]any{
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"config": map[string]any{
 			"listeners": []any{map[string]any{
 				"id": "web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", port),
 				"hostnames": []string{}, "protocols": []string{"http1"}, "tls": map[string]any{"mode": "disabled"},
 			}},
 			"routes": []any{map[string]any{
-				"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "frontend"},
+				"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "frontend", "releaseId": releaseID, "mountPrefix": "/"},
 			}},
 		},
 	}

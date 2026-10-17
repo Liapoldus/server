@@ -22,7 +22,7 @@ const httpRoute = {
   id: "api",
   listenerId: "web",
   match: { hosts: ["api.example.test"], methods: ["GET", "POST"], path: { type: "prefix", value: "/v1" } },
-  handler: { type: "static", siteId: "frontend" },
+  handler: { type: "reverseProxy", upstreams: [{ origin: "https://origin.example.test" }] },
 };
 const serviceAPI = (method = "GET", routePath = "/v1/echo") => ({
   version: "server-http/v1",
@@ -32,7 +32,7 @@ const serviceAPI = (method = "GET", routePath = "/v1/echo") => ({
 });
 
 function settings(config: Record<string, unknown>) {
-  return { schemaVersion: 1, config };
+  return { schemaVersion: 2, config };
 }
 
 function accepts(candidate: unknown): boolean {
@@ -41,7 +41,7 @@ function accepts(candidate: unknown): boolean {
 
 describe("Server service strict settings schema v1", () => {
   it("advertises the service-owned listener and route fields", () => {
-    expect(serviceContract.configuration).toMatchObject({ schemaVersion: 1, versionField: "schemaVersion", runtimeConfigField: "config" });
+    expect(serviceContract.configuration).toMatchObject({ schemaVersion: 2, versionField: "schemaVersion", runtimeConfigField: "config" });
     expect(serviceContract.configSchema.fields).toEqual([
       expect.objectContaining({ name: "listeners", type: "array", required: true }) as unknown,
       expect.objectContaining({ name: "routes", type: "array", required: true }) as unknown,
@@ -65,7 +65,7 @@ describe("Server service strict settings schema v1", () => {
   it("accepts custom-certificate and explicit plaintext listener variants", () => {
     expect(accepts(settings({
       listeners: [
-        { id: "custom", kind: "http", address: "192.0.2.10:8443", hostnames: ["custom.example.test"], protocols: ["http1", "http2"], tls: { mode: "custom", certificateRef: "cert-ref", privateKeyRef: "key-ref" } },
+        { id: "custom", kind: "http", address: "192.0.2.10:8443", hostnames: ["custom.example.test"], protocols: ["http1", "http2"], tls: { mode: "custom", certificateRef: "ssr:v1:00000000000000000000000000000001", privateKeyRef: "ssr:v1:00000000000000000000000000000002" } },
         { id: "plain", kind: "http", address: ":8080", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } },
       ],
       routes: [],
@@ -92,7 +92,7 @@ describe("Server service strict settings schema v1", () => {
     expect(schema.$defs.hostname.description).toContain("lowercase A-label");
   });
 
-  it("accepts all path matchers for non-service handlers and typed service contracts", () => {
+  it("accepts request matchers for reverse proxies and mounts static releases by URL prefix", () => {
     const paths = [
       { type: "exact", value: "/exact" },
       { type: "prefix", value: "/prefix" },
@@ -101,13 +101,11 @@ describe("Server service strict settings schema v1", () => {
       { type: "glob", value: "/files/file-?.js" },
       { type: "regex", value: "/v[0-9]+/items" },
     ];
-    const handlers = [
-      { type: "static", siteId: "frontend" },
-      { type: "reverseProxy", upstreams: [{ origin: "https://origin.example.test" }] },
-    ];
+    const handlers = [{ type: "reverseProxy", upstreams: [{ origin: "https://origin.example.test" }] }];
     for (const path of paths) for (const handler of handlers) {
       expect(accepts(settings({ listeners: [httpListener], routes: [{ ...httpRoute, match: { path }, handler }] }))).toBe(true);
     }
+    expect(accepts(settings({ listeners: [httpListener], routes: [{ id: "static", listenerId: "web", handler: { type: "static", siteId: "frontend", releaseId: `sha256:${"a".repeat(64)}`, mountPrefix: "/assets" } }] }))).toBe(true);
     const serviceHandlers = [
       { type: "service", instanceId: "identity", capability: "identity.login", mode: "call" },
       { type: "service", instanceId: "forms", capability: "forms.submit", mode: "http_stream" },
@@ -128,7 +126,7 @@ describe("Server service strict settings schema v1", () => {
     expect(schema.$defs.httpRoute.description).toContain("first matching route is terminal");
     expect(schema.$defs.serviceAPIContract.description).toContain("validated before service dispatch");
     expect(schema.$defs.apiParameter.properties.repeated.enum).toEqual(["single", "first", "last", "repeat", "commaDelimited"]);
-    expect(schema.$defs.staticHandler.description).toContain("active current release for siteId");
+    expect(schema.$defs.staticHandler.description).toContain("immutable site release");
   });
 
   it("accepts service dispatch and rejects the removed runtime handler name", () => {
@@ -228,7 +226,7 @@ describe("Server service strict settings schema v1", () => {
     expect(accepts(settings({
       listeners: [httpListener],
       routes: [{ ...httpRoute, handler: { type: "reverseProxy", upstreams: [
-        { origin: "https://one.internal:8443", weight: 2, caRef: "private-ca" },
+        { origin: "https://one.internal:8443", weight: 2, caRef: "ssr:v1:00000000000000000000000000000003" },
         { origin: "http://192.0.2.25:8080", weight: 100 },
         { origin: "http://a" },
       ] } }],
@@ -245,13 +243,12 @@ describe("Server service strict settings schema v1", () => {
       settings({ apps: {} }),
       settings({ listeners: [], routes: [], app: {} }),
       settings({ listeners: [] }),
-      { schemaVersion: 1, config: { listeners: [], routes: [] }, extra: true },
+      { schemaVersion: 2, config: { listeners: [], routes: [] }, extra: true },
       settings({ listeners: [{ ...httpListener, extra: true }], routes: [] }),
       settings({ listeners: [{ ...httpListener, tls: { mode: "automatic", extra: true } }], routes: [] }),
       settings({ listeners: [httpListener], routes: [{ ...httpRoute, extra: true }] }),
       settings({ listeners: [httpListener], routes: [{ ...httpRoute, match: { path: { type: "exact", value: "/", extra: true } } }] }),
-      settings({ listeners: [httpListener], routes: [{ ...httpRoute, handler: { type: "static", siteId: "x", root: "/tmp" } }] }),
-      settings({ listeners: [httpListener], routes: [{ ...httpRoute, handler: { type: "static", siteId: "x", releaseId: "previous" } }] }),
+      settings({ listeners: [httpListener], routes: [{ ...httpRoute, handler: { type: "static", siteId: "x", releaseId: "previous", mountPrefix: "/" } }] }),
       settings({ listeners: [httpListener], routes: [{ ...httpRoute, handler: { type: "reverseProxy", upstreams: [{ origin: "https://origin.example.test", extra: true }] } }] }),
     ];
     for (const candidate of cases) expect(accepts(candidate)).toBe(false);

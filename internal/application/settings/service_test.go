@@ -32,7 +32,7 @@ func TestCandidateValidationDoesNotActivateOrChangeRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings := settingsmodel.Settings{SchemaVersion: 1, RuntimeConfig: []byte(`{"listeners":[],"routes":[]}`)}
+	settings := settingsmodel.Settings{SchemaVersion: 2, RuntimeConfig: []byte(`{"listeners":[],"routes":[]}`)}
 	if err := configuration.Apply(settings, "1"); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestConfigurationErrorsPreservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings := settingsmodel.Settings{SchemaVersion: 1, RuntimeConfig: []byte(`{"listeners":[],"routes":[]}`)}
+	settings := settingsmodel.Settings{SchemaVersion: 2, RuntimeConfig: []byte(`{"listeners":[],"routes":[]}`)}
 	if !errors.Is(configuration.Apply(settings, ""), ErrInvalidRevision) {
 		t.Fatal("empty revision accepted")
 	}

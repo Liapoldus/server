@@ -8,4 +8,5 @@ const (
 	SettingsCertificatePurpose SettingsSecretPurpose = "server.tls.certificate"
 	SettingsPrivateKeyPurpose  SettingsSecretPurpose = "server.tls.private-key"
 	SettingsUpstreamCAPurpose  SettingsSecretPurpose = "server.upstream.ca"
+	SettingsHTTPAuthPurpose    SettingsSecretPurpose = "server.http.auth.credential"
 )

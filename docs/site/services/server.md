@@ -54,13 +54,17 @@ Admin API не публикуется и не является интерфей�
 определены типом `SettingsSecretPurpose` в REST adapter; прежний внутренний
 `secret-purposes.json` и его loader удалены после проверки всех потребителей.
 Public settings schema/semantics, Admin descriptors и site artifacts сохраняют
-своих текущих владельцев. Этот технический срез не завершает общую миграцию
-контрактов в code-first и не расширяет v1 возможности.
+своих текущих владельцев. Общая миграция контрактов в code-first остаётся
+незавершённой; v1 публикует только поля, которые runtime проверяет и применяет.
 
 Server service принимает только собственный versioned JSON contract, не raw Caddy
 JSON и не Caddyfile. Настройки задают public HTTP/HTTPS listeners и ordered
-routes. Для static и reverse-proxy routes `match` поддерживает hostname и ровно
-один path режим `exact`, `prefix`, `glob` или Go RE2 `regex`. Service route
+routes. Для reverse-proxy routes `match` поддерживает hostname и ровно один
+path режим `exact`, `prefix`, `glob` или Go RE2 `regex`. Static route задаёт
+`handler.mountPrefix`, `handler.siteId` и точный `handler.releaseId` из каталога
+неизменяемых релизов. Server обслуживает остаток URL внутри выбранного релиза,
+отдаёт index document на корне mount и отклоняет traversal и encoded separators.
+Публикация нового релиза не меняет уже закреплённый маршрут. Service route
 обязан содержать versioned `api` contract `server-http/v1`: method и template
 path задаются в нём, а не дублируются в `match`; `match` для такого route может
 задавать только host. Named path placeholders имеют форму `{name}` и занимают
@@ -68,6 +72,21 @@ path задаются в нём, а не дублируются в `match`; `mat
 принимается. Совпавший route использует один terminal handler: static site,
 HTTP(S) reverse-proxy pool или service capability. Middleware chain и общий
 `continue` не входят в v1.
+
+`config.defaults` задаёт общие режимы `compression`, `cache`, `headers` и `cors`
+отдельно для service, static и reverse-proxy routes. Если значение не задано,
+static включает `zstd`/`gzip` и публичный `Cache-Control: max-age=3600`; остальные
+типы оставляют эти функции выключенными. Route может наследовать, включить или
+выключить каждую функцию в `features`. Отключение не удаляет сохранённые
+алгоритмы и значения.
+
+`headers` задаёт фиксированные allowlisted значения request/response headers.
+`cors` поддерживает exact origins, методы, request/response header allowlists,
+credentials и кэширование preflight. Server отвечает на разрешённый preflight
+сам и блокирует запросы с неперечисленными origin, методом или заголовком;
+wildcard origin нельзя совмещать с credentials. Cache здесь задаёт только
+`Cache-Control`, а не хранит ответы; включать его для персонализированного API
+можно только явно.
 
 ### Typed request/response contract
 
@@ -187,6 +206,11 @@ operation распаковывает и проверяет gzip/tar, manifest, �
 entries. Только после полной проверки immutable release атомарно становится
 `current`, а прежний `current` — `previous`. Ошибка проверки переводит operation
 в `failed` и оставляет оба активных указателя без изменений.
+Manifest задаёт `siteId`, `documentRoot` и `indexDocument`. `site-releases`
+каталог через Service SDK/CLI возвращает доступные immutable revision IDs;
+маршрут хранит выбранный digest вместе с site ID. При проверке кандидатной
+конфигурации Server сверяет пару с каталогом релизов до передачи её runtime;
+несуществующий digest или релиз другого сайта отклоняется до активации.
 
 Для terminal service route `mode: "call"` передаёт конечный JSON request/response.
 `mode: "http_stream"` передаёт metadata отдельным `request_start`, затем поток

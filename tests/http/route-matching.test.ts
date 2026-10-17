@@ -21,7 +21,7 @@ describe("Caddy strict HTTP route matching", () => {
     const port = await freePort();
     try {
       const settings = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         config: {
           listeners: [listener(port)],
           routes: [
@@ -43,9 +43,7 @@ describe("Caddy strict HTTP route matching", () => {
             route("glob-triple-star", {
               path: { type: "glob", value: vector("glob-triple-star-uses-longest-tokenization").input.pattern },
             }, proxy(originA.origin)),
-            route("normalized-static-path", {
-              path: { type: "exact", value: "/docs/file.txt" },
-            }, { type: "static", siteId: "frontend" }),
+            route("normalized-static-path", undefined, { type: "static", siteId: "frontend", releaseId: `sha256:${"0".repeat(64)}`, mountPrefix: "/docs" }),
             route("fallback", undefined, proxy(originB.origin)),
           ],
         },
@@ -105,21 +103,21 @@ describe("Caddy strict HTTP route matching", () => {
   it("rejects noncanonical and canonical-equivalent matchers without replacing active settings", async () => {
     const port = await freePort();
     const settings = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       config: {
         listeners: [listener(port)],
         routes: [route("active", undefined, { type: "static", siteId: "frontend" })],
       },
     };
     const noncanonical = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       config: {
         listeners: [listener(port)],
         routes: [route("bad-path", { path: { type: "exact", value: "/a//b" } }, proxy("http://127.0.0.1:18081"))],
       },
     };
     const equivalentMatchers = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       config: {
         listeners: [listener(port)],
         routes: [
@@ -129,7 +127,7 @@ describe("Caddy strict HTTP route matching", () => {
       },
     };
     const exactDotSegments = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       config: {
         listeners: [listener(port)],
         routes: [route("dot-segments", {
@@ -166,7 +164,10 @@ function listener(port: number) {
 }
 
 function route(id: string, match: unknown, handler: unknown) {
-  return { id, listenerId: "web", ...(match ? { match } : {}), handler };
+  const configured = handler && typeof handler === "object" && (handler as { type?: string }).type === "static"
+    ? { releaseId: `sha256:${"0".repeat(64)}`, mountPrefix: "/", ...(handler as Record<string, unknown>) }
+    : handler;
+  return { id, listenerId: "web", ...(match ? { match } : {}), handler: configured };
 }
 
 function proxy(origin: string) {

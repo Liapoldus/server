@@ -26,7 +26,7 @@ import (
 
 const (
 	settingsRevision = "revision-1"
-	caReference      = "private-upstream-ca"
+	caReference      = "ssr:v1:00000000000000000000000000000003"
 )
 
 type input struct {
@@ -70,7 +70,7 @@ func main() {
 	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	requestSettings, err := json.Marshal(map[string]any{
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"config": map[string]any{
 			"listeners": []any{map[string]any{
 				"id": "web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", request.Port),

@@ -23,7 +23,7 @@ func TestApplyPreservesOpaqueGeneration(t *testing.T) {
 	// Names inside opaque IDs are application data, never migration targets.
 	config := []byte(`{ "routes": [], "listeners": [{"id":"plugin-marker","kind":"http","address":":8080","hostnames":[],"protocols":["http1"],"tls":{"mode":"disabled"}}] }`)
 	raw := append([]byte(" \n{\"config\":"), config...)
-	raw = append(raw, []byte(",\"schemaVersion\":1}\n")...)
+	raw = append(raw, []byte(",\"schemaVersion\":2}\n")...)
 	digest := sdkmodels.Digest(raw)
 	incoming, err := sdkmodels.NewConfiguration("generation-opaque", "1", digest, raw)
 	if err != nil {

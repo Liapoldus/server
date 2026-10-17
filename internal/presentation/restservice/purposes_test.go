@@ -10,7 +10,7 @@ import (
 )
 
 func TestSettingsSecretPurposesPreservation(t *testing.T) {
-	if SettingsCertificatePurpose != "server.tls.certificate" || SettingsPrivateKeyPurpose != "server.tls.private-key" || SettingsUpstreamCAPurpose != "server.upstream.ca" {
+	if SettingsCertificatePurpose != "server.tls.certificate" || SettingsPrivateKeyPurpose != "server.tls.private-key" || SettingsUpstreamCAPurpose != "server.upstream.ca" || SettingsHTTPAuthPurpose != "server.http.auth.credential" {
 		t.Fatal("settings grant purposes changed")
 	}
 }
@@ -41,7 +41,10 @@ func TestSettingsGrantPurposeDelivery(t *testing.T) {
 	}
 	provider := &purposeTestProvider{purposes: make(map[string]string)}
 	adapter := &Adapter{configuration: configuration, secrets: provider}
-	settings := settingsmodel.Settings{SchemaVersion: 1, RuntimeConfig: []byte(`{"listeners":[{"tls":{"mode":"custom","certificateRef":"cert","privateKeyRef":"key"}}],"routes":[{"handler":{"type":"reverseProxy","upstreams":[{"caRef":"ca"}]}}]}`)}
+	settings := settingsmodel.Settings{SchemaVersion: 2, RuntimeConfig: []byte(`{"listeners":[{"tls":{"mode":"custom","certificateRef":"cert","privateKeyRef":"key"}}],"routes":[{"handler":{"type":"reverseProxy","upstreams":[{"caRef":"ca"}]}}]}`)}
+	if _, err := settings.ConfigSecretReferenceKinds(); err != nil {
+		t.Fatalf("settings secret reference extraction failed: %v", err)
+	}
 	if err := adapter.applyWithSecrets(context.Background(), settings, "generation"); err != nil {
 		t.Fatal(err)
 	}

@@ -32,8 +32,8 @@ import (
 )
 
 const (
-	certificateRef  = "fixture-certificate"
-	privateKeyRef   = "fixture-private-key"
+	certificateRef  = "ssr:v1:00000000000000000000000000000001"
+	privateKeyRef   = "ssr:v1:00000000000000000000000000000002"
 	customHostname  = "custom.example.test"
 	invalidRevision = "revision-2"
 	validRevision   = "revision-3"
@@ -168,15 +168,15 @@ func settings(httpPort int, httpsPort *int, invalidKeyRef string) []byte {
 		})
 	}
 	routes := []any{map[string]any{
-		"id": "site", "listenerId": "old-web", "handler": map[string]any{"type": "static", "siteId": "custom-tls-fixture"},
+		"id": "site", "listenerId": "old-web", "handler": map[string]any{"type": "static", "siteId": "custom-tls-fixture", "releaseId": "sha256:0000000000000000000000000000000000000000000000000000000000000000", "mountPrefix": "/"},
 	}}
 	if httpsPort != nil {
 		routes = append(routes, map[string]any{
-			"id": "secure-site", "listenerId": "secure-web", "handler": map[string]any{"type": "static", "siteId": "custom-tls-fixture"},
+			"id": "secure-site", "listenerId": "secure-web", "handler": map[string]any{"type": "static", "siteId": "custom-tls-fixture", "releaseId": "sha256:0000000000000000000000000000000000000000000000000000000000000000", "mountPrefix": "/"},
 		})
 	}
 	contents, err := json.Marshal(map[string]any{
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"config": map[string]any{
 			"listeners": listeners,
 			"routes":    routes,

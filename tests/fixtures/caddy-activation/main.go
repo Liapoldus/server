@@ -94,19 +94,20 @@ func main() {
 	siteFile := filepath.Join(siteRoot, "docs", "file.txt")
 	check(os.MkdirAll(filepath.Dir(siteFile), 0o700))
 	check(os.WriteFile(siteFile, []byte(request.SiteFileContent), 0o600))
+	check(os.WriteFile(filepath.Join(siteRoot, "file.txt"), []byte(request.SiteFileContent), 0o600))
 	configuration, err := settingsapp.NewConfiguration(runtime)
 	check(err)
 	settings := request.Settings
 	if len(settings) == 0 {
 		settings, err = json.Marshal(map[string]any{
-			"schemaVersion": 1,
+			"schemaVersion": 2,
 			"config": map[string]any{
 				"listeners": []any{map[string]any{
 					"id": "web", "kind": "http", "address": fmt.Sprintf("127.0.0.1:%d", request.Port),
 					"hostnames": []string{}, "protocols": []string{"http1"}, "tls": map[string]any{"mode": "disabled"},
 				}},
 				"routes": []any{map[string]any{
-					"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "frontend"},
+					"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "frontend", "releaseId": "sha256:0000000000000000000000000000000000000000000000000000000000000000", "mountPrefix": "/"},
 				}},
 			},
 		})

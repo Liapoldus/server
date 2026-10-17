@@ -18,5 +18,5 @@ type SiteReleaseRepository interface {
 	ListSites(context.Context, int, string) (sitemodel.SitePage[sitemodel.SiteSummary], error)
 	ListSiteReleases(context.Context, string, int, string) (sitemodel.SitePage[sitemodel.SiteReleaseSummary], error)
 	ListSiteOperations(context.Context, string, int, string) (sitemodel.SitePage[sitemodel.SiteOperationSummary], error)
-	OpenSiteDocument(context.Context, string, string) (io.ReadCloser, error)
+	OpenSiteDocument(context.Context, string, string, string) (io.ReadCloser, error)
 }

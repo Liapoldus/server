@@ -10,7 +10,7 @@ const schema = readContract('settings.schema.json');
 
 function streamSettings(streamLimits: object) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     config: {
       listeners: [{ id: "web", kind: "http", address: "127.0.0.1:8080", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }],
       routes: [{

@@ -1,5 +1,35 @@
 # TODO — Server service v1
 
+## Settings-v2 HTTP and secret-reference checkpoint — 2026-10-18
+
+- Server settings schema v2 now covers service, static, reverse-proxy and
+  redirect routes; inherited route defaults and per-route overrides; request/
+  response headers, CORS, auth references, rewrite, rate limiting, cache,
+  compression and reverse-proxy active health checks. Disabled features retain
+  their settings. Runtime compilation validates and activates only complete
+  candidates; failed validation keeps the active Caddy snapshot untouched.
+- Local service secret values are resolved only through Core-issued, scoped
+  SDK grants. Caddy configuration stores keyed MACs for auth comparison, not
+  plaintext credentials or opaque references. Bearer/API-key/Basic checks,
+  trusted-proxy rate limiting, redirects, rewrite and active health probes have
+  Go regressions. Static assets use immutable release IDs and safe path
+  resolution beneath a release root.
+- Verification on 2026-10-18: `go test -ldflags=-w ./... -count=1`,
+  `go build ./...`, `go vet ./...`, `go run -ldflags=-w ./cmd/contracts --check`,
+  and Vitest (34 files / 86 tests) pass. The `-ldflags=-w` on test/contract
+  binaries only omits debug symbols; it was used after the host temporary volume
+  ran low while linking fixture binaries. OrbStack was started with `orbctl
+  start` for the ACME Pebble test and Docker reports 29.8.2.
+- Server runtime release is `1.1.8`. Its owner source and contract changes are
+  ready for commit/push. The matching Server Editor `0.3.59` package passes
+  73/73 tests and Studio's package inspector, but it has not been installed;
+  exact digest `682bd7af7b2d61c312403628b7407fda7a621b9d9d565e65fa7004849cd9094f`
+  still needs the normal native Studio trust confirmation.
+- Live acceptance against the selected local Core/Server Project, multi-replica
+  rotation ACK/timeout/restart recovery, the packaged macOS WebView, and hosted
+  cross-platform workflows remain open. Do not mark source tests as live
+  runtime acceptance.
+
 ## Live unknown-route retest — 2026-10-16 20:54 UTC
 
 - Earlier notes below saying Server `1.1.5` returns `200` for unmatched paths

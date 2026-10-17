@@ -15,12 +15,12 @@ describe("Caddy service settings contract", () => {
   it("accepts strict Liapoldus settings and rejects native Caddy JSON", () => {
     const validate = settingsAjv().compile(schema);
 
-    expect(validate({ schemaVersion: 1, config: { listeners: [], routes: [] } })).toBe(true);
-    expect(validate({ schemaVersion: 1, config: { apps: {} } })).toBe(false);
-    expect(validate({ schemaVersion: 2, config: { listeners: [], routes: [] } })).toBe(false);
-    expect(validate({ schemaVersion: 1, config: "not-an-object" })).toBe(false);
-    expect(validate({ schemaVersion: 1, config: { listeners: [], routes: [], extra: true } })).toBe(false);
-    expect(validate({ schemaVersion: 1, config: {}, extra: true })).toBe(false);
+    expect(validate({ schemaVersion: 2, config: { listeners: [], routes: [] } })).toBe(true);
+    expect(validate({ schemaVersion: 2, config: { apps: {} } })).toBe(false);
+    expect(validate({ schemaVersion: 1, config: { listeners: [], routes: [] } })).toBe(false);
+    expect(validate({ schemaVersion: 2, config: "not-an-object" })).toBe(false);
+    expect(validate({ schemaVersion: 2, config: { listeners: [], routes: [], extra: true } })).toBe(false);
+    expect(validate({ schemaVersion: 2, config: {}, extra: true })).toBe(false);
   });
 
   it("does not depend on the retired DispatchApply capability registry", () => {
@@ -30,12 +30,12 @@ describe("Caddy service settings contract", () => {
   });
 
   it("acknowledges a valid revision and retains active settings when a candidate is rejected", () => {
-    const activeSettings = { schemaVersion: 1, config: { listeners: [], routes: [] } };
+    const activeSettings = { schemaVersion: 2, config: { listeners: [], routes: [] } };
     const input = JSON.stringify({
       calls: [
         { revision: "revision-1", settings: activeSettings },
-        { revision: "revision-2", settings: { schemaVersion: 1, config: { listeners: [{ id: "reject", kind: "http", address: ":8080", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }], routes: [] } } },
-        { revision: "revision-1", settings: { schemaVersion: 1, config: { listeners: [{ id: "changed", kind: "http", address: ":8081", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }], routes: [] } } },
+        { revision: "revision-2", settings: { schemaVersion: 2, config: { listeners: [{ id: "reject", kind: "http", address: ":8080", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }], routes: [] } } },
+        { revision: "revision-1", settings: { schemaVersion: 2, config: { listeners: [{ id: "changed", kind: "http", address: ":8081", hostnames: [], protocols: ["http1"], tls: { mode: "disabled" } }], routes: [] } } },
       ],
     });
     const output = execFileSync("go", ["run", "./tests/fixtures/config-apply"], {
@@ -76,7 +76,7 @@ describe("Caddy service settings contract", () => {
         skipRequest: true,
         certificateStatusHost: host,
         settings: {
-          schemaVersion: 1,
+          schemaVersion: 2,
           config: {
             listeners: [{
               id: "automatic-tls",

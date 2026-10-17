@@ -250,7 +250,7 @@ func main() {
 	if !errors.Is(err, siteapp.ErrDocumentNotFound) {
 		panic("manifest was not hidden using the product not-found result")
 	}
-	output.FinalState.CaddyRootDocument, output.FinalState.CaddyNestedAsset, output.FinalState.CaddyDirectoryIndex, output.FinalState.CaddyManifestStatus = servePublishedSite(root, request.Port)
+	output.FinalState.CaddyRootDocument, output.FinalState.CaddyNestedAsset, output.FinalState.CaddyDirectoryIndex, output.FinalState.CaddyManifestStatus = servePublishedSite(root, request.Port, secondRevision)
 	rollbackOperation, err := publisher.Rollback(context.Background(), sitemodel.SiteRollbackInput{
 		SiteID: "docs", ExpectedCurrentRevision: secondRevision, TargetRevision: firstRevision,
 		IdempotencyKey: "rollback-one", Capability: contract.RollbackCapability,
@@ -287,7 +287,7 @@ func main() {
 	}
 }
 
-func servePublishedSite(root string, port int) (string, string, string, int) {
+func servePublishedSite(root string, port int, releaseID string) (string, string, string, int) {
 	if port < 1 {
 		panic("fixture requires a listening port")
 	}
@@ -305,14 +305,14 @@ func servePublishedSite(root string, port int) (string, string, string, int) {
 	}
 	defer func() { _ = configuration.Stop() }()
 	settings, err := json.Marshal(map[string]any{
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"config": map[string]any{
 			"listeners": []any{map[string]any{
 				"id": "web", "kind": "http", "address": net.JoinHostPort("127.0.0.1", strconv.Itoa(port)),
 				"hostnames": []string{}, "protocols": []string{"http1"}, "tls": map[string]any{"mode": "disabled"},
 			}},
 			"routes": []any{map[string]any{
-				"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "docs"},
+				"id": "site", "listenerId": "web", "handler": map[string]any{"type": "static", "siteId": "docs", "releaseId": releaseID, "mountPrefix": "/"},
 			}},
 		},
 	})

@@ -131,10 +131,296 @@
       ],
       "type": "object"
     },
+    "authDefault": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "scheme",
+              "secretRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scheme": {
+                "const": "basic"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "username"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scheme": {
+                "const": "apiKey"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "headerName"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "headerName": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        },
+        "realm": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "scheme": {
+          "enum": [
+            "bearer",
+            "apiKey",
+            "basic"
+          ],
+          "type": "string"
+        },
+        "secretRef": {
+          "description": "Opaque service-scoped secret reference. Plaintext secret values are never stored in Project settings.",
+          "pattern": "^ssr:v1:[a-f0-9]{32}$",
+          "type": "string",
+          "x-liapoldus-secret-reference": true,
+          "x-studio-secret-purpose": "server.http.auth.credential"
+        },
+        "username": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Аутентификация",
+      "type": "object"
+    },
+    "authFeature": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "scheme",
+              "secretRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scheme": {
+                "const": "basic"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "username"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scheme": {
+                "const": "apiKey"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "headerName"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "headerName": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        },
+        "realm": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "scheme": {
+          "enum": [
+            "bearer",
+            "apiKey",
+            "basic"
+          ],
+          "type": "string"
+        },
+        "secretRef": {
+          "description": "Opaque service-scoped secret reference. Plaintext secret values are never stored in Project settings.",
+          "pattern": "^ssr:v1:[a-f0-9]{32}$",
+          "type": "string",
+          "x-liapoldus-secret-reference": true,
+          "x-studio-secret-purpose": "server.http.auth.credential"
+        },
+        "username": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Аутентификация",
+      "type": "object"
+    },
+    "cacheDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "maxAgeSeconds": {
+          "default": 3600,
+          "maximum": 31536000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        },
+        "visibility": {
+          "default": "private",
+          "enum": [
+            "public",
+            "private"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Cache-Control",
+      "type": "object"
+    },
+    "cacheFeature": {
+      "additionalProperties": false,
+      "properties": {
+        "maxAgeSeconds": {
+          "maximum": 31536000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        },
+        "visibility": {
+          "description": "HTTP Cache-Control visibility. API routes require an explicit route-level enable before any cache header is emitted.",
+          "enum": [
+            "public",
+            "private"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Cache-Control",
+      "type": "object"
+    },
+    "compressionDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithms": {
+          "items": {
+            "enum": [
+              "zstd",
+              "gzip"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Сжатие",
+      "type": "object"
+    },
+    "compressionFeature": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithms": {
+          "description": "Compression algorithms ordered by preference. Omitted values inherit the route-type default.",
+          "items": {
+            "enum": [
+              "zstd",
+              "gzip"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Сжатие",
+      "type": "object"
+    },
     "config": {
       "additionalProperties": false,
       "description": "Strict Liapoldus desired settings, not native Caddy JSON or Caddyfile. Before compiling a candidate runtime configuration, SDK Reload candidate apply rejects duplicate IDs/binds, unresolved listener/site references, route/listener kind mismatches, canonical-equivalent matchers, invalid normalized paths/hosts, TLS certificate coverage errors and mode values outside the Server-supported enum. It does not preflight product methods on remote peers.",
       "properties": {
+        "defaults": {
+          "$ref": "#/$defs/routeDefaults",
+          "description": "Shared route defaults. Each route can inherit, enable, or disable a feature without deleting its stored values."
+        },
         "listeners": {
           "items": {
             "$ref": "#/$defs/listener"
@@ -154,6 +440,309 @@
       ],
       "type": "object"
     },
+    "corsDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "allowCredentials": {
+          "type": "boolean"
+        },
+        "allowedHeaders": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "exposedHeaders": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "maxAgeSeconds": {
+          "maximum": 86400,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "methods": {
+          "items": {
+            "$ref": "#/$defs/method"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        },
+        "origins": {
+          "items": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "CORS",
+      "type": "object"
+    },
+    "corsFeature": {
+      "additionalProperties": false,
+      "properties": {
+        "allowCredentials": {
+          "type": "boolean"
+        },
+        "allowedHeaders": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "exposedHeaders": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "maxAgeSeconds": {
+          "maximum": 86400,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "methods": {
+          "items": {
+            "$ref": "#/$defs/method"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        },
+        "origins": {
+          "items": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "CORS",
+      "type": "object"
+    },
+    "defaultFeatureMode": {
+      "enum": [
+        "enabled",
+        "disabled"
+      ],
+      "type": "string"
+    },
+    "featureMode": {
+      "description": "A route may inherit its handler-type default or explicitly enable/disable the feature. Values remain in Project while disabled.",
+      "enum": [
+        "inherit",
+        "enabled",
+        "disabled"
+      ],
+      "type": "string"
+    },
+    "headerMap": {
+      "additionalProperties": {
+        "maxLength": 8192,
+        "type": "string"
+      },
+      "description": "Allowlisted request or response header assignments. Header names are case-insensitive; values cannot contain control characters.",
+      "maxProperties": 64,
+      "propertyNames": {
+        "maxLength": 128,
+        "pattern": "^[!#$%\u0026'*+.^_`|~0-9A-Za-z-]+$",
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "headersDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        },
+        "request": {
+          "$ref": "#/$defs/headerMap"
+        },
+        "response": {
+          "$ref": "#/$defs/headerMap"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "HTTP headers",
+      "type": "object"
+    },
+    "headersFeature": {
+      "$ref": "#/$defs/headersFeatureDefinition"
+    },
+    "headersFeatureDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        },
+        "request": {
+          "$ref": "#/$defs/headerMap"
+        },
+        "response": {
+          "$ref": "#/$defs/headerMap"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "HTTP headers",
+      "type": "object"
+    },
+    "healthCheckDefault": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "expectedStatus": {
+          "default": 200,
+          "maximum": 599,
+          "minimum": 200,
+          "type": "integer"
+        },
+        "intervalSeconds": {
+          "default": 30,
+          "maximum": 600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        },
+        "path": {
+          "default": "/healthz",
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^/[^\\r\\n\\x00]*$",
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "default": 5,
+          "maximum": 60,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Активная проверка upstream",
+      "type": "object"
+    },
+    "healthCheckFeature": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "expectedStatus": {
+          "default": 200,
+          "maximum": 599,
+          "minimum": 200,
+          "type": "integer"
+        },
+        "intervalSeconds": {
+          "default": 30,
+          "maximum": 600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        },
+        "path": {
+          "default": "/healthz",
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^/[^\\r\\n\\x00]*$",
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "default": 5,
+          "maximum": 60,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Активная проверка upstream",
+      "type": "object"
+    },
     "hostname": {
       "description": "DNS hostname or a leftmost wildcard. Reload canonicalizes IDNA to a lowercase A-label without a port; a wildcard matches exactly one DNS label and never the apex.",
       "maxLength": 255,
@@ -168,6 +757,9 @@
         },
         {
           "$ref": "#/$defs/reverseProxyHandler"
+        },
+        {
+          "$ref": "#/$defs/redirectHandler"
         },
         {
           "$ref": "#/$defs/serviceHandler"
@@ -415,6 +1007,10 @@
         "api": {
           "$ref": "#/$defs/serviceAPIContract"
         },
+        "features": {
+          "$ref": "#/$defs/routeFeatures",
+          "description": "Optional per-route overrides. Disabled settings remain saved and can be enabled later."
+        },
         "handler": {
           "$ref": "#/$defs/httpHandler"
         },
@@ -528,6 +1124,138 @@
         }
       ]
     },
+    "rateLimitDefault": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "requestsPerSecond",
+              "burst"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "burst": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        },
+        "requestsPerSecond": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "trustedProxies": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Ограничение частоты",
+      "type": "object"
+    },
+    "rateLimitFeature": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "requestsPerSecond",
+              "burst"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "burst": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        },
+        "requestsPerSecond": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "trustedProxies": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Ограничение частоты",
+      "type": "object"
+    },
+    "redirectHandler": {
+      "additionalProperties": false,
+      "properties": {
+        "statusCode": {
+          "default": 308,
+          "enum": [
+            301,
+            302,
+            307,
+            308
+          ],
+          "type": "integer"
+        },
+        "target": {
+          "description": "A same-origin absolute path or an HTTP(S) URL without userinfo, query, or fragment. The original query string is preserved.",
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^(?:/[^\\r\\n\\x00]*|https?://[^/@?#\\s]+(?:/[^\\r\\n\\x00]*)?)$",
+          "type": "string"
+        },
+        "type": {
+          "const": "redirect"
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "statusCode"
+      ],
+      "title": "Перенаправление",
+      "type": "object"
+    },
     "reverseProxyHandler": {
       "additionalProperties": false,
       "description": "Uses per-route smooth weighted round-robin with 1–32 origins and weights 1–100 (default 1): add each eligible weight to its current weight, choose the largest (ties use array order), then subtract the eligible-weight sum from the selected origin. If the eligible set changes, current weights reset for that set. Only TCP refusal/timeout before request bytes passively excludes an origin for 30 seconds and permits at most one next-origin retry. TLS handshake/verification failure and failures after TCP connect are terminal and neither retried nor passively excluded; active health probes are not used. Once request bytes are sent, the request is never replayed.",
@@ -550,8 +1278,160 @@
       ],
       "type": "object"
     },
+    "rewriteDefault": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/defaultFeatureMode"
+        },
+        "path": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^/[^\\r\\n\\x00]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Переписывание пути",
+      "type": "object"
+    },
+    "rewriteFeature": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "enabled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/featureMode"
+        },
+        "path": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^/[^\\r\\n\\x00]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Переписывание пути",
+      "type": "object"
+    },
     "route": {
       "$ref": "#/$defs/httpRoute"
+    },
+    "routeDefaults": {
+      "additionalProperties": false,
+      "description": "Optional shared defaults by route handler type. Omitted defaults use safe built-in values: static routes enable compression and public max-age=3600; API and reverse-proxy routes disable compression and caching.",
+      "properties": {
+        "redirect": {
+          "$ref": "#/$defs/routeFeatureDefaults"
+        },
+        "reverseProxy": {
+          "$ref": "#/$defs/routeFeatureDefaults"
+        },
+        "service": {
+          "$ref": "#/$defs/routeFeatureDefaults"
+        },
+        "static": {
+          "$ref": "#/$defs/routeFeatureDefaults"
+        }
+      },
+      "title": "Значения по типам маршрутов",
+      "type": "object"
+    },
+    "routeFeatureDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "$ref": "#/$defs/authDefault"
+        },
+        "cache": {
+          "$ref": "#/$defs/cacheDefault"
+        },
+        "compression": {
+          "$ref": "#/$defs/compressionDefault"
+        },
+        "cors": {
+          "$ref": "#/$defs/corsDefault"
+        },
+        "headers": {
+          "$ref": "#/$defs/headersDefault"
+        },
+        "healthCheck": {
+          "$ref": "#/$defs/healthCheckDefault"
+        },
+        "rateLimit": {
+          "$ref": "#/$defs/rateLimitDefault"
+        },
+        "rewrite": {
+          "$ref": "#/$defs/rewriteDefault"
+        }
+      },
+      "title": "Общие значения маршрутов",
+      "type": "object"
+    },
+    "routeFeatures": {
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "$ref": "#/$defs/authFeature"
+        },
+        "cache": {
+          "$ref": "#/$defs/cacheFeature"
+        },
+        "compression": {
+          "$ref": "#/$defs/compressionFeature"
+        },
+        "cors": {
+          "$ref": "#/$defs/corsFeature"
+        },
+        "headers": {
+          "$ref": "#/$defs/headersFeature"
+        },
+        "healthCheck": {
+          "$ref": "#/$defs/healthCheckFeature"
+        },
+        "rateLimit": {
+          "$ref": "#/$defs/rateLimitFeature"
+        },
+        "rewrite": {
+          "$ref": "#/$defs/rewriteFeature"
+        }
+      },
+      "title": "Обработка маршрута",
+      "type": "object"
     },
     "serviceAPIContract": {
       "additionalProperties": false,
@@ -711,8 +1591,20 @@
     },
     "staticHandler": {
       "additionalProperties": false,
-      "description": "Serves the active current release for siteId. A route cannot pin an immutable release or select previous; publishing or rollback changes the current pointer without changing the route.",
+      "description": "Serves one immutable site release at mountPrefix. releaseId is the exact sha256 revision returned by the Server release catalog; publishing a later release never changes this route.",
       "properties": {
+        "mountPrefix": {
+          "description": "URL path prefix. Runtime rejects dot segments and mounts the immutable release below this prefix.",
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^/(?:[A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)*)?/?$",
+          "type": "string"
+        },
+        "releaseId": {
+          "description": "Immutable release digest selected from the Server release catalog.",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
         "siteId": {
           "$ref": "#/$defs/nonEmptyString"
         },
@@ -722,7 +1614,9 @@
       },
       "required": [
         "type",
-        "siteId"
+        "siteId",
+        "releaseId",
+        "mountPrefix"
       ],
       "type": "object"
     },
@@ -757,15 +1651,21 @@
       "description": "Uses the referenced certificate/key pair. The service resolves references only through the scoped secret-grant boundary and validates the pair before activation. Effective TLS bounds are TLS 1.2 minimum and TLS 1.3 maximum.",
       "properties": {
         "certificateRef": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Opaque Core-generated secret reference; never PEM bytes or a path."
+          "description": "Opaque Core-generated secret reference; never PEM bytes or a path.",
+          "pattern": "^ssr:v1:[a-f0-9]{32}$",
+          "type": "string",
+          "x-liapoldus-secret-reference": true,
+          "x-studio-secret-purpose": "server.tls.certificate"
         },
         "mode": {
           "const": "custom"
         },
         "privateKeyRef": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Opaque Core-generated secret reference; never PEM bytes or a path."
+          "description": "Opaque Core-generated secret reference; never PEM bytes or a path.",
+          "pattern": "^ssr:v1:[a-f0-9]{32}$",
+          "type": "string",
+          "x-liapoldus-secret-reference": true,
+          "x-studio-secret-purpose": "server.tls.private-key"
         }
       },
       "required": [
@@ -815,8 +1715,11 @@
       ],
       "properties": {
         "caRef": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional opaque private-CA secret reference; accepted only for HTTPS origins. It extends the system trust chain and never disables hostname verification."
+          "description": "Optional opaque private-CA secret reference; accepted only for HTTPS origins. It extends the system trust chain and never disables hostname verification.",
+          "pattern": "^ssr:v1:[a-f0-9]{32}$",
+          "type": "string",
+          "x-liapoldus-secret-reference": true,
+          "x-studio-secret-purpose": "server.upstream.ca"
         },
         "origin": {
           "description": "HTTP(S) origin authority only: no userinfo, path, query, or fragment. Full URL and port parsing is checked during SDK Reload candidate apply.",
@@ -837,7 +1740,7 @@
       "type": "object"
     }
   },
-  "$id": "https://liapoldus.github.io/services/server/settings/v1/schema.json",
+  "$id": "https://liapoldus.github.io/services/server/settings/v2/schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Strict Liapoldus configuration compiled privately into the Caddy runtime. Native Caddy JSON and Caddyfile input are not accepted.",
@@ -846,13 +1749,13 @@
       "$ref": "#/$defs/config"
     },
     "schemaVersion": {
-      "const": 1
+      "const": 2
     }
   },
   "required": [
     "schemaVersion",
     "config"
   ],
-  "title": "Server service settings v1",
+  "title": "Server service settings v2",
   "type": "object"
 }

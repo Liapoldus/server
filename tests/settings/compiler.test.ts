@@ -73,8 +73,11 @@ describe("strict settings to Caddy runtime compilation", () => {
 });
 
 function httpSettings(port: number, handler: Record<string, unknown>) {
+  const configuredHandler = handler.type === "static"
+    ? { ...handler, releaseId: `sha256:${"0".repeat(64)}`, mountPrefix: "/" }
+    : handler;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     config: {
       listeners: [{
         id: "web",
@@ -87,8 +90,8 @@ function httpSettings(port: number, handler: Record<string, unknown>) {
       routes: [{
         id: "route",
         listenerId: "web",
-        handler,
-        ...(handler.type === "service" ? { api: serviceAPI() } : {}),
+        handler: configuredHandler,
+        ...(configuredHandler.type === "service" ? { api: serviceAPI() } : {}),
       }],
     },
   };

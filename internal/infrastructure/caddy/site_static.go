@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 
 	caddycore "github.com/caddyserver/caddy/v2"
@@ -18,7 +19,7 @@ import (
 const siteFileServerModule = "liapoldus_site_file_server"
 
 type SiteDocumentReader interface {
-	OpenSiteDocument(context.Context, string, string) (io.ReadCloser, error)
+	OpenPinnedSiteDocument(context.Context, string, string, string) (io.ReadCloser, error)
 }
 
 type siteDocumentFile interface {
@@ -45,7 +46,9 @@ func SetSiteDocumentReader(reader SiteDocumentReader) error {
 }
 
 type siteFileServer struct {
-	SiteID string `json:"siteId"`
+	SiteID      string `json:"siteId"`
+	ReleaseID   string `json:"releaseId"`
+	MountPrefix string `json:"mountPrefix"`
 }
 
 func init() {
@@ -60,7 +63,7 @@ func (siteFileServer) CaddyModule() caddycore.ModuleInfo {
 }
 
 func (handler *siteFileServer) Provision(caddycore.Context) error {
-	if _, err := SiteRoot(handler.SiteID); err != nil {
+	if _, err := SiteRoot(handler.SiteID); err != nil || !validReleaseID(handler.ReleaseID) || !validStaticMountPrefix(handler.MountPrefix) {
 		return errUnsupportedSettings
 	}
 	return nil
@@ -74,7 +77,11 @@ func (handler *siteFileServer) ServeHTTP(writer http.ResponseWriter, request *ht
 	if holder == nil || holder.reader == nil {
 		return caddyhttp.Error(http.StatusServiceUnavailable, errors.New(""))
 	}
-	file, err := holder.reader.OpenSiteDocument(request.Context(), handler.SiteID, request.URL.Path)
+	requestPath, ok := stripStaticMountPrefix(request.URL.Path, handler.MountPrefix)
+	if !ok {
+		return caddyhttp.Error(http.StatusNotFound, errors.New(""))
+	}
+	file, err := holder.reader.OpenPinnedSiteDocument(request.Context(), handler.SiteID, handler.ReleaseID, requestPath)
 	if err != nil {
 		return caddyhttp.Error(http.StatusNotFound, errors.New(""))
 	}
@@ -92,4 +99,31 @@ func (handler *siteFileServer) ServeHTTP(writer http.ResponseWriter, request *ht
 	}
 	http.ServeContent(writer, request, filepath.Base(request.URL.Path), info.ModTime(), staticFile)
 	return nil
+}
+
+func stripStaticMountPrefix(requestPath, mountPrefix string) (string, bool) {
+	if !strings.HasPrefix(requestPath, "/") || strings.ContainsAny(requestPath, `\\?#%`) || !validStaticMountPrefix(mountPrefix) {
+		return "", false
+	}
+	for _, segment := range strings.Split(requestPath, "/") {
+		if segment == "." || segment == ".." {
+			return "", false
+		}
+		for _, character := range segment {
+			if character < 0x20 || character == 0x7f {
+				return "", false
+			}
+		}
+	}
+	if mountPrefix == "/" {
+		return requestPath, true
+	}
+	base := strings.TrimSuffix(mountPrefix, "/")
+	if requestPath == base {
+		return "/", true
+	}
+	if !strings.HasPrefix(requestPath, base+"/") {
+		return "", false
+	}
+	return strings.TrimPrefix(requestPath, base), true
 }

@@ -15,9 +15,9 @@ describe("real Server binary HTTP protocol gate", () => {
       timeout: 180_000,
     });
     expect(parseJSON<Record<string, unknown>>(output).protocols).toEqual({
-      http1: { protocol: "HTTP/1.1", alpn: "http/1.1", status: 200, body: "published-site" },
-      http2: { protocol: "HTTP/2.0", alpn: "h2", status: 200, body: "published-site" },
-      http3: { protocol: "HTTP/3.0", alpn: "h3", status: 200, body: "published-site" },
+      http1: { protocol: "HTTP/1.1", alpn: "http/1.1", status: 200, body: "previous-site" },
+      http2: { protocol: "HTTP/2.0", alpn: "h2", status: 200, body: "previous-site" },
+      http3: { protocol: "HTTP/3.0", alpn: "h3", status: 200, body: "previous-site" },
     });
     expect(output).not.toMatch(/PRIVATE KEY|BEGIN CERTIFICATE|grant-fixture-/);
   }, 180_000);

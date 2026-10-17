@@ -124,6 +124,37 @@ func (publisher *SitePublisher) ListReleases(ctx context.Context, siteID string,
 	return publisher.repository.ListSiteReleases(ctx, siteID, limit, cursor)
 }
 
+// ValidatePinnedRelease rejects a static route unless its revision is an
+// immutable release owned by the referenced site. It never follows the
+// mutable current pointer, so a later publication cannot change the route.
+func (publisher *SitePublisher) ValidatePinnedRelease(ctx context.Context, siteID, revisionID string) error {
+	if publisher == nil || publisher.repository == nil || ctx == nil || siteID == "" || revisionID == "" {
+		return ErrInvalidSitePublish
+	}
+	cursor := ""
+	seenCursors := map[string]bool{}
+	for pageNumber := 0; pageNumber < 100; pageNumber++ {
+		page, err := publisher.repository.ListSiteReleases(ctx, siteID, 100, cursor)
+		if err != nil {
+			return ErrInvalidSitePublish
+		}
+		for _, release := range page.Items {
+			if release.SiteID == siteID && release.RevisionID == revisionID {
+				return nil
+			}
+		}
+		if page.NextCursor == nil {
+			return ErrInvalidSitePublish
+		}
+		cursor = *page.NextCursor
+		if cursor == "" || seenCursors[cursor] {
+			return ErrInvalidSitePublish
+		}
+		seenCursors[cursor] = true
+	}
+	return ErrInvalidSitePublish
+}
+
 func (publisher *SitePublisher) ListOperations(ctx context.Context, state string, limit int, cursor string) (SitePage[SiteOperationSummary], error) {
 	if publisher == nil || publisher.repository == nil || ctx == nil || limit < 1 || limit > 100 {
 		return SitePage[SiteOperationSummary]{}, ErrInvalidSitePublisher
@@ -135,7 +166,20 @@ func (publisher *SitePublisher) OpenSiteDocument(ctx context.Context, siteID, re
 	if publisher == nil || publisher.repository == nil || ctx == nil || siteID == "" || requestPath == "" {
 		return nil, ErrInvalidSitePublisher
 	}
-	return publisher.repository.OpenSiteDocument(ctx, siteID, requestPath)
+	state, err := publisher.repository.SiteReleaseState(ctx, siteID)
+	if err != nil {
+		return nil, err
+	}
+	return publisher.repository.OpenSiteDocument(ctx, siteID, state.CurrentRevision, requestPath)
+}
+
+// OpenPinnedSiteDocument reads only the immutable revision named by the
+// effective route configuration. It never follows the mutable current pointer.
+func (publisher *SitePublisher) OpenPinnedSiteDocument(ctx context.Context, siteID, releaseID, requestPath string) (io.ReadCloser, error) {
+	if publisher == nil || publisher.repository == nil || ctx == nil || siteID == "" || releaseID == "" || requestPath == "" {
+		return nil, ErrInvalidSitePublisher
+	}
+	return publisher.repository.OpenSiteDocument(ctx, siteID, releaseID, requestPath)
 }
 
 // ErrorCode returns the stable contract error code without exposing internal

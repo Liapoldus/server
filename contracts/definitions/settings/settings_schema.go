@@ -5,14 +5,14 @@ import "liapoldus.local/server-service/contracts/schema"
 func SettingsSchema() schema.Definition {
 	return schema.Definition{
 		Definition:           "https://json-schema.org/draft/2020-12/schema",
-		ID:                   "https://liapoldus.github.io/services/server/settings/v1/schema.json",
-		Title:                "Server service settings v1",
+		ID:                   "https://liapoldus.github.io/services/server/settings/v2/schema.json",
+		Title:                "Server service settings v2",
 		Description:          "Strict Liapoldus configuration compiled privately into the Caddy runtime. Native Caddy JSON and Caddyfile input are not accepted.",
 		Type:                 "object",
 		AdditionalProperties: false,
 		Required:             schema.Value([]string{"schemaVersion", "config"}),
 		Properties: map[string]schema.Definition{"schemaVersion": {
-			Const: 1,
+			Const: 2,
 		}, "config": {
 			Ref: "#/$defs/config",
 		}},
@@ -48,11 +48,17 @@ func SettingsSchema() schema.Definition {
 			Properties: map[string]schema.Definition{"mode": {
 				Const: "custom",
 			}, "certificateRef": {
-				Ref:         "#/$defs/nonEmptyString",
-				Description: "Opaque Core-generated secret reference; never PEM bytes or a path.",
+				Type:                    "string",
+				Pattern:                 "^ssr:v1:[a-f0-9]{32}$",
+				StudioSecretPurpose:     "server.tls.certificate",
+				LiapoldusSecretReference: true,
+				Description:             "Opaque Core-generated secret reference; never PEM bytes or a path.",
 			}, "privateKeyRef": {
-				Ref:         "#/$defs/nonEmptyString",
-				Description: "Opaque Core-generated secret reference; never PEM bytes or a path.",
+				Type:                    "string",
+				Pattern:                 "^ssr:v1:[a-f0-9]{32}$",
+				StudioSecretPurpose:     "server.tls.private-key",
+				LiapoldusSecretReference: true,
+				Description:             "Opaque Core-generated secret reference; never PEM bytes or a path.",
 			}},
 		}, "tlsDisabled": {
 			Type:                 "object",
@@ -217,13 +223,23 @@ func SettingsSchema() schema.Definition {
 			}},
 		}, "staticHandler": {
 			Type:                 "object",
-			Description:          "Serves the active current release for siteId. A route cannot pin an immutable release or select previous; publishing or rollback changes the current pointer without changing the route.",
+			Description:          "Serves one immutable site release at mountPrefix. releaseId is the exact sha256 revision returned by the Server release catalog; publishing a later release never changes this route.",
 			AdditionalProperties: false,
-			Required:             schema.Value([]string{"type", "siteId"}),
+			Required:             schema.Value([]string{"type", "siteId", "releaseId", "mountPrefix"}),
 			Properties: map[string]schema.Definition{"type": {
 				Const: "static",
 			}, "siteId": {
 				Ref: "#/$defs/nonEmptyString",
+			}, "releaseId": {
+				Type:        "string",
+				Pattern:     "^sha256:[a-f0-9]{64}$",
+				Description: "Immutable release digest selected from the Server release catalog.",
+			}, "mountPrefix": {
+				Type:        "string",
+				MinLength:   schema.Value(int(1)),
+				MaxLength:   schema.Value(int(2048)),
+				Pattern:     "^/(?:[A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)*)?/?$",
+				Description: "URL path prefix. Runtime rejects dot segments and mounts the immutable release below this prefix.",
 			}},
 		}, "upstream": {
 			Type:                 "object",
@@ -240,8 +256,11 @@ func SettingsSchema() schema.Definition {
 				Default:     1,
 				Description: "Smooth weighted round-robin weight. An omitted value is interpreted as 1.",
 			}, "caRef": {
-				Ref:         "#/$defs/nonEmptyString",
-				Description: "Optional opaque private-CA secret reference; accepted only for HTTPS origins. It extends the system trust chain and never disables hostname verification.",
+				Type:                    "string",
+				Pattern:                 "^ssr:v1:[a-f0-9]{32}$",
+				StudioSecretPurpose:     "server.upstream.ca",
+				LiapoldusSecretReference: true,
+				Description:             "Optional opaque private-CA secret reference; accepted only for HTTPS origins. It extends the system trust chain and never disables hostname verification.",
 			}},
 			AllOf: []schema.Definition{{
 				If: schema.Value(schema.Definition{
@@ -272,6 +291,24 @@ func SettingsSchema() schema.Definition {
 				Items: schema.Value(schema.Definition{
 					Ref: "#/$defs/upstream",
 				}),
+			}},
+		}, "redirectHandler": {
+			Type:                 "object",
+			Title:                "Перенаправление",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"type", "target", "statusCode"}),
+			Properties: map[string]schema.Definition{"type": {
+				Const: "redirect",
+			}, "target": {
+				Type:        "string",
+				MinLength:   schema.Value(int(1)),
+				MaxLength:   schema.Value(int(2048)),
+				Pattern:     "^(?:/[^\\r\\n\\x00]*|https?://[^/@?#\\s]+(?:/[^\\r\\n\\x00]*)?)$",
+				Description: "A same-origin absolute path or an HTTP(S) URL without userinfo, query, or fragment. The original query string is preserved.",
+			}, "statusCode": {
+				Type:    "integer",
+				Enum:    []any{301, 302, 307, 308},
+				Default: 308,
 			}},
 		}, "serviceHandler": {
 			Type:                 "object",
@@ -332,6 +369,8 @@ func SettingsSchema() schema.Definition {
 			}, {
 				Ref: "#/$defs/reverseProxyHandler",
 			}, {
+				Ref: "#/$defs/redirectHandler",
+			}, {
 				Ref: "#/$defs/serviceHandler",
 			}},
 		}, "httpRoute": {
@@ -349,6 +388,9 @@ func SettingsSchema() schema.Definition {
 				Ref: "#/$defs/httpHandler",
 			}, "api": {
 				Ref: "#/$defs/serviceAPIContract",
+			}, "features": {
+				Ref:         "#/$defs/routeFeatures",
+				Description: "Optional per-route overrides. Disabled settings remain saved and can be enabled later.",
 			}},
 			AllOf: []schema.Definition{{
 				If: schema.Value(schema.Definition{
@@ -394,6 +436,231 @@ func SettingsSchema() schema.Definition {
 			}},
 		}, "route": {
 			Ref: "#/$defs/httpRoute",
+		}, "featureMode": {
+			Type:        "string",
+			Enum:        []any{"inherit", "enabled", "disabled"},
+			Description: "A route may inherit its handler-type default or explicitly enable/disable the feature. Values remain in Project while disabled.",
+		}, "defaultFeatureMode": {
+			Type: "string",
+			Enum: []any{"enabled", "disabled"},
+		}, "compressionFeature": {
+			Type:                 "object",
+			Title:                "Сжатие",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties: map[string]schema.Definition{"mode": {
+				Ref: "#/$defs/featureMode",
+			}, "algorithms": {
+				Type:        "array",
+				MinItems:    schema.Value(int(1)),
+				MaxItems:    schema.Value(int(2)),
+				UniqueItems: schema.Value(true),
+				Items:       schema.Value(schema.Definition{Type: "string", Enum: []any{"zstd", "gzip"}}),
+				Description: "Compression algorithms ordered by preference. Omitted values inherit the route-type default.",
+			}},
+		}, "cacheFeature": {
+			Type:                 "object",
+			Title:                "Cache-Control",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties: map[string]schema.Definition{"mode": {
+				Ref: "#/$defs/featureMode",
+			}, "visibility": {
+				Type:        "string",
+				Enum:        []any{"public", "private"},
+				Description: "HTTP Cache-Control visibility. API routes require an explicit route-level enable before any cache header is emitted.",
+			}, "maxAgeSeconds": {
+				Type:    "integer",
+				Minimum: schema.Value(int(0)),
+				Maximum: schema.Value(int(31536000)),
+			}},
+		}, "headerMap": {
+			Type:                 "object",
+			MaxProperties:        schema.Value(int(64)),
+			AdditionalProperties: schema.Definition{Type: "string", MaxLength: schema.Value(int(8192))},
+			PropertyNames:        schema.Value(schema.Definition{Type: "string", MaxLength: schema.Value(int(128)), Pattern: `^[!#$%&'*+.^_` + "`" + `|~0-9A-Za-z-]+$`}),
+			Description:          "Allowlisted request or response header assignments. Header names are case-insensitive; values cannot contain control characters.",
+		}, "headersFeature": {
+			Ref: "#/$defs/headersFeatureDefinition",
+		}, "headersFeatureDefinition": {
+			Type:                 "object",
+			Title:                "HTTP headers",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties: map[string]schema.Definition{"mode": {
+				Ref: "#/$defs/featureMode",
+			}, "request": {
+				Ref: "#/$defs/headerMap",
+			}, "response": {
+				Ref: "#/$defs/headerMap",
+			}},
+		}, "headersDefault": {
+			Type:                 "object",
+			Title:                "HTTP headers",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties: map[string]schema.Definition{"mode": {
+				Ref: "#/$defs/defaultFeatureMode",
+			}, "request": {
+				Ref: "#/$defs/headerMap",
+			}, "response": {
+				Ref: "#/$defs/headerMap",
+			}},
+		}, "corsFeature": {
+			Type:                 "object",
+			Title:                "CORS",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           corsProperties("featureMode"),
+		}, "corsDefault": {
+			Type:                 "object",
+			Title:                "CORS",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           corsProperties("defaultFeatureMode"),
+		}, "authFeature": {
+			Type:                 "object",
+			Title:                "Аутентификация",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           authProperties("featureMode"),
+			AllOf:                authRequirements(),
+		}, "authDefault": {
+			Type:                 "object",
+			Title:                "Аутентификация",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           authProperties("defaultFeatureMode"),
+			AllOf:                authRequirements(),
+		}, "rateLimitFeature": {
+			Type:                 "object",
+			Title:                "Ограничение частоты",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           rateLimitProperties("featureMode"),
+			AllOf:                []schema.Definition{{If: schema.Value(schema.Definition{Properties: map[string]schema.Definition{"mode": {Const: "enabled"}}}), Then: schema.Value(schema.Definition{Required: schema.Value([]string{"requestsPerSecond", "burst"})})}},
+		}, "rateLimitDefault": {
+			Type:                 "object",
+			Title:                "Ограничение частоты",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           rateLimitProperties("defaultFeatureMode"),
+			AllOf:                []schema.Definition{{If: schema.Value(schema.Definition{Properties: map[string]schema.Definition{"mode": {Const: "enabled"}}}), Then: schema.Value(schema.Definition{Required: schema.Value([]string{"requestsPerSecond", "burst"})})}},
+		}, "healthCheckFeature": {
+			Type:                 "object",
+			Title:                "Активная проверка upstream",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           healthCheckProperties("featureMode"),
+			AllOf:                []schema.Definition{{If: schema.Value(schema.Definition{Properties: map[string]schema.Definition{"mode": {Const: "enabled"}}}), Then: schema.Value(schema.Definition{Required: schema.Value([]string{"path"})})}},
+		}, "healthCheckDefault": {
+			Type:                 "object",
+			Title:                "Активная проверка upstream",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           healthCheckProperties("defaultFeatureMode"),
+			AllOf:                []schema.Definition{{If: schema.Value(schema.Definition{Properties: map[string]schema.Definition{"mode": {Const: "enabled"}}}), Then: schema.Value(schema.Definition{Required: schema.Value([]string{"path"})})}},
+		}, "rewriteFeature": {
+			Type:                 "object",
+			Title:                "Переписывание пути",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           rewriteProperties("featureMode"),
+			AllOf:                []schema.Definition{{If: schema.Value(schema.Definition{Properties: map[string]schema.Definition{"mode": {Const: "enabled"}}}), Then: schema.Value(schema.Definition{Required: schema.Value([]string{"path"})})}},
+		}, "rewriteDefault": {
+			Type:                 "object",
+			Title:                "Переписывание пути",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties:           rewriteProperties("defaultFeatureMode"),
+			AllOf:                []schema.Definition{{If: schema.Value(schema.Definition{Properties: map[string]schema.Definition{"mode": {Const: "enabled"}}}), Then: schema.Value(schema.Definition{Required: schema.Value([]string{"path"})})}},
+		}, "routeFeatures": {
+			Type:                 "object",
+			Title:                "Обработка маршрута",
+			AdditionalProperties: false,
+			Properties: map[string]schema.Definition{"compression": {
+				Ref: "#/$defs/compressionFeature",
+			}, "cache": {
+				Ref: "#/$defs/cacheFeature",
+			}, "headers": {
+				Ref: "#/$defs/headersFeature",
+			}, "cors": {
+				Ref: "#/$defs/corsFeature",
+			}, "auth": {
+				Ref: "#/$defs/authFeature",
+			}, "rateLimit": {
+				Ref: "#/$defs/rateLimitFeature",
+			}, "healthCheck": {
+				Ref: "#/$defs/healthCheckFeature",
+			}, "rewrite": {
+				Ref: "#/$defs/rewriteFeature",
+			}},
+		}, "compressionDefault": {
+			Type:                 "object",
+			Title:                "Сжатие",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties: map[string]schema.Definition{"mode": {
+				Ref: "#/$defs/defaultFeatureMode",
+			}, "algorithms": {
+				Type:        "array",
+				MinItems:    schema.Value(int(1)),
+				MaxItems:    schema.Value(int(2)),
+				UniqueItems: schema.Value(true),
+				Items:       schema.Value(schema.Definition{Type: "string", Enum: []any{"zstd", "gzip"}}),
+			}},
+		}, "cacheDefault": {
+			Type:                 "object",
+			Title:                "Cache-Control",
+			AdditionalProperties: false,
+			Required:             schema.Value([]string{"mode"}),
+			Properties: map[string]schema.Definition{"mode": {
+				Ref: "#/$defs/defaultFeatureMode",
+			}, "visibility": {
+				Type:    "string",
+				Enum:    []any{"public", "private"},
+				Default: "private",
+			}, "maxAgeSeconds": {
+				Type:    "integer",
+				Minimum: schema.Value(int(0)),
+				Maximum: schema.Value(int(31536000)),
+				Default: 3600,
+			}},
+		}, "routeFeatureDefaults": {
+			Type:                 "object",
+			Title:                "Общие значения маршрутов",
+			AdditionalProperties: false,
+			Properties: map[string]schema.Definition{"compression": {
+				Ref: "#/$defs/compressionDefault",
+			}, "cache": {
+				Ref: "#/$defs/cacheDefault",
+			}, "headers": {
+				Ref: "#/$defs/headersDefault",
+			}, "cors": {
+				Ref: "#/$defs/corsDefault",
+			}, "auth": {
+				Ref: "#/$defs/authDefault",
+			}, "rateLimit": {
+				Ref: "#/$defs/rateLimitDefault",
+			}, "healthCheck": {
+				Ref: "#/$defs/healthCheckDefault",
+			}, "rewrite": {
+				Ref: "#/$defs/rewriteDefault",
+			}},
+		}, "routeDefaults": {
+			Type:                 "object",
+			Title:                "Значения по типам маршрутов",
+			AdditionalProperties: false,
+			Description:          "Optional shared defaults by route handler type. Omitted defaults use safe built-in values: static routes enable compression and public max-age=3600; API and reverse-proxy routes disable compression and caching.",
+			Properties: map[string]schema.Definition{"service": {
+				Ref: "#/$defs/routeFeatureDefaults",
+			}, "static": {
+				Ref: "#/$defs/routeFeatureDefaults",
+			}, "reverseProxy": {
+				Ref: "#/$defs/routeFeatureDefaults",
+			}, "redirect": {
+				Ref: "#/$defs/routeFeatureDefaults",
+			}},
 		}, "config": {
 			Type:                 "object",
 			AdditionalProperties: false,
@@ -409,6 +676,9 @@ func SettingsSchema() schema.Definition {
 				Items: schema.Value(schema.Definition{
 					Ref: "#/$defs/route",
 				}),
+			}, "defaults": {
+				Ref:         "#/$defs/routeDefaults",
+				Description: "Shared route defaults. Each route can inherit, enable, or disable a feature without deleting its stored values.",
 			}},
 		}, "apiParameter": {
 			Type:                 "object",
@@ -532,5 +802,98 @@ func SettingsSchema() schema.Definition {
 				Items:    schema.Value(schema.Definition{Ref: "#/$defs/apiResponse"}),
 			}},
 		}},
+	}
+}
+
+func corsProperties(modeDefinition string) map[string]schema.Definition {
+	headerName := schema.Definition{
+		Type:      "string",
+		MinLength: schema.Value(int(1)),
+		MaxLength: schema.Value(int(128)),
+		Pattern:   `^[!#$%&'*+.^_` + "`" + `|~0-9A-Za-z-]+$`,
+	}
+	return map[string]schema.Definition{
+		"mode": {Ref: "#/$defs/" + modeDefinition},
+		"origins": {
+			Type:        "array",
+			MinItems:    schema.Value(int(1)),
+			MaxItems:    schema.Value(int(32)),
+			UniqueItems: schema.Value(true),
+			Items:       schema.Value(schema.Definition{Type: "string", MinLength: schema.Value(int(1)), MaxLength: schema.Value(int(255))}),
+		},
+		"methods": {
+			Type:        "array",
+			MaxItems:    schema.Value(int(32)),
+			UniqueItems: schema.Value(true),
+			Items:       schema.Value(schema.Definition{Ref: "#/$defs/method"}),
+		},
+		"allowedHeaders": {
+			Type:        "array",
+			MaxItems:    schema.Value(int(64)),
+			UniqueItems: schema.Value(true),
+			Items:       schema.Value(headerName),
+		},
+		"exposedHeaders": {
+			Type:        "array",
+			MaxItems:    schema.Value(int(64)),
+			UniqueItems: schema.Value(true),
+			Items:       schema.Value(headerName),
+		},
+		"allowCredentials": {Type: "boolean"},
+		"maxAgeSeconds": {
+			Type:    "integer",
+			Minimum: schema.Value(int(0)),
+			Maximum: schema.Value(int(86400)),
+		},
+	}
+}
+
+func authProperties(modeDefinition string) map[string]schema.Definition {
+	return map[string]schema.Definition{
+		"mode":       {Ref: "#/$defs/" + modeDefinition},
+		"scheme":     {Type: "string", Enum: []any{"bearer", "apiKey", "basic"}},
+		"secretRef":  {Type: "string", Pattern: "^ssr:v1:[a-f0-9]{32}$", StudioSecretPurpose: "server.http.auth.credential", LiapoldusSecretReference: true, Description: "Opaque service-scoped secret reference. Plaintext secret values are never stored in Project settings."},
+		"headerName": {Type: "string", MinLength: schema.Value(int(1)), MaxLength: schema.Value(int(128)), Pattern: `^[!#$%&'*+.^_` + "`" + `|~0-9A-Za-z-]+$`},
+		"username":   {Type: "string", MinLength: schema.Value(int(1)), MaxLength: schema.Value(int(128))},
+		"realm":      {Type: "string", MaxLength: schema.Value(int(128))},
+	}
+}
+
+func authRequirements() []schema.Definition {
+	return []schema.Definition{{
+		If:   schema.Value(schema.Definition{Properties: map[string]schema.Definition{"mode": {Const: "enabled"}}}),
+		Then: schema.Value(schema.Definition{Required: schema.Value([]string{"scheme", "secretRef"})}),
+	}, {
+		If:   schema.Value(schema.Definition{Properties: map[string]schema.Definition{"scheme": {Const: "basic"}}}),
+		Then: schema.Value(schema.Definition{Required: schema.Value([]string{"username"})}),
+	}, {
+		If:   schema.Value(schema.Definition{Properties: map[string]schema.Definition{"scheme": {Const: "apiKey"}}}),
+		Then: schema.Value(schema.Definition{Required: schema.Value([]string{"headerName"})}),
+	}}
+}
+
+func rateLimitProperties(modeDefinition string) map[string]schema.Definition {
+	return map[string]schema.Definition{
+		"mode":              {Ref: "#/$defs/" + modeDefinition},
+		"requestsPerSecond": {Type: "integer", Minimum: schema.Value(int(1)), Maximum: schema.Value(int(10000))},
+		"burst":             {Type: "integer", Minimum: schema.Value(int(1)), Maximum: schema.Value(int(10000))},
+		"trustedProxies":    {Type: "array", MaxItems: schema.Value(int(32)), UniqueItems: schema.Value(true), Items: schema.Value(schema.Definition{Type: "string", MinLength: schema.Value(int(1)), MaxLength: schema.Value(int(64))})},
+	}
+}
+
+func healthCheckProperties(modeDefinition string) map[string]schema.Definition {
+	return map[string]schema.Definition{
+		"mode":            {Ref: "#/$defs/" + modeDefinition},
+		"path":            {Type: "string", MinLength: schema.Value(int(1)), MaxLength: schema.Value(int(2048)), Pattern: "^/[^\\r\\n\\x00]*$", Default: "/healthz"},
+		"intervalSeconds": {Type: "integer", Minimum: schema.Value(int(1)), Maximum: schema.Value(int(600)), Default: 30},
+		"timeoutSeconds":  {Type: "integer", Minimum: schema.Value(int(1)), Maximum: schema.Value(int(60)), Default: 5},
+		"expectedStatus":  {Type: "integer", Minimum: schema.Value(int(200)), Maximum: schema.Value(int(599)), Default: 200},
+	}
+}
+
+func rewriteProperties(modeDefinition string) map[string]schema.Definition {
+	return map[string]schema.Definition{
+		"mode": {Ref: "#/$defs/" + modeDefinition},
+		"path": {Type: "string", MinLength: schema.Value(int(1)), MaxLength: schema.Value(int(2048)), Pattern: "^/[^\\r\\n\\x00]*$"},
 	}
 }

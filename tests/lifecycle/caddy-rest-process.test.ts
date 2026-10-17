@@ -18,11 +18,11 @@ describe("Caddy production process Service SDK lifecycle", () => {
     expect(parseJSON<Record<string, unknown>>(output)).toMatchObject({
       acknowledgement: { generation: "generation-rest-1", applied: true },
       readiness: { ready: true, generation: "generation-rest-1" },
-      response: { status: 200, body: "published-site" },
+      response: { status: 200, body: "previous-site" },
       adminSurface: { status: 200, hasPublishAction: true },
       artifact: { status: 202, state: "accepted" },
       crossPageQuery: { status: 400, body: { code: "invalid_input" } },
-      beforeCompletion: { status: 404, body: "" },
+      beforeCompletion: { status: 200, body: "previous-site" },
       manifestResponse: { status: 404 },
       childExitCode: 0,
     });
