@@ -31,6 +31,15 @@
   cross-platform workflows remain open. Do not mark source tests as live
   runtime acceptance.
 
+Additional live preflight on 2026-10-18: typed runtime start registered
+Server 1.1.8 (trusted artifact SHA-256
+5a8e02a65624441b4654eda80103e7e91ea9406f069236f12ce2e128ae6807b2) and
+Echo 1.2.2; Core-backed status reports both ready at generation 92, and
+GET http://127.0.0.1:19080/echo?text=studio-http-check-20261018 returned the
+matching Echo body. The live Server manifest publishes
+service-editor-buttons/v1 with server.endpoints. The editor and multi-replica
+secret retirement gates remain open.
+
 ## Live unknown-route retest — 2026-10-16 20:54 UTC
 
 - Earlier notes below saying Server `1.1.5` returns `200` for unmatched paths
