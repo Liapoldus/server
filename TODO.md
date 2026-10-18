@@ -17,11 +17,16 @@
 - The actual `Server Echo Studio/services/server/settings.json` values pass the
   current Server v2 JSON Schema after changing only the candidate root
   `schemaVersion` in memory; no Project bytes were modified by this check.
-- Full Vitest was attempted with default and single-worker modes. Both stopped
-  at linker failures (`no space left on device`); full `go test ./...`, full
-  `go build ./...` remain unverified. The shared volume had 205 MiB free at
-  that point. No caches or unrelated temporary files were removed. The full
-  owner suite remains unverified.
+- Initial full Vitest attempts at low disk space stopped at linker failures
+  (`no space left on device`). After free space increased, the complete owner
+  checks passed: `GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1 go test ./...
+  -count=1`; `PATH=/Users/docup/.cache/codex-runtimes/codex-primary-runtime/
+  dependencies/node/bin:$PATH GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1
+  npm test -- --maxWorkers=1 --no-file-parallelism` (34 files / 88 tests); and
+  `GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1 go build ./...`. Previously
+  passing `GOWORK=off GOFLAGS=-p=1 go vet ./...` and `GOWORK=off GOFLAGS=-p=1
+  go run ./cmd/contracts --check` were run on the same unchanged Server source
+  commit. No caches or unrelated files were removed.
 - Production artifact build subsequently passed:
   `GOTOOLCHAIN=go1.26.0 GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0
   GOFLAGS=-p=1 go build -trimpath -ldflags '-s -w' -o
@@ -32,7 +37,8 @@
   `vcs.modified=false`, service-sdk `a5e55efdc9091b9f8e631041d800f1d8f1c2cb21`
   and Wool `c2b51ed192af5ec02fe0295b97a7f6d4c4834c3d`. It is not installed or
   running; exact-digest local trust and live migration remain pending.
-- The shared volume now has 141 MiB free. No user data or caches were removed.
+- The shared volume currently has 4.3 GiB available. No user data or caches
+  were removed.
 
 ## Exact-source current runtime candidate — 2026-10-18
 
