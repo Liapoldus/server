@@ -50,6 +50,7 @@
               "confirmation": "Атомарно переключить current и previous на выбранную неизменяемую ревизию?",
               "dangerous": true,
               "id": "rollback",
+              "ifMatchField": "expectedCurrentRevision",
               "inputSchema": {
                 "additionalProperties": false,
                 "properties": {
@@ -93,6 +94,7 @@
           "dataCapability": "server.sites.list",
           "id": "sites",
           "kind": "table",
+          "queryResource": "sites",
           "title": "Сайты"
         },
         {
@@ -107,6 +109,7 @@
           "dataCapability": "server.sites.releases.list",
           "id": "releases",
           "kind": "table",
+          "queryResource": "releases",
           "title": "Неизменяемые ревизии"
         },
         {
@@ -145,6 +148,7 @@
           "dataCapability": "server.operations.list",
           "id": "operations",
           "kind": "table",
+          "queryResource": "operations",
           "title": "Операции публикации"
         }
       ],
@@ -192,6 +196,7 @@
           "dataCapability": "server.certificates.list",
           "id": "domains",
           "kind": "table",
+          "queryResource": "certificates",
           "title": "Домены и готовность TLS"
         }
       ],

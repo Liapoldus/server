@@ -14,6 +14,7 @@ type AdminSurfaceDocumentPagesItemSectionsItemActionsItem struct {
 	ArtifactInput *AdminSurfaceDocumentPagesItemSectionsItemActionsItemArtifactInput `json:"artifactInput,omitempty"`
 	RowInput      map[string]string                                                  `json:"rowInput"`
 	Dangerous     *bool                                                              `json:"dangerous,omitempty"`
+	IfMatchField  string                                                             `json:"ifMatchField,omitempty"`
 	ID            string                                                             `json:"id"`
 	Title         string                                                             `json:"title"`
 	Capability    string                                                             `json:"capability"`
@@ -25,6 +26,7 @@ type AdminSurfaceDocumentPagesItemSectionsItem struct {
 	Kind           string                                                 `json:"kind"`
 	Title          string                                                 `json:"title"`
 	DataCapability string                                                 `json:"dataCapability"`
+	QueryResource  string                                                 `json:"queryResource,omitempty"`
 	Columns        []string                                               `json:"columns"`
 	Actions        []AdminSurfaceDocumentPagesItemSectionsItemActionsItem `json:"actions"`
 }
@@ -59,6 +61,7 @@ func AdminSurface() AdminSurfaceDocument {
 				Kind:           "table",
 				Title:          "Сайты",
 				DataCapability: "server.sites.list",
+				QueryResource:  "sites",
 				Columns:        []string{"siteId", "currentRevision", "previousRevision", "updatedAt"},
 				Actions: []AdminSurfaceDocumentPagesItemSectionsItemActionsItem{{
 					ID:           "publish",
@@ -116,13 +119,15 @@ func AdminSurface() AdminSurfaceDocument {
 						"expectedCurrentRevision": "currentRevision",
 						"targetRevision":          "previousRevision",
 					},
-					Dangerous: schema.Value(true),
+					Dangerous:    schema.Value(true),
+					IfMatchField: "expectedCurrentRevision",
 				}},
 			}, {
 				ID:             "releases",
 				Kind:           "table",
 				Title:          "Неизменяемые ревизии",
 				DataCapability: "server.sites.releases.list",
+				QueryResource:  "releases",
 				Columns:        []string{"siteId", "revisionId", "state", "sha256", "createdAt"},
 				Actions:        []AdminSurfaceDocumentPagesItemSectionsItemActionsItem{},
 			}, {
@@ -130,6 +135,7 @@ func AdminSurface() AdminSurfaceDocument {
 				Kind:           "table",
 				Title:          "Операции публикации",
 				DataCapability: "server.operations.list",
+				QueryResource:  "operations",
 				Columns:        []string{"operationId", "siteId", "kind", "state", "progressPercent", "updatedAt"},
 				Actions: []AdminSurfaceDocumentPagesItemSectionsItemActionsItem{{
 					ID:         "status",
@@ -160,6 +166,7 @@ func AdminSurface() AdminSurfaceDocument {
 				Kind:           "table",
 				Title:          "Домены и готовность TLS",
 				DataCapability: "server.certificates.list",
+				QueryResource:  "certificates",
 				Columns:        []string{"domain", "source", "readiness", "notAfter", "serial"},
 				Actions: []AdminSurfaceDocumentPagesItemSectionsItemActionsItem{{
 					ID:         "status",

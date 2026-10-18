@@ -9,6 +9,24 @@ const root = fileURLToPath(new URL("../..", import.meta.url));
 
 
 describe("Server service-owned Admin Surface v1", () => {
+	it("declares typed table resources and binds dangerous rollback to its current revision", async () => {
+		const surface = readContract('admin-surface.json');
+		const sites = required(surface.pages.find((page) => page.id === "sites"));
+		const siteTable = required(sites.sections.find((section) => section.id === "sites"));
+		const rollback = required(siteTable.actions.find((action) => action.id === "rollback"));
+		const operationsTable = required(sites.sections.find((section) => section.id === "operations"));
+		const operations = required(operationsTable.actions.find((action) => action.id === "status"));
+		const certificates = required(surface.pages.find((page) => page.id === "certificates"));
+
+		expect(siteTable.queryResource).toBe("sites");
+		expect(required(sites.sections.find((section) => section.id === "releases")).queryResource).toBe("releases");
+		expect(operationsTable.queryResource).toBe("operations");
+		expect(required(certificates.sections.find((section) => section.id === "domains")).queryResource).toBe("certificates");
+		expect(rollback).toMatchObject({ dangerous: true, ifMatchField: "expectedCurrentRevision" });
+		expect(rollback.inputSchema.required).toContain(rollback.ifMatchField);
+		expect(operations.ifMatchField).toBeUndefined();
+	});
+
 	it("treats synchronous admin-action idempotency keys as correlation only", async () => {
 		const actions = readContract('admin-actions.json');
 		const rollback = actions.operations["server.sites.rollback"];

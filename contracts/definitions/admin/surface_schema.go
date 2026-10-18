@@ -150,6 +150,8 @@ func AdminSurfaceSchema() schema.Definition {
 				MaxLength: schema.Value(int(512)),
 			}, "dangerous": {
 				Type: "boolean",
+			}, "ifMatchField": {
+				Ref: "#/$defs/nonEmptyString",
 			}, "inputSchema": {
 				Ref: "#/$defs/actionInputSchema",
 			}, "rowInput": {
@@ -174,6 +176,8 @@ func AdminSurfaceSchema() schema.Definition {
 				MaxLength: schema.Value(int(120)),
 			}, "dataCapability": {
 				Ref: "#/$defs/capability",
+			}, "queryResource": {
+				Ref: "#/$defs/nonEmptyString",
 			}, "columns": {
 				Type:        "array",
 				MinItems:    schema.Value(int(1)),

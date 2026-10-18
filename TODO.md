@@ -1,5 +1,22 @@
 # TODO — Server service v1
 
+## Admin Surface query and compare-and-swap metadata — 2026-10-18
+
+- Added optional `queryResource` to table sections and `ifMatchField` to
+  actions. All Server tables name their typed query resource; rollback binds
+  its `expectedCurrentRevision` input to the host's `If-Match` request header.
+- Bumped the authenticated Server release claim to `1.1.10`; the Admin Surface
+  remains additive within v1 and does not add a second action execution path.
+- `GOWORK=off go test -ldflags=-w ./... -count=1` passes; the focused Admin
+  Surface suite passes 11/11, and full Vitest passes 34 files / 88 tests.
+  `GOWORK=off go run -ldflags=-w ./cmd/contracts --check`, `go vet ./...`
+  and `git diff --check` pass. Full `go build -ldflags=-w ./...` could not
+  link all fixture binaries because the host temporary volume ran out of space;
+  production `GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/server`
+  passes. That pre-commit diagnostic binary embeds a dirty-tree marker and is
+  not an install candidate. No runtime binary has been trusted or installed;
+  live local acceptance requires a clean exact-digest build and Studio trust.
+
 ## Current Server 1.1.9 candidate and full owner gates — 2026-10-18
 
 - Server 1.1.9 Linux/arm64 was rebuilt from source commit `a2b1bdc` at

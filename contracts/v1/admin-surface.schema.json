@@ -20,6 +20,9 @@
         "id": {
           "$ref": "#/$defs/pageId"
         },
+        "ifMatchField": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
         "inputSchema": {
           "$ref": "#/$defs/actionInputSchema"
         },
@@ -323,6 +326,9 @@
         },
         "kind": {
           "const": "table"
+        },
+        "queryResource": {
+          "$ref": "#/$defs/nonEmptyString"
         },
         "title": {
           "maxLength": 120,
