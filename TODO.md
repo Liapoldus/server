@@ -15,6 +15,11 @@
   one of two active synthetic local secrets. The candidate is not applied; the
   existing config remains active. This updated source has not been installed
   into Core/Server, and live grant/auth/rotation ACK checks remain open.
+- A repeated typed local apply returned generic Core HTTP 409
+  `bundle_apply_failed: service configuration revision conflict`. The response
+  does not establish whether Server candidate validation ran. A fresh HTTP
+  check still returns 404 for the temporary route and 200 for `/echo`; do not
+  claim that the saved auth candidate is active or that Server rejected it.
 - Server 1.1.13 digest `e69ff4af…` was approved for local earlier, but it was
   built from the superseded deferred-validation implementation. It is not used
   to claim acceptance for the current source. New candidate digests will be
