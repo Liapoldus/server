@@ -18,11 +18,11 @@
   coverage remains open.
 - Re-ran `vitest run tests/lifecycle/caddy-rest-process.test.ts --maxWorkers=1`:
   1/1 pass. This is fixture coverage, not live Core grant/rotation acceptance.
-  A subsequent read-only curl to `/echo?text=goal-recheck` returned HTTP 200;
-  the isolated `/__server-secret-rotation-smoke` path returned 404 because its
-  route remains unsaved. The test reference is not in Project settings or
-  runtime configuration. No Server source or Project settings changed during
-  these reads.
+  Fresh local HTTP reads returned `200` with the expected Echo body for
+  `/echo?text=goal-audit-20261018` and `404` for
+  `/__server-secret-rotation-smoke` because its route remains unsaved. The test
+  reference is not in Project settings or runtime configuration. No Server
+  source or Project settings changed during these reads.
 - Focused owner tests re-run on 2026-10-18:
   `GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1 go test
   ./internal/infrastructure/caddy ./internal/presentation/restservice -run
