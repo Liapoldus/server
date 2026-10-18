@@ -1,5 +1,26 @@
 # TODO — Server service v1
 
+## Local staged secret rotation; Server currently stopped — 2026-10-18
+
+- The local Core catalog has two active opaque Server references, one revoked
+  record and one pending rotation in `staged` state. This is metadata only; the
+  active Server runtime has not received either reference. The previous
+  checkpoint's selection failure is now traced to Studio patch construction,
+  not Server's secret catalog or schema.
+- Studio `19ce4e6…` loaded the Server Editor successfully and populated the
+  purpose-filtered picker, but selecting the active test reference failed in
+  Studio when a secret field was added to an inserted protected route. Studio
+  now updates protected route fields through `$studioArrayOps/v1`; its new
+  macOS build awaits exact-digest approval and live retest.
+- Latest `runtime status --target local` shows Core running with Echo and Server
+  containers exited. Typed Server status consequently returns Core HTTP 503
+  `service_unavailable`; the last successful status was Server 1.1.11 at
+  generation 94, ready and acknowledged.
+- Project `services/server/settings.json` remains `/echo` only, without a
+  secret reference. No configuration was saved/applied and no secret was
+  delivered to this service. Restart, authenticated HTTP, rotation readiness
+  ACK and old-reference retirement remain open; production was not accessed.
+
 ## Current local secret-capable runtime preflight — 2026-10-18
 
 - Typed `service status server --target local` from the Studio-selected CLI
