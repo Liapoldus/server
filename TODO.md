@@ -1,5 +1,23 @@
 # TODO — Server service v1
 
+## Exact-source current runtime candidate — 2026-10-18
+
+- Built Linux/arm64 Server from published source HEAD
+  `6dcb45cf01b8a7966e3e6913778b664558d2463a` to
+  `/tmp/liapoldus-server-20261018-6dcb45c`, SHA-256
+  `ed9f865367e9389c5a2fad2a224ab8ff407c3c7cb846e6ebb8e198bdc54995f9`.
+  `file` confirms static ELF aarch64; `go version -m` records the exact
+  revision and `vcs.modified=false`. The binary reports the current Server
+  source release `1.1.10`.
+- `GOWORK=off go test ./...`, `GOWORK=off GOFLAGS=-p=1 go vet ./...`, and the
+  34-file / 88-test Vitest suite pass. The exact production `./cmd/server`
+  cross-build passes. Full `GOWORK=off GOFLAGS=-p=1 go build ./...` was
+  attempted but could not link fixture executables because the host temporary
+  volume ran out of space; it is not a pass.
+- The candidate has not been installed or run. Live settings/editor/secret-grant
+  acceptance remains open pending the exact-digest Studio flow; no Project,
+  Core or runtime state changed while preparing it.
+
 ## Exact-source runtime candidate for current editor contract — 2026-10-18
 
 - Built Linux/arm64 Server from published source HEAD `5780448923ac69652433e4c6927d80e1b65aed8d` to `/tmp/liapoldus-server-current` with `GOTOOLCHAIN=go1.26.0 GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o /tmp/liapoldus-server-current ./cmd/server`.
