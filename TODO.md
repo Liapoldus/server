@@ -19,9 +19,20 @@
   `schemaVersion` in memory; no Project bytes were modified by this check.
 - Full Vitest was attempted with default and single-worker modes. Both stopped
   at linker failures (`no space left on device`); full `go test ./...`, full
-  `go build ./...`, and the Linux/arm64 artifact build remain unverified. The
-  shared volume has 205 MiB free. No caches or unrelated temporary files were
-  removed. The exact artifact digest and live migration are still pending.
+  `go build ./...` remain unverified. The shared volume had 205 MiB free at
+  that point. No caches or unrelated temporary files were removed. The full
+  owner suite remains unverified.
+- Production artifact build subsequently passed:
+  `GOTOOLCHAIN=go1.26.0 GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0
+  GOFLAGS=-p=1 go build -trimpath -ldflags '-s -w' -o
+  /tmp/liapoldus-server-20261018-a46ce85 ./cmd/server`. SHA-256 is
+  `3f3f66e4d8b852b337d07f39276aa949ca1df5095fa411b88ca976286d4075a1`;
+  `file` confirms a static ELF aarch64 executable and Go build metadata records
+  Server commit `a46ce85625eff3efebe06f90efcf37e90065538e`,
+  `vcs.modified=false`, service-sdk `a5e55efdc9091b9f8e631041d800f1d8f1c2cb21`
+  and Wool `c2b51ed192af5ec02fe0295b97a7f6d4c4834c3d`. It is not installed or
+  running; exact-digest local trust and live migration remain pending.
+- The shared volume now has 141 MiB free. No user data or caches were removed.
 
 ## Exact-source current runtime candidate — 2026-10-18
 
