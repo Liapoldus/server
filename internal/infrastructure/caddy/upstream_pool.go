@@ -281,7 +281,26 @@ func (state *upstreamPoolState) originIndex(upstream *reverseproxy.Upstream) int
 	if index, exists := state.originIndexes[upstream]; exists {
 		return index
 	}
-	return -1
+	if upstream == nil {
+		return -1
+	}
+	// Caddy runs active health probes before a request reaches our selection
+	// policy, so the upstream pointer may not have been indexed yet. Resolve a
+	// unique configured dial address for that first probe and cache the mapping.
+	index := -1
+	for candidate, origin := range state.config.Origins {
+		if upstream.Dial != origin.Address {
+			continue
+		}
+		if index >= 0 {
+			return -1
+		}
+		index = candidate
+	}
+	if index >= 0 {
+		state.originIndexes[upstream] = index
+	}
+	return index
 }
 
 func (state *upstreamPoolState) markUnavailable(index int) {

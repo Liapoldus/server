@@ -43,19 +43,17 @@ Core, и возвращает ответ peer без Core/CLI proxy. Эта по
 один и тот же persistent directory при обновлении или рестарте. Внешний Caddy
 Admin API не публикуется и не является интерфейсом Core.
 
-## HTTP configuration v1
+## HTTP settings contract v2
 
 Внутренний decoder settings использует typed Go-константы из
-`internal/domain/models/settings_definition.go`: version `1`, поле версии
+`internal/domain/models/settings_definition.go`: version `2`, поле версии
 `schemaVersion` и поле runtime config `config`. Runtime не читает эти значения
-из `service.json`; native regression tests проверяют их точное соответствие
-опубликованному manifest, исходные config bytes и settings error messages.
-Три неизменяемых grant purposes для certificate, private key и upstream CA
-определены типом `SettingsSecretPurpose` в REST adapter; прежний внутренний
-`secret-purposes.json` и его loader удалены после проверки всех потребителей.
-Public settings schema/semantics, Admin descriptors и site artifacts сохраняют
-своих текущих владельцев. Общая миграция контрактов в code-first остаётся
-незавершённой; v1 публикует только поля, которые runtime проверяет и применяет.
+из `service.json`. JSON Schema и семантика settings принадлежат Server и
+экспортируются из code-first definitions в `contracts/v1/`; `go run
+./cmd/contracts --check` проверяет совпадение опубликованных файлов с исходниками.
+Четыре grant purposes для TLS certificate, private key, upstream CA и HTTP
+credentials определены типом `SettingsSecretPurpose` в REST adapter. Значения
+секретов не входят в Project settings: там хранится только opaque reference.
 
 Server service принимает только собственный versioned JSON contract, не raw Caddy
 JSON и не Caddyfile. Настройки задают public HTTP/HTTPS listeners и ordered
@@ -71,14 +69,15 @@ path задаются в нём, а не дублируются в `match`; `mat
 ровно один сегмент. Старый untyped service route без `api` contract не
 принимается. Совпавший route использует один terminal handler: static site,
 HTTP(S) reverse-proxy pool или service capability. Middleware chain и общий
-`continue` не входят в v1.
+`continue` не входят в текущий settings contract.
 
-`config.defaults` задаёт общие режимы `compression`, `cache`, `headers` и `cors`
-отдельно для service, static и reverse-proxy routes. Если значение не задано,
-static включает `zstd`/`gzip` и публичный `Cache-Control: max-age=3600`; остальные
-типы оставляют эти функции выключенными. Route может наследовать, включить или
-выключить каждую функцию в `features`. Отключение не удаляет сохранённые
-алгоритмы и значения.
+`config.defaults` задаёт общие режимы `compression`, `cache`, `headers`, `cors`,
+`auth`, `rateLimit`, `healthCheck` и `rewrite` по типам routes. Для каждой функции
+route выбирает `inherit`, `enabled` или `disabled`. При отключении её значения
+остаются в Project и доступны при повторном включении. Без явных defaults
+функции выключены; исключение — static compression (`zstd`/`gzip`) и публичный
+`Cache-Control: max-age=3600`. Для service и reverse-proxy cache и compression
+по умолчанию выключены.
 
 `headers` задаёт фиксированные allowlisted значения request/response headers.
 `cors` поддерживает exact origins, методы, request/response header allowlists,
@@ -87,6 +86,27 @@ credentials и кэширование preflight. Server отвечает на р
 wildcard origin нельзя совмещать с credentials. Cache здесь задаёт только
 `Cache-Control`, а не хранит ответы; включать его для персонализированного API
 можно только явно.
+
+`auth` поддерживает Bearer token, API key в выбранном заголовке и Basic с
+username. Конфигурация ссылается на service-scoped secret reference; plaintext
+принимается host-owned потоком Studio/CLI, остаётся в системном хранилище и не
+передаётся плагину, Project или Caddy JSON. Runtime получает scoped grant при
+применении настроек и проверяет credentials по keyed MAC в памяти.
+
+`rateLimit` использует instance-local token bucket на route и IP клиента и
+возвращает `429`. Forwarded IP учитывается только для явно перечисленных
+`trustedProxies`; без доверенного proxy используется сетевой адрес клиента.
+`rewrite` меняет request path до передачи reverse-proxy upstream. Для
+reverse-proxy route `healthCheck` включает активные HTTP GET probes с заданными
+path, interval, timeout и ожидаемым status; Caddy исключает нездоровый upstream
+из выбора до успешного последующего probe. `healthCheck` применяется только к
+reverse-proxy routes.
+
+Redirect — отдельный terminal route handler с локальным абсолютным path либо
+явным `http`/`https` URL target и статусом 301, 302, 307 или 308. Отдельно
+настраиваемый listener может переводить HTTP на
+явно заданный TLS listener с проверкой покрытия hostname; он не создаёт HTTP
+socket автоматически.
 
 ### Typed request/response contract
 
@@ -174,8 +194,10 @@ cookies входят в handshake decision и проверяются до `101`.
 Reverse-proxy pool содержит 1–32 HTTP(S) origins с весами 1–100 и smooth
 weighted round-robin. Passive connection failure допускает не более одного
 retry до отправки request bytes; HTTPS verification обязательна, private CA
-задаётся внешним `caRef`. Active health probes и отключение проверки TLS не
-поддерживаются.
+задаётся внешним `caRef`. Настройка `features.healthCheck` дополнительно
+проверяет upstream активными probes и исключает origin, пока он не станет
+здоровым. Без явного `healthCheck.mode: enabled` probes не выполняются.
+Отключить проверку TLS сертификата upstream нельзя.
 
 TLS использует ACME либо custom certificate/key references; private key bytes не
 передаются через settings. Валидная конфигурация может активироваться до

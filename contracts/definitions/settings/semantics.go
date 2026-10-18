@@ -147,7 +147,7 @@ func SettingsSemantics() SettingsSemanticsDocument {
 			PassiveFailure:     "TCP connection refusal or timeout before request bytes; exclude only that origin for 30 seconds",
 			Retry:              "at most one next eligible origin, only after TCP connect refusal or timeout before any request byte",
 			NoRetryOrExclusion: "TLS handshake/verification failure and any failure after TCP connect",
-			ActiveHealthChecks: false,
+			ActiveHealthChecks: true,
 		},
 	}
 }

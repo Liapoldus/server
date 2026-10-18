@@ -39,7 +39,7 @@ function accepts(candidate: unknown): boolean {
   return validate(candidate) as boolean;
 }
 
-describe("Server service strict settings schema v1", () => {
+describe("Server service strict settings schema v2", () => {
   it("advertises the service-owned listener and route fields", () => {
     expect(serviceContract.configuration).toMatchObject({ schemaVersion: 2, versionField: "schemaVersion", runtimeConfigField: "config" });
     expect(serviceContract.configSchema.fields).toEqual([
@@ -191,7 +191,7 @@ describe("Server service strict settings schema v1", () => {
       passiveFailure: "TCP connection refusal or timeout before request bytes; exclude only that origin for 30 seconds",
       retry: "at most one next eligible origin, only after TCP connect refusal or timeout before any request byte",
       noRetryOrExclusion: "TLS handshake/verification failure and any failure after TCP connect",
-      activeHealthChecks: false,
+      activeHealthChecks: true,
     });
     expect(semantics.automaticHttpsRedirect).toMatchObject({
       sourceListener: "an explicit HTTP listener with tls.mode=disabled, protocols=[http1], redirectToListenerId targeting a TLS-enabled HTTP listener, and no routes",
@@ -234,7 +234,7 @@ describe("Server service strict settings schema v1", () => {
     expect(accepts(settings({ listeners: [httpListener], routes: [{ ...httpRoute, handler: { type: "reverseProxy", upstreams: maxPool } }] }))).toBe(true);
     expect(schema.$defs.upstream.properties.weight.default).toBe(1);
     expect(schema.$defs.upstream.properties.caRef.description).toContain("never disables hostname verification");
-    expect(schema.$defs.reverseProxyHandler.description).toContain("active health probes are not used");
+    expect(schema.$defs.reverseProxyHandler.description).toContain("Configure active GET health probes with route.features.healthCheck");
     expect(schema.$defs.reverseProxyHandler.description).toContain("before request bytes passively excludes");
   });
 

@@ -279,7 +279,7 @@ func SettingsSchema() schema.Definition {
 			}},
 		}, "reverseProxyHandler": {
 			Type:                 "object",
-			Description:          "Uses per-route smooth weighted round-robin with 1–32 origins and weights 1–100 (default 1): add each eligible weight to its current weight, choose the largest (ties use array order), then subtract the eligible-weight sum from the selected origin. If the eligible set changes, current weights reset for that set. Only TCP refusal/timeout before request bytes passively excludes an origin for 30 seconds and permits at most one next-origin retry. TLS handshake/verification failure and failures after TCP connect are terminal and neither retried nor passively excluded; active health probes are not used. Once request bytes are sent, the request is never replayed.",
+			Description:          "Uses per-route smooth weighted round-robin with 1–32 origins and weights 1–100 (default 1): add each eligible weight to its current weight, choose the largest (ties use array order), then subtract the eligible-weight sum from the selected origin. If the eligible set changes, current weights reset for that set. Configure active GET health probes with route.features.healthCheck. Only TCP refusal/timeout before request bytes passively excludes an origin for 30 seconds and permits at most one next-origin retry. TLS handshake/verification failure and failures after TCP connect are terminal and neither retried nor passively excluded. Once request bytes are sent, the request is never replayed.",
 			AdditionalProperties: false,
 			Required:             schema.Value([]string{"type", "upstreams"}),
 			Properties: map[string]schema.Definition{"type": {

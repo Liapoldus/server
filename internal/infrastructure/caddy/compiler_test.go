@@ -184,6 +184,13 @@ func TestCompileReverseProxyRouteSecurityAndHealthFeatures(t *testing.T) {
 	}
 }
 
+func TestCompileRejectsAmbiguousActiveHealthCheckUpstreams(t *testing.T) {
+	configuration := []byte(`{"listeners":[{"id":"web","kind":"http","address":"127.0.0.1:19923","hostnames":[],"protocols":["http1"],"tls":{"mode":"disabled"}}],"routes":[{"id":"api","listenerId":"web","features":{"healthCheck":{"mode":"enabled","path":"/health","intervalSeconds":5,"timeoutSeconds":1,"expectedStatus":200}},"handler":{"type":"reverseProxy","upstreams":[{"origin":"http://127.0.0.1:19924","weight":100},{"origin":"http://127.0.0.1:19924","weight":1}]}}]}`)
+	if _, err := compileSettings(configuration, 1, nil); err == nil {
+		t.Fatal("active probes must reject duplicate dial addresses because their transport settings are ambiguous")
+	}
+}
+
 func TestCompileRedirectRouteUsesValidatedRedirectHandler(t *testing.T) {
 	configuration := []byte(`{"listeners":[{"id":"web","kind":"http","address":"127.0.0.1:19922","hostnames":[],"protocols":["http1"],"tls":{"mode":"disabled"}}],"routes":[{"id":"old-path","listenerId":"web","handler":{"type":"redirect","target":"/new-path","statusCode":308}}]}`)
 	if err := New().Validate(configuration); err != nil {

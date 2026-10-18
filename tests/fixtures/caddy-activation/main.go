@@ -38,6 +38,7 @@ type input struct {
 	HTTPChallengePort     int               `json:"httpChallengePort"`
 	ForceRenew            bool              `json:"forceRenew"`
 	SkipRequest           bool              `json:"skipRequest"`
+	WaitBeforeRequestsMS  int               `json:"waitBeforeRequestsMs"`
 }
 
 type httpRequest struct {
@@ -136,6 +137,9 @@ func main() {
 		}
 	}
 	requests := request.Requests
+	if request.WaitBeforeRequestsMS > 0 {
+		time.Sleep(time.Duration(request.WaitBeforeRequestsMS) * time.Millisecond)
+	}
 	if len(requests) == 0 && !request.SkipRequest {
 		requests = []httpRequest{{Target: "/"}}
 	}

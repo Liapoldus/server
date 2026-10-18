@@ -1,5 +1,28 @@
 # TODO — Server service v1
 
+## Active upstream health-check runtime fix — 2026-10-18
+
+- The settings-v2 contract advertised active reverse-proxy health probes, and
+  the Caddy compiler emitted `health_checks.active`, but the custom upstream
+  transport could not resolve Caddy's health-check upstream pointer before the
+  first user request. This made every initial probe fail without reaching the
+  origin. The transport now resolves a unique configured dial address for the
+  first probe and caches that pointer mapping; duplicate dial addresses are
+  rejected when active probes are enabled because their per-origin transport
+  settings cannot be selected safely.
+- Verified by an actual Caddy HTTP integration test: a 503 `/ready` upstream is
+  probed and excluded while the healthy origin serves the route. Go Caddy tests,
+  settings schema tests, and deterministic contract export check pass.
+- Server runtime version is now `1.1.9`; it is a local source candidate only.
+  A fresh Linux/arm64 artifact still needs to be built, its digest recorded, and
+  the normal Studio trust step completed before installation. No live runtime
+  has been changed.
+- The canonical settings guide now describes the schema v2 feature defaults,
+  auth references, rate limiting, rewrites, redirects, active probes and current
+  limits. A full Vitest run was attempted but 12 tests failed while the host had
+  only about 500 MiB free; most failures are Go linker `No space left on device`.
+  The targeted health runtime and schema tests pass.
+
 ## Settings-v2 HTTP and secret-reference checkpoint — 2026-10-18
 
 - Server settings schema v2 now covers service, static, reverse-proxy and
@@ -20,8 +43,8 @@
   binaries only omits debug symbols; it was used after the host temporary volume
   ran low while linking fixture binaries. OrbStack was started with `orbctl
   start` for the ACME Pebble test and Docker reports 29.8.2.
-- Server runtime release is `1.1.8`. Its owner source and contract changes are
-  committed and pushed as `2bc9f56`; the central documentation source pin is
+- The previous Server runtime release was `1.1.8`; its owner source and contract
+  changes are committed and pushed as `2bc9f56`; the central documentation source pin is
   published. The matching Server Editor `0.3.59` package passes
   73/73 tests and Studio's package inspector, but it has not been installed;
   exact digest `682bd7af7b2d61c312403628b7407fda7a621b9d9d565e65fa7004849cd9094f`

@@ -145,6 +145,46 @@ describe("Caddy upstream pool conformance", () => {
     }
   }, 60_000);
 
+  it("excludes an actively unhealthy origin from real HTTP requests", async () => {
+    let healthChecks = 0;
+    let businessRequests = 0;
+    const unhealthy = createServer((request, response) => {
+      if (request.url === "/ready") {
+        healthChecks++;
+        response.statusCode = 503;
+        response.end("unhealthy");
+        return;
+      }
+      businessRequests++;
+      response.end("unhealthy-origin");
+    });
+    await listen(unhealthy);
+    const healthy = await startOrigin("healthy-origin");
+    const port = await freePort();
+
+    try {
+      const settings = httpSettings(port, [
+        { origin: `http://${serverAddress(unhealthy)}`, weight: 100 },
+        { origin: healthy.origin, weight: 1 },
+      ]);
+      (settings.config.routes[0] as { features?: unknown }).features = {
+        healthCheck: { mode: "enabled", path: "/ready", intervalSeconds: 1, timeoutSeconds: 1, expectedStatus: 200 },
+      };
+      const result = await runActivation({
+        port,
+        settings,
+        waitBeforeRequestsMs: 2500,
+        requests: [{ target: "/" }],
+      });
+
+      expect(result.responses, JSON.stringify({ healthChecks, businessRequests })).toEqual([{ status: 200, body: "healthy-origin" }]);
+      expect(healthChecks).toBeGreaterThan(0);
+      expect(businessRequests).toBe(0);
+    } finally {
+      await Promise.all([close(unhealthy), healthy.close()]);
+    }
+  }, 60_000);
+
   it("extends system trust with a scoped caRef and preserves hostname verification", async () => {
     const trustedPort = await freePort();
     const trusted = await runCAActivation({ port: trustedPort, trustCA: true });

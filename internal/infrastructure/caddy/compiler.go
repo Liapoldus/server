@@ -333,6 +333,9 @@ func compileSettings(contents []byte, callerSetID uint64, secrets map[string][]b
 		if err != nil || features.Compression.Mode == "enabled" && route.Handler.Type == "service" && route.Handler.Mode != "call" {
 			return nil, errUnsupportedSettings
 		}
+		if route.Handler.Type == "reverseProxy" && features.HealthCheck.Mode == "enabled" && !uniqueUpstreamDialAddresses(route.Handler.Upstreams) {
+			return nil, errUnsupportedSettings
+		}
 		handler, err := compileHandler(route.ID, route.Handler, route.API, usedTargets, &upstreamPools, secrets, usedSecretReferences)
 		if err != nil {
 			return nil, err
@@ -1253,6 +1256,21 @@ func compileHandler(routeID string, handler settingsHandler, api *apiContract, u
 	default:
 		return nil, fmt.Errorf("%w: handler", errUnsupportedSettings)
 	}
+}
+
+func uniqueUpstreamDialAddresses(upstreams []upstream) bool {
+	seen := make(map[string]struct{}, len(upstreams))
+	for _, configured := range upstreams {
+		origin, err := parseUpstreamOrigin(configured.Origin, configured.Weight)
+		if err != nil {
+			return false
+		}
+		if _, exists := seen[origin.Address]; exists {
+			return false
+		}
+		seen[origin.Address] = struct{}{}
+	}
+	return true
 }
 
 func validReleaseID(value string) bool {

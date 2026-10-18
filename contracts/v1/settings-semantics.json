@@ -60,7 +60,7 @@
     "port": "ASCII decimal integer 1 through 65535; leading zeroes are rejected"
   },
   "upstreamPool": {
-    "activeHealthChecks": false,
+    "activeHealthChecks": true,
     "eligibilityChange": "reset current weights for all origins in the new eligible set",
     "noRetryOrExclusion": "TLS handshake/verification failure and any failure after TCP connect",
     "passiveFailure": "TCP connection refusal or timeout before request bytes; exclude only that origin for 30 seconds",
