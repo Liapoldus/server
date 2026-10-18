@@ -2,13 +2,14 @@
 
 ## Current Server 1.1.9 candidate and full owner gates — 2026-10-18
 
-- Current source HEAD is `a2b1bdc`; Server 1.1.9 Linux/arm64 was rebuilt from
-  that exact HEAD at
+- Server 1.1.9 Linux/arm64 was rebuilt from source commit `a2b1bdc` at
   `/tmp/liapoldus-server-linux-arm64-2026-10-18-a2b1bdc`, SHA-256
   `784923bea75c65b2ea7eb4ca325bb413e3ef0eef1a84005798e7059762280b60`.
   `file` confirms static ELF aarch64 and `go version -m` records the expected
   source module. It has not been registered or installed; exact-digest Studio
   trust is pending.
+- Current HEAD `e7aaf3c` adds only this TODO checkpoint; the candidate contains
+  the same Server source code and records its build revision in Go metadata.
 - Current source checks pass: `GOWORK=off go test -ldflags=-w ./... -count=1`,
   `GOWORK=off go build -ldflags=-w ./...`, `GOWORK=off go vet ./...`,
   `GOWORK=off go run -ldflags=-w ./cmd/contracts --check`, and the full Vitest
