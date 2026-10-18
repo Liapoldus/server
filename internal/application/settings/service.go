@@ -54,6 +54,12 @@ func (configuration *Configuration) Apply(settings settingsmodel.Settings, revis
 
 // Validate checks the candidate without replacing the active runtime.
 func (configuration *Configuration) Validate(settings settingsmodel.Settings) error {
+	return configuration.ValidateWithSecrets(settings, nil)
+}
+
+// ValidateWithSecrets checks the candidate with one-use secret material without
+// replacing the active runtime. Callers own and must clear the supplied bytes.
+func (configuration *Configuration) ValidateWithSecrets(settings settingsmodel.Settings, secrets map[string][]byte) error {
 	if configuration == nil {
 		return ErrCandidateRejected
 	}
@@ -61,6 +67,13 @@ func (configuration *Configuration) Validate(settings settingsmodel.Settings) er
 	defer configuration.mu.Unlock()
 	if settings.SchemaVersion != settingsmodel.SettingsSchemaVersion && !configuration.canValidatePreviousSettingsLocked(settings) {
 		return ErrCandidateRejected
+	}
+	if len(secrets) != 0 {
+		secretRuntime, supportsSecrets := configuration.runtime.(SecretAwareRuntime)
+		if !supportsSecrets || secretRuntime.ValidateWithSecrets(settings.RuntimeConfig, secrets) != nil {
+			return ErrCandidateRejected
+		}
+		return nil
 	}
 	if err := configuration.runtime.Validate(settings.RuntimeConfig); err != nil {
 		return ErrCandidateRejected

@@ -1,5 +1,28 @@
 # TODO — Server service v1
 
+## Secret-bearing candidate validation — 2026-10-19
+
+- The local auth smoke created one synthetic Server credential through the
+  typed CLI secure-stdin path. Only its active opaque reference and metadata
+  were registered in Core; the generated value was not printed or placed in
+  the Project.
+- A temporary `GET /__codex_auth_smoke_20261019` route was saved in the local
+  Project with that reference. The first bundle apply was rejected during
+  Server preflight with a generic HTTP 409. Server's validation endpoint had
+  called the Caddy compiler without redeeming the candidate's scoped secret,
+  so a valid auth configuration looked invalid. Core kept Server at generation
+  96 and the existing `/echo` still returned HTTP 200.
+- Server 1.1.12 now redeems each referenced secret through the existing
+  one-use Core grant for preflight and validates the Caddy candidate with
+  `ValidateWithSecrets`; it clears the redeemed bytes before returning. The
+  later apply obtains a separate grant and validates again before activation.
+  Regression coverage checks both calls, safe grant failure, no activation
+  during preflight, and clearing the in-memory bytes.
+- Focused Server Go tests, all Server Go tests/build/vet, and all 88 Vitest
+  tests pass. The updated Linux/arm64 artifact has not yet been built or
+  installed. Local auth request, rotation ACK, and cleanup remain pending that
+  exact artifact approval; production is out of scope.
+
 ## Local runtime recovery — 2026-10-19
 
 - The approved Core build `df625da7…` and CLI `1381dd42…` are active for

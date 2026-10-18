@@ -20,7 +20,7 @@ import (
 	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
-const ServiceVersion = "1.1.11"
+const ServiceVersion = "1.1.12"
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
 
@@ -202,7 +202,19 @@ func (adapter *Adapter) ValidateConfiguration(ctx context.Context, contents []by
 	if err := adapter.validateStaticRouteReleases(ctx, settings.RuntimeConfig); err != nil {
 		return settingsmodel.ErrInvalidSettings
 	}
-	return adapter.configuration.Validate(settings)
+	kinds, err := settings.ConfigSecretReferenceKinds()
+	if err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	if len(kinds) == 0 {
+		return adapter.configuration.Validate(settings)
+	}
+	values, err := adapter.settingsSecretValues(ctx, kinds)
+	if err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	defer clearSettingsSecretValues(values)
+	return adapter.configuration.ValidateWithSecrets(settings, values)
 }
 
 func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configuration) error {
@@ -286,19 +298,26 @@ func (adapter *Adapter) SetSecretProvider(provider SecretProvider) {
 }
 
 func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings settingsmodel.Settings, generation string) error {
-	if adapter.secrets == nil {
-		return ErrSecretReferencesRequireCoreGrantAPI
-	}
 	kinds, err := settings.ConfigSecretReferenceKinds()
 	if err != nil {
 		return settingsmodel.ErrInvalidSettings
 	}
+	values, err := adapter.settingsSecretValues(ctx, kinds)
+	if err != nil {
+		return err
+	}
+	defer clearSettingsSecretValues(values)
+	return adapter.configuration.ApplyWithSecrets(settings, generation, values)
+}
+
+func (adapter *Adapter) settingsSecretValues(ctx context.Context, kinds map[string]settingsmodel.SecretReferenceKind) (map[string][]byte, error) {
+	if len(kinds) == 0 {
+		return map[string][]byte{}, nil
+	}
+	if adapter == nil || adapter.secrets == nil {
+		return nil, ErrSecretReferencesRequireCoreGrantAPI
+	}
 	values := make(map[string][]byte, len(kinds))
-	defer func() {
-		for _, value := range values {
-			clear(value)
-		}
-	}()
 	for reference, kind := range kinds {
 		var purpose SettingsSecretPurpose
 		switch kind {
@@ -311,16 +330,25 @@ func (adapter *Adapter) applyWithSecrets(ctx context.Context, settings settingsm
 		case settingsmodel.SecretReferenceHTTPAuth:
 			purpose = SettingsHTTPAuthPurpose
 		default:
-			return settingsmodel.ErrInvalidSettings
+			clearSettingsSecretValues(values)
+			return nil, settingsmodel.ErrInvalidSettings
 		}
 		value, err := adapter.secrets.SecretProvider(ctx, reference, string(purpose))
 		if err != nil {
-			return settingsmodel.ErrInvalidSettings
+			value.Destroy()
+			clearSettingsSecretValues(values)
+			return nil, settingsmodel.ErrInvalidSettings
 		}
 		values[reference] = value.Bytes()
 		value.Destroy()
 	}
-	return adapter.configuration.ApplyWithSecrets(settings, generation, values)
+	return values, nil
+}
+
+func clearSettingsSecretValues(values map[string][]byte) {
+	for _, value := range values {
+		clear(value)
+	}
 }
 
 // NewHandler creates the Service SDK REST lifecycle handler and its use case.
