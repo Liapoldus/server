@@ -1,6 +1,23 @@
 # TODO — Server service v1
 
-## Local Server status after approved trust recovery — 2026-10-18
+## Latest local runtime and configuration state — 2026-10-18
+
+- The latest typed CLI runtime read reports Core running and Echo/Server
+  containers exited. Server metadata reads return HTTP 503 until the service
+  starts; the last successful readiness observation was generation 95. The
+  source-level Server settings and secret-grant tests do not replace this live
+  ACK gate.
+- Project `Server Echo Studio` contains only `/echo`; the temporary local auth
+  route was removed. All three synthetic Server secret references are revoked,
+  with no pending registrations or rotations. No reference was delivered to
+  Server and no protected HTTP request or rotation ACK succeeded.
+- The latest bundle apply was rejected by Core with HTTP 409 before any
+  successful configuration or grant was observed. Core/CLI owners are adding
+  typed safe admission blockers so the local cause can be diagnosed before
+  another attempt. No Server source or runtime configuration was changed by
+  this check; production is out of scope.
+
+## Local Server status after approved trust recovery — superseded status — 2026-10-18
 
 - The earlier bootstrap-certificate blocker below has been resolved for
   `local` after explicit approval. Core, Echo and Server containers are
