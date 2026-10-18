@@ -2,10 +2,11 @@
 
 ## Secret-bearing candidate validation — 2026-10-19
 
-- The local auth smoke created one synthetic Server credential through the
-  typed CLI secure-stdin path. Only its active opaque reference and metadata
-  were registered in Core; the generated value was not printed or placed in
-  the Project.
+- The local auth smoke created two synthetic Server credentials through the
+  typed CLI secure-stdin path. Only opaque references and safe metadata were
+  registered in Core; generated values were not printed or placed in the
+  Project. The local catalog currently has both references active and no
+  pending rotation.
 - A temporary `GET /__codex_auth_smoke_20261019` route was saved in the local
   Project with that reference. The first bundle apply was rejected during
   Server preflight with a generic HTTP 409. Server's validation endpoint had
@@ -26,8 +27,10 @@
   It has not yet been registered, trusted, or run; the exact-digest action-time
   approval is pending. The Project file currently has the temporary auth route,
   but Core still runs Server 1.1.11 at generation 96 and the candidate has not
-  been applied. Local auth request, rotation ACK, and cleanup remain pending;
-  production is out of scope.
+  been applied. A fresh HTTP read confirms `/echo` returns 200, its missing
+  required parameter returns 400, and the temporary route returns 404 before
+  apply. Local authenticated request, rotation ACK, and cleanup remain
+  pending; production is out of scope.
 
 ## Local runtime recovery — 2026-10-19
 
