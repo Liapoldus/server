@@ -17,9 +17,13 @@
   into Core/Server, and live grant/auth/rotation ACK checks remain open.
 - A repeated typed local apply returned generic Core HTTP 409
   `bundle_apply_failed: service configuration revision conflict`. The response
-  does not establish whether Server candidate validation ran. A fresh HTTP
-  check still returns 404 for the temporary route and 200 for `/echo`; do not
-  claim that the saved auth candidate is active or that Server rejected it.
+  does not expose the validator outcome. A filter that emitted only whitelisted
+  safe tokens found the latest Server-log `grantDenied` event at
+  `2026-10-18T23:17:52.423698534Z`, consistent with this apply attempt. The
+  candidate reached scoped secret access, which was denied. A fresh HTTP check
+  still returns 404 for the temporary route and 200 for `/echo`; do not claim
+  that the saved auth candidate is active. No raw log line or secret value was
+  emitted.
 - Server 1.1.13 digest `e69ff4af…` was approved for local earlier, but it was
   built from the superseded deferred-validation implementation. It is not used
   to claim acceptance for the current source. New candidate digests will be
