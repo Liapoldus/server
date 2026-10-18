@@ -5,20 +5,22 @@
 - Typed `service status server --target local` from the Studio-selected CLI
   reports active Server 1.1.11, digest
   `sha256:3f3f66e4d8b852b337d07f39276aa949ca1df5095fa411b88ca976286d4075a1`,
-  generation 92 and ready/acknowledged. The active readiness envelope still
+  generation 93 and ready/acknowledged. The active readiness envelope still
   reports schemaVersion 1; Project settings are v2 and Studio reports them as
   unapplied. No apply was attempted in this preflight.
-- Studio's Server Editor 0.3.64 opens from the service Inspector and completes
-  its handshake. The `/echo` route editor exposes the auth controls and its
-  contextual picker reports `Нет активных ссылок` for the declared purpose
-  `server.http.auth.credential`. Studio's global reference catalog also reads
-  successfully and is empty. This is UI/read-path evidence only; no credential
-  was written or delivered to Server.
+- Studio's Server Editor 0.3.65 opens from the service Inspector and completes
+  its handshake. Enabling auth on an isolated editor draft is accepted by the
+  typed Studio bridge. The global catalog returns one revoked metadata record;
+  no active secret reference is selectable. No credential was delivered to
+  Server. This remains UI/read-path evidence, not applied-auth runtime coverage.
 - Re-ran `vitest run tests/lifecycle/caddy-rest-process.test.ts --maxWorkers=1`:
   1/1 pass. This is fixture coverage, not live Core grant/rotation acceptance.
-  No Server source, Project, runtime or secret state changed.
+  A subsequent read-only curl to `/echo?text=goal-recheck` returned HTTP 200;
+  the isolated `/__server-secret-rotation-smoke` path returned 404 because its
+  route remains unsaved. No Server source, Project, runtime or secret state
+  changed.
 
-## Current local runtime and uninstalled 1.1.11 candidate — 2026-10-18
+## Prior local runtime and uninstalled 1.1.11 candidate — 2026-10-18
 
 - Read-only typed CLI status for `Server Echo Studio` / `local` reports active
   Server 1.1.8, artifact digest
