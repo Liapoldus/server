@@ -1,5 +1,20 @@
 # TODO — Server service v1
 
+## Current owner gates and local Core dependency — 2026-10-18
+
+- Re-ran `GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1 go test ./...`,
+  `go build ./...`, and `go vet ./...` on the current Server source; all passed.
+- The latest approved Studio Run did not start Server. After OrbStack exposed
+  its local Docker Engine, CLI stopped before Core container creation because
+  the local target's Core Management TLS certificate and the rest of its
+  bootstrap trust files are missing. Typed `liapoldus runtime status --target
+  local` reports Core exited. No Server settings candidate was applied and no
+  secret reference was delivered to Server.
+- Local HTTP/auth, settings apply, readiness, rotation ACK and secret retirement
+  remain unverified against the runtime. Restore the existing local Core trust
+  bundle before repeating this gate; do not generate a replacement CA as an
+  implicit repair.
+
 ## Local staged secret rotation; Server currently stopped — 2026-10-18
 
 - The local Core catalog has two active opaque Server references, one revoked
