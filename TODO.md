@@ -24,10 +24,15 @@
   scoped to the applying candidate generation. A missing grant still rejects
   Apply before activation; the prior runtime remains active. Focused Go tests,
   all Server Go tests/build/vet, and all 88 Vitest tests pass.
-- Server 1.1.13 is the next candidate. Its Linux/arm64 build, live secret grant,
-  auth request, rotation ACK and cleanup are pending. The local Project retains
-  the temporary route and two synthetic references; production is out of
-  scope.
+- Server 1.1.13 source commit `3ea5c6deb7761e0176a06b873c0688eb3b9c1a65` is
+  pushed. Its clean Linux/arm64 candidate is
+  `/tmp/liapoldus-server-1.1.13-3ea5c6d/server`, SHA-256
+  `e69ff4af77a30841c2ef1f770506f91afa07d82045ab8dc73ad8912c6ce45ce7`.
+  Focused and full Server Go tests, build, vet, and all 88 Vitest tests pass.
+  This new digest has not been registered, trusted, or run; exact-digest
+  action-time approval is required. The Project retains the temporary route
+  and two synthetic references; live grant, auth request, rotation ACK and
+  cleanup are pending. Production is out of scope.
 
 ## Local runtime recovery — 2026-10-19
 
