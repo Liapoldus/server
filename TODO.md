@@ -1,5 +1,23 @@
 # TODO — Server service v1
 
+## Current Server 1.1.9 candidate and full owner gates — 2026-10-18
+
+- Current source HEAD is `a2b1bdc`; Server 1.1.9 Linux/arm64 was rebuilt from
+  that exact HEAD at
+  `/tmp/liapoldus-server-linux-arm64-2026-10-18-a2b1bdc`, SHA-256
+  `784923bea75c65b2ea7eb4ca325bb413e3ef0eef1a84005798e7059762280b60`.
+  `file` confirms static ELF aarch64 and `go version -m` records the expected
+  source module. It has not been registered or installed; exact-digest Studio
+  trust is pending.
+- Current source checks pass: `GOWORK=off go test -ldflags=-w ./... -count=1`,
+  `GOWORK=off go build -ldflags=-w ./...`, `GOWORK=off go vet ./...`,
+  `GOWORK=off go run -ldflags=-w ./cmd/contracts --check`, and the full Vitest
+  suite (34 files / 87 tests). The earlier test attempt that failed under low
+  disk space is superseded by this complete successful run.
+- No live Server/Core/Project configuration was changed while building and
+  checking this candidate. Runtime/editor acceptance remains pending the
+  exact-digest confirmation and native Studio trust/update flow.
+
 ## Active upstream health-check runtime fix — 2026-10-18
 
 - The settings-v2 contract advertised active reverse-proxy health probes, and
