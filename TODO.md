@@ -14,9 +14,13 @@
 - Project still contains only `/echo` and no secret reference. The three
   previous local synthetic references remain revoked. The separate Server
   Editor auth-route, grant delivery, authenticated request, rotation ACK and
-  reference retirement have not yet been exercised. Studio is awaiting manual
-  entry of a new test credential into its secure field; no credential value was
-  read or printed. Production is out of scope.
+  reference retirement have not yet been exercised. The user reported saving
+  the new test credential, but Studio still shows an empty secure field and the
+  typed Core catalog has no new reference. No credential value was read or
+  printed; do not start the auth workflow until an active reference is visible.
+  Production is out of scope.
+- Re-ran `GOWORK=off GOFLAGS=-p=1 go test ./...`, `go build ./...`, and
+  `go vet ./...`; all passed. These checks do not establish live grant delivery.
 
 ## Latest local runtime and configuration state — 2026-10-18
 
