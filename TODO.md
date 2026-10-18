@@ -29,6 +29,12 @@
 - The next local candidate is version 1.1.14 so it does not reuse the
   superseded 1.1.13 artifact identity. Rebuild and verify its exact Linux/arm64
   digest from the pushed source before requesting the local action gate.
+- Server commit `80ffb234263aba13fe69722b5d8423650d78b026` is pushed. The
+  Linux/arm64 binary SHA-256 is
+  `be991dab5b250461963ef46ad713fdbb3b1f2322915376c0ec0519623998a74e`;
+  build metadata confirms `vcs.modified=false`. Full Go tests (88), build,
+  vet, generated-contract check, and Vitest (34 files / 88 tests) pass. This
+  1.1.14 candidate is not installed in local; approval must name this digest.
 
 ## Candidate-scoped secret grant — superseded implementation — 2026-10-19
 
