@@ -5,20 +5,24 @@
 - Typed `service status server --target local` from the Studio-selected CLI
   reports active Server 1.1.11, digest
   `sha256:3f3f66e4d8b852b337d07f39276aa949ca1df5095fa411b88ca976286d4075a1`,
-  generation 93 and ready/acknowledged. The active readiness envelope still
+  generation 94 and ready/acknowledged. The active readiness envelope still
   reports schemaVersion 1; Project settings are v2 and Studio reports them as
   unapplied. No apply was attempted in this preflight.
-- Studio's Server Editor 0.3.65 opens from the service Inspector and completes
-  its handshake. Enabling auth on an isolated editor draft is accepted by the
-  typed Studio bridge. The global catalog returns one revoked metadata record;
-  no active secret reference is selectable. No credential was delivered to
-  Server. This remains UI/read-path evidence, not applied-auth runtime coverage.
+- Studio's installed Server Editor 0.3.65 opens from the service Inspector and
+  completes its handshake. Enabling auth on an isolated editor draft is
+  accepted by the typed Studio bridge. The catalog now contains one active
+  temporary reference and one revoked record; the running Studio build still
+  fails to select the active reference with `bridge.secret_path_not_declared`.
+  The fix is committed in Studio but the new host digest has not yet been
+  launched. No credential was delivered to Server; applied-auth runtime
+  coverage remains open.
 - Re-ran `vitest run tests/lifecycle/caddy-rest-process.test.ts --maxWorkers=1`:
   1/1 pass. This is fixture coverage, not live Core grant/rotation acceptance.
   A subsequent read-only curl to `/echo?text=goal-recheck` returned HTTP 200;
   the isolated `/__server-secret-rotation-smoke` path returned 404 because its
-  route remains unsaved. No Server source, Project, runtime or secret state
-  changed.
+  route remains unsaved. The test reference is not in Project settings or
+  runtime configuration. No Server source or Project settings changed during
+  these reads.
 - Focused owner tests re-run on 2026-10-18:
   `GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1 go test
   ./internal/infrastructure/caddy ./internal/presentation/restservice -run
