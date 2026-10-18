@@ -15,6 +15,12 @@
   acceptance remain open pending the exact-digest Studio flow.
 - This status check was read-only and changed no Project, Core, Server or secret
   state.
+- Re-ran the real child-process path with
+  `PATH=/Users/docup/.cache/codex-runtimes/codex-primary-runtime/dependencies/
+  node/bin:$PATH ./node_modules/.bin/vitest run
+  tests/lifecycle/caddy-rest-process.test.ts --maxWorkers=1`: 1/1 pass. This
+  exercises Server and SDK grant delivery in an isolated fixture; it does not
+  verify the uninstalled 1.1.11 candidate against the live Core target.
 
 ## One-time settings v1 bootstrap for the Studio v2 migration — 2026-10-18
 
