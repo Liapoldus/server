@@ -1,6 +1,6 @@
 # TODO — Server service v1
 
-## Secret-bearing candidate validation — 2026-10-19
+## Candidate-scoped secret grant — 2026-10-19
 
 - The local auth smoke created two synthetic Server credentials through the
   typed CLI secure-stdin path. Only opaque references and safe metadata were
@@ -13,24 +13,21 @@
   called the Caddy compiler without redeeming the candidate's scoped secret,
   so a valid auth configuration looked invalid. Core kept Server at generation
   96 and the existing `/echo` still returned HTTP 200.
-- Server 1.1.12 now redeems each referenced secret through the existing
-  one-use Core grant for preflight and validates the Caddy candidate with
-  `ValidateWithSecrets`; it clears the redeemed bytes before returning. The
-  later apply obtains a separate grant and validates again before activation.
-  Regression coverage checks both calls, safe grant failure, no activation
-  during preflight, and clearing the in-memory bytes.
-- Focused Server Go tests, all Server Go tests/build/vet, and all 88 Vitest
-  tests pass. The clean Linux/arm64 artifact from pushed source commit
-  `2ca1b63e8afb17fbd83a751380da87de08cdceaf` is built at
-  `/tmp/liapoldus-server-1.1.12.s7k1n2/server`, SHA-256
-  `0847f0cbf5348e2ce9083d6952c1e56628861ffa189f7e4d7b2a54f52179c91d`.
-  It has not yet been registered, trusted, or run; the exact-digest action-time
-  approval is pending. The Project file currently has the temporary auth route,
-  but Core still runs Server 1.1.11 at generation 96 and the candidate has not
-  been applied. A fresh HTTP read confirms `/echo` returns 200, its missing
-  required parameter returns 400, and the temporary route returns 404 before
-  apply. Local authenticated request, rotation ACK, and cleanup remain
-  pending; production is out of scope.
+- Server 1.1.12 was registered, trusted and run locally. Its first auth apply
+  still failed preflight with a safe `grantDenied`: Core correctly issues
+  service grants only for references in the retained active generation, while
+  `ValidateConfiguration` runs before the candidate is retained. The failed
+  apply left Server at generation 96; `/echo` returned 200 and the temporary
+  auth path returned 404.
+- The fix keeps secret-free envelope/schema checks in preflight and defers
+  secret-bearing Caddy validation to the SDK Apply callback, where grants are
+  scoped to the applying candidate generation. A missing grant still rejects
+  Apply before activation; the prior runtime remains active. Focused Go tests,
+  all Server Go tests/build/vet, and all 88 Vitest tests pass.
+- Server 1.1.13 is the next candidate. Its Linux/arm64 build, live secret grant,
+  auth request, rotation ACK and cleanup are pending. The local Project retains
+  the temporary route and two synthetic references; production is out of
+  scope.
 
 ## Local runtime recovery — 2026-10-19
 

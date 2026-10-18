@@ -57,6 +57,24 @@ func (configuration *Configuration) Validate(settings settingsmodel.Settings) er
 	return configuration.ValidateWithSecrets(settings, nil)
 }
 
+// ValidatePreflight checks versioned settings compatibility without compiling
+// the runtime. Secret-bearing candidates must be fully validated by Apply,
+// inside the SDK candidate-generation callback where scoped grants are allowed.
+func (configuration *Configuration) ValidatePreflight(settings settingsmodel.Settings) error {
+	if configuration == nil {
+		return ErrCandidateRejected
+	}
+	configuration.mu.Lock()
+	defer configuration.mu.Unlock()
+	if settings.SchemaVersion != settingsmodel.SettingsSchemaVersion && !configuration.canValidatePreviousSettingsLocked(settings) {
+		return ErrCandidateRejected
+	}
+	if len(settings.RuntimeConfig) == 0 {
+		return ErrCandidateRejected
+	}
+	return nil
+}
+
 // ValidateWithSecrets checks the candidate with one-use secret material without
 // replacing the active runtime. Callers own and must clear the supplied bytes.
 func (configuration *Configuration) ValidateWithSecrets(settings settingsmodel.Settings, secrets map[string][]byte) error {

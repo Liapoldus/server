@@ -45,6 +45,29 @@ func TestCandidateValidationDoesNotActivateOrChangeRevision(t *testing.T) {
 	}
 }
 
+func TestPreflightChecksEnvelopeWithoutCompilingCandidate(t *testing.T) {
+	runtime := &settingsTestRuntime{validateErr: errors.New("runtime compile must be deferred")}
+	configuration, err := NewConfiguration(runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := settingsmodel.Settings{SchemaVersion: settingsmodel.SettingsSchemaVersion, RuntimeConfig: []byte(`{"listeners":[],"routes":[]}`)}
+	if err := configuration.ValidatePreflight(settings); err != nil {
+		t.Fatalf("valid current envelope rejected: %v", err)
+	}
+	if runtime.validations != 0 || runtime.activations != 0 {
+		t.Fatalf("preflight compiled or activated the candidate: validations:%d activations:%d", runtime.validations, runtime.activations)
+	}
+	settings.SchemaVersion++
+	if !errors.Is(configuration.ValidatePreflight(settings), ErrCandidateRejected) {
+		t.Fatal("unknown settings schema version passed preflight")
+	}
+	settings = settingsmodel.Settings{SchemaVersion: settingsmodel.SettingsSchemaVersion}
+	if !errors.Is(configuration.ValidatePreflight(settings), ErrCandidateRejected) {
+		t.Fatal("empty runtime candidate passed preflight")
+	}
+}
+
 func TestPreviousSettingsVersionIsBootstrapOnlyAndThenRequiresMigration(t *testing.T) {
 	runtime := &settingsTestRuntime{}
 	configuration, err := NewConfiguration(runtime)

@@ -20,7 +20,7 @@ import (
 	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
-const ServiceVersion = "1.1.12"
+const ServiceVersion = "1.1.13"
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
 
@@ -209,12 +209,12 @@ func (adapter *Adapter) ValidateConfiguration(ctx context.Context, contents []by
 	if len(kinds) == 0 {
 		return adapter.configuration.Validate(settings)
 	}
-	values, err := adapter.settingsSecretValues(ctx, kinds)
-	if err != nil {
-		return settingsmodel.ErrInvalidSettings
-	}
-	defer clearSettingsSecretValues(values)
-	return adapter.configuration.ValidateWithSecrets(settings, values)
+	// Core preflight runs before this candidate becomes the SDK's applying
+	// generation. A secret grant here would be scoped to the old active config,
+	// which correctly cannot authorize a reference introduced by this candidate.
+	// The SDK Apply callback obtains the candidate-scoped grant and performs the
+	// full Caddy validation immediately before atomic activation.
+	return adapter.configuration.ValidatePreflight(settings)
 }
 
 func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configuration) error {
