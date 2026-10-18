@@ -1,6 +1,25 @@
 # TODO — Server service v1
 
-## Current owner gates and local Core dependency — 2026-10-18
+## Local Server status after approved trust recovery — 2026-10-18
+
+- The earlier bootstrap-certificate blocker below has been resolved for
+  `local` after explicit approval. Core, Echo and Server containers are
+  running; typed `service status server` reports Server 1.1.11 ready and
+  acknowledged at generation 95. The existing `/echo` route returns HTTP 200.
+- Server's active generation remains schemaVersion 1. The Project's canonical
+  working-tree settings file contains only `/echo` in schemaVersion 2. The
+  isolated auth/rotation route is not in that file or active runtime.
+- The Core catalog has two active synthetic auth references, one revoked record
+  and one staged rotation. No reference has been granted to Server. The Studio
+  host-side secretRef validation fix is pushed as `b92c2d9`, but its new
+  macOS/arm64 digest `88a4d2b0939f2427…` is still awaiting action-time launch
+  approval, so live apply/auth/ACK/revoke coverage has not run.
+- Keep Server's existing `/echo` config untouched until the approved WebView
+  test can save and apply the temporary route. After the grant/ACK and HTTP
+  checks, remove that route and revoke only the synthetic references once the
+  active generation no longer uses them. Production is out of scope.
+
+## Initial owner gates before local trust recovery — 2026-10-18
 
 - Re-ran `GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1 go test ./...`,
   `go build ./...`, and `go vet ./...` on the current Server source; all passed.
