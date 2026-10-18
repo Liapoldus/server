@@ -19,6 +19,11 @@
   the isolated `/__server-secret-rotation-smoke` path returned 404 because its
   route remains unsaved. No Server source, Project, runtime or secret state
   changed.
+- Focused owner tests re-run on 2026-10-18:
+  `GOTOOLCHAIN=go1.26.0 GOWORK=off GOFLAGS=-p=1 go test
+  ./internal/infrastructure/caddy ./internal/presentation/restservice -run
+  'Secret|Auth|Purpose' -count=1` passes both packages. This is not live
+  Core-grant or rotation acceptance.
 
 ## Prior local runtime and uninstalled 1.1.11 candidate — 2026-10-18
 
