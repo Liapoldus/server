@@ -26,6 +26,9 @@
   10,000-entry bound. Added focused coverage for empty site/release and
   certificate inventories and for all-site release pagination. These source
   fixes are not installed in the local runtime yet.
+- The next local candidate is version 1.1.14 so it does not reuse the
+  superseded 1.1.13 artifact identity. Rebuild and verify its exact Linux/arm64
+  digest from the pushed source before requesting the local action gate.
 
 ## Candidate-scoped secret grant — superseded implementation — 2026-10-19
 

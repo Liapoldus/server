@@ -20,7 +20,7 @@ import (
 	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
-const ServiceVersion = "1.1.13"
+const ServiceVersion = "1.1.14"
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
 
