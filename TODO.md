@@ -1,5 +1,23 @@
 # TODO — Server service v1
 
+## Local runtime recovery — 2026-10-19
+
+- The approved Core build `df625da7…` and CLI `1381dd42…` are active for
+  `Server Echo Studio` / `local`. `runtime start --revision WORKING_TREE` removed
+  stale Echo/Server containers, started the pinned Echo 1.2.2 and Server 1.1.11
+  binaries, and registered both replicas. Typed status reports ready and
+  desired/applied generation 96 for each service.
+- The existing `GET /echo?text=local-smoke` route returns HTTP 200 through
+  Server; omitting its required `text` parameter returns HTTP 400. The earlier
+  local HTTP 409 apply failure has not recurred after Core restart and replica
+  registration, but its exact historical cause is not established.
+- Project still contains only `/echo` and no secret reference. The three
+  previous local synthetic references remain revoked. The separate Server
+  Editor auth-route, grant delivery, authenticated request, rotation ACK and
+  reference retirement have not yet been exercised. Studio is awaiting manual
+  entry of a new test credential into its secure field; no credential value was
+  read or printed. Production is out of scope.
+
 ## Latest local runtime and configuration state — 2026-10-18
 
 - The latest typed CLI runtime read reports Core running and Echo/Server
