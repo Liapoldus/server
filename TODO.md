@@ -1,5 +1,11 @@
 # TODO — Server service v1
 
+## Exact-source runtime candidate for current editor contract — 2026-10-18
+
+- Built Linux/arm64 Server from published source HEAD `5780448923ac69652433e4c6927d80e1b65aed8d` to `/tmp/liapoldus-server-current` with `GOTOOLCHAIN=go1.26.0 GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o /tmp/liapoldus-server-current ./cmd/server`.
+- SHA-256: `25e372207d1dc24a93510142e108d5274770b264138345bd08626459729658a4`. `file` reports a static ELF aarch64 executable; `go version -m` records the exact revision and `vcs.modified=false`. This source release advertises Server `1.1.10`.
+- The current source has passing focused Admin Surface tests, Go tests, all 34 Vitest files / 88 tests, contract generation/checks and `go vet`; the Linux/arm64 production build passed. A full fixture build previously hit the host temp-volume limit and is not represented as passed. This candidate is not installed; live settings, editor and secret-grant acceptance remain open.
+
 ## Admin Surface query and compare-and-swap metadata — 2026-10-18
 
 - Added optional `queryResource` to table sections and `ifMatchField` to
