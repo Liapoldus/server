@@ -491,7 +491,7 @@ func (store *ReleaseStore) ListSites(ctx context.Context, limit int, cursor stri
 }
 
 func (store *ReleaseStore) ListSiteReleases(ctx context.Context, siteID string, limit int, cursor string) (sitemodel.SitePage[sitemodel.SiteReleaseSummary], error) {
-	if store == nil || ctx == nil || !validSiteIdentifier(siteID) || limit < 1 || limit > 100 {
+	if store == nil || ctx == nil || siteID != "" && !validSiteIdentifier(siteID) || limit < 1 || limit > 100 {
 		return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrInvalidSitePublisher
 	}
 	if err := ctx.Err(); err != nil {
@@ -499,23 +499,40 @@ func (store *ReleaseStore) ListSiteReleases(ctx context.Context, siteID string, 
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	if siteID == "" {
+		return store.listAllSiteReleasesLocked(ctx, limit, cursor)
+	}
+	items, err := store.listSiteReleasesLocked(ctx, siteID)
+	if err != nil {
+		return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, err
+	}
+	return paginate(items, limit, cursor, func(item sitemodel.SiteReleaseSummary) string { return item.RevisionID })
+}
+
+func (store *ReleaseStore) listSiteReleasesLocked(ctx context.Context, siteID string) ([]sitemodel.SiteReleaseSummary, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, sitemodel.ErrInvalidSitePublisher
+	}
 	siteRoot := filepath.Join(store.root, "sites", siteID)
 	active, err := store.readActiveGeneration(siteRoot)
 	if err != nil {
-		return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrSiteNotFound
+		return nil, sitemodel.ErrSiteNotFound
 	}
 	entries, err := os.ReadDir(filepath.Join(siteRoot, "releases"))
 	if err != nil {
-		return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrSiteNotFound
+		return nil, sitemodel.ErrSiteNotFound
 	}
 	items := make([]sitemodel.SiteReleaseSummary, 0, len(entries))
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, sitemodel.ErrInvalidSitePublisher
+		}
 		if !entry.IsDir() || !validRevisionID("sha256:"+entry.Name()) {
 			continue
 		}
 		revision := "sha256:" + entry.Name()
 		if _, err := ValidateStagedManifest(filepath.Join(siteRoot, "releases", entry.Name()), siteID); err != nil {
-			return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrInvalidSitePublisher
+			return nil, sitemodel.ErrInvalidSitePublisher
 		}
 		state := "available"
 		switch revision {
@@ -526,12 +543,46 @@ func (store *ReleaseStore) ListSiteReleases(ctx context.Context, siteID string, 
 		}
 		info, err := entry.Info()
 		if err != nil {
-			return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrInvalidSitePublisher
+			return nil, sitemodel.ErrInvalidSitePublisher
 		}
 		items = append(items, sitemodel.SiteReleaseSummary{SiteID: siteID, RevisionID: revision, State: state, SHA256: revision, CreatedAt: info.ModTime().UTC().Format(time.RFC3339Nano)})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].RevisionID < items[j].RevisionID })
-	return paginate(items, limit, cursor, func(item sitemodel.SiteReleaseSummary) string { return item.RevisionID })
+	return items, nil
+}
+
+func (store *ReleaseStore) listAllSiteReleasesLocked(ctx context.Context, limit int, cursor string) (sitemodel.SitePage[sitemodel.SiteReleaseSummary], error) {
+	entries, err := os.ReadDir(filepath.Join(store.root, "sites"))
+	if err != nil {
+		return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrInvalidSitePublisher
+	}
+	const maximumListedReleases = 10000
+	items := make([]sitemodel.SiteReleaseSummary, 0)
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrInvalidSitePublisher
+		}
+		if !entry.IsDir() || !validSiteIdentifier(entry.Name()) {
+			continue
+		}
+		siteItems, err := store.listSiteReleasesLocked(ctx, entry.Name())
+		if errors.Is(err, sitemodel.ErrSiteNotFound) {
+			continue
+		}
+		if err != nil || len(siteItems) > maximumListedReleases-len(items) {
+			return sitemodel.SitePage[sitemodel.SiteReleaseSummary]{}, sitemodel.ErrInvalidSitePublisher
+		}
+		items = append(items, siteItems...)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].SiteID == items[j].SiteID {
+			return items[i].RevisionID < items[j].RevisionID
+		}
+		return items[i].SiteID < items[j].SiteID
+	})
+	return paginate(items, limit, cursor, func(item sitemodel.SiteReleaseSummary) string {
+		return item.SiteID + "/" + item.RevisionID
+	})
 }
 
 func (store *ReleaseStore) ListSiteOperations(ctx context.Context, state string, limit int, cursor string) (sitemodel.SitePage[sitemodel.SiteOperationSummary], error) {
@@ -847,7 +898,8 @@ func paginate[T any](items []T, limit int, cursor string, key func(T) string) (s
 	if end > len(items) {
 		end = len(items)
 	}
-	page := sitemodel.SitePage[T]{Items: append([]T(nil), items[start:end]...)}
+	page := sitemodel.SitePage[T]{Items: make([]T, end-start)}
+	copy(page.Items, items[start:end])
 	if end < len(items) && end > start {
 		next := base64.RawURLEncoding.EncodeToString([]byte(key(items[end-1])))
 		page.NextCursor = &next

@@ -299,7 +299,7 @@ func AdminActions() AdminActionsDocument {
 						Minimum: schema.Value(int(1)),
 						Maximum: schema.Value(int(100)),
 					}},
-					Required:             schema.Value([]string{"siteId"}),
+					Required:             schema.Value([]string{}),
 					AdditionalProperties: false,
 				}),
 				ResponseSchema: schema.Value(schema.Definition{

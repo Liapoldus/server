@@ -209,12 +209,12 @@ func (adapter *Adapter) ValidateConfiguration(ctx context.Context, contents []by
 	if len(kinds) == 0 {
 		return adapter.configuration.Validate(settings)
 	}
-	// Core preflight runs before this candidate becomes the SDK's applying
-	// generation. A secret grant here would be scoped to the old active config,
-	// which correctly cannot authorize a reference introduced by this candidate.
-	// The SDK Apply callback obtains the candidate-scoped grant and performs the
-	// full Caddy validation immediately before atomic activation.
-	return adapter.configuration.ValidatePreflight(settings)
+	values, err := adapter.settingsSecretValues(ctx, kinds)
+	if err != nil {
+		return settingsmodel.ErrInvalidSettings
+	}
+	defer clearSettingsSecretValues(values)
+	return adapter.configuration.ValidateWithSecrets(settings, values)
 }
 
 func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configuration) error {
@@ -532,7 +532,8 @@ func presentationContracts(contract sdkinfra.HTTPContract) sdkpresentation.Contr
 		ContractVersion:  contract.ContractVersion,
 		IdentityEndpoint: endpoint("identity"), ManifestEndpoint: endpoint("manifest"),
 		ConfigSchemaEndpoint: endpoint("configSchema"), ConfigValidationEndpoint: endpoint("configValidate"), HealthEndpoint: endpoint("health"),
-		ReadyEndpoint: endpoint("ready"), ReloadEndpoint: endpoint("reload"),
+		ConfigurationValidationGenerationHeader: contract.Service.ConfigurationValidationGenerationHeader,
+		ReadyEndpoint:                           endpoint("ready"), ReloadEndpoint: endpoint("reload"),
 		MetricsEndpoint: endpoint("metrics"),
 		HealthStatus:    contract.Service.Responses.Health.Status,
 		HealthBody:      cloneStringMap(contract.Service.Responses.Health.Body),

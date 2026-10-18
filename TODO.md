@@ -1,6 +1,33 @@
 # TODO — Server service v1
 
-## Candidate-scoped secret grant — 2026-10-19
+## Candidate secret validation before activation — current checkpoint — 2026-10-19
+
+- Server's `ValidateConfiguration` now resolves each declared secret reference
+  through the scoped SDK provider and runs full Caddy candidate validation
+  during Core preflight. Missing/denied grants fail before activation; values
+  are cleared after validation. Core exposes only the exact staged generation
+  for this request. Apply still validates the candidate as part of activation.
+- Regression coverage verifies the preflight grant and full validator call,
+  plus safe rejection on grant failure without reaching runtime activation.
+  Full Server Go tests/build/vet and all 34 Vitest files / 88 tests pass.
+- Local runtime remains Server 1.1.12 at generation 96. The Project contains
+  `/echo` and a temporary `/__codex_auth_smoke_20261019` route that references
+  one of two active synthetic local secrets. The candidate is not applied; the
+  existing config remains active. This updated source has not been installed
+  into Core/Server, and live grant/auth/rotation ACK checks remain open.
+- Server 1.1.13 digest `e69ff4af…` was approved for local earlier, but it was
+  built from the superseded deferred-validation implementation. It is not used
+  to claim acceptance for the current source. New candidate digests will be
+  checked before any local install or run. Production is out of scope.
+
+- Fixed the Admin Surface inventory responses used by Studio: empty query
+  results are JSON arrays, not `null`; release inventory can aggregate across
+  sites when the generic table sends no `siteId`, with pagination and a
+  10,000-entry bound. Added focused coverage for empty site/release and
+  certificate inventories and for all-site release pagination. These source
+  fixes are not installed in the local runtime yet.
+
+## Candidate-scoped secret grant — superseded implementation — 2026-10-19
 
 - The local auth smoke created two synthetic Server credentials through the
   typed CLI secure-stdin path. Only opaque references and safe metadata were
@@ -34,7 +61,7 @@
   and two synthetic references; live grant, auth request, rotation ACK and
   cleanup are pending. Production is out of scope.
 
-## Local runtime recovery — 2026-10-19
+## Local runtime recovery — previous checkpoint — 2026-10-19
 
 - The approved Core build `df625da7…` and CLI `1381dd42…` are active for
   `Server Echo Studio` / `local`. `runtime start --revision WORKING_TREE` removed
@@ -56,7 +83,7 @@
 - Re-ran `GOWORK=off GOFLAGS=-p=1 go test ./...`, `go build ./...`, and
   `go vet ./...`; all passed. These checks do not establish live grant delivery.
 
-## Latest local runtime and configuration state — 2026-10-18
+## Latest local runtime and configuration state — superseded checkpoint — 2026-10-18
 
 - The latest typed CLI runtime read reports Core running and Echo/Server
   containers exited. Server metadata reads return HTTP 503 until the service

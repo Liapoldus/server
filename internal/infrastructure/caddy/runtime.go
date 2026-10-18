@@ -154,7 +154,8 @@ func (runtime *Runtime) ListCertificates(ctx context.Context, domain string, lim
 	if end > len(items) {
 		end = len(items)
 	}
-	page := certificatemodel.CertificatePage{Items: append([]certificatemodel.CertificateSummary(nil), items[start:end]...)}
+	page := certificatemodel.CertificatePage{Items: make([]certificatemodel.CertificateSummary, end-start)}
+	copy(page.Items, items[start:end])
 	if end < len(items) && end > start {
 		next := base64.RawURLEncoding.EncodeToString([]byte(items[end-1].Domain))
 		page.NextCursor = &next

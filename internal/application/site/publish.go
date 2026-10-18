@@ -118,7 +118,7 @@ func (publisher *SitePublisher) ListSites(ctx context.Context, limit int, cursor
 }
 
 func (publisher *SitePublisher) ListReleases(ctx context.Context, siteID string, limit int, cursor string) (SitePage[SiteReleaseSummary], error) {
-	if publisher == nil || publisher.repository == nil || ctx == nil || siteID == "" || limit < 1 || limit > 100 {
+	if publisher == nil || publisher.repository == nil || ctx == nil || limit < 1 || limit > 100 {
 		return SitePage[SiteReleaseSummary]{}, ErrInvalidSitePublisher
 	}
 	return publisher.repository.ListSiteReleases(ctx, siteID, limit, cursor)

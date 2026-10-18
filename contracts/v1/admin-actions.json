@@ -750,9 +750,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "siteId"
-        ],
+        "required": [],
         "type": "object"
       },
       "responseSchema": {
