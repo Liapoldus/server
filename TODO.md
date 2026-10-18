@@ -19,9 +19,15 @@
   Regression coverage checks both calls, safe grant failure, no activation
   during preflight, and clearing the in-memory bytes.
 - Focused Server Go tests, all Server Go tests/build/vet, and all 88 Vitest
-  tests pass. The updated Linux/arm64 artifact has not yet been built or
-  installed. Local auth request, rotation ACK, and cleanup remain pending that
-  exact artifact approval; production is out of scope.
+  tests pass. The clean Linux/arm64 artifact from pushed source commit
+  `2ca1b63e8afb17fbd83a751380da87de08cdceaf` is built at
+  `/tmp/liapoldus-server-1.1.12.s7k1n2/server`, SHA-256
+  `0847f0cbf5348e2ce9083d6952c1e56628861ffa189f7e4d7b2a54f52179c91d`.
+  It has not yet been registered, trusted, or run; the exact-digest action-time
+  approval is pending. The Project file currently has the temporary auth route,
+  but Core still runs Server 1.1.11 at generation 96 and the candidate has not
+  been applied. Local auth request, rotation ACK, and cleanup remain pending;
+  production is out of scope.
 
 ## Local runtime recovery — 2026-10-19
 
