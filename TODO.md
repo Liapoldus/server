@@ -1,5 +1,28 @@
 # TODO — Server service v1
 
+## One-time settings v1 bootstrap for the Studio v2 migration — 2026-10-18
+
+- Server 1.1.10 could not start against the already-active Project envelope
+  `schemaVersion: 1`: the runtime accepted only v2, so Core rolled the artifact
+  back before Studio could read the v2 schema and offer its migration preview.
+- Server 1.1.11 adds a bounded bootstrap path: a v1 payload is validated against
+  the current v2 settings schema with only the validation envelope rewritten;
+  the original runtime-config bytes remain unchanged. The first active v1
+  generation can be loaded, while changed/new v1 generations are rejected after
+  activation. Studio then owns the reviewed Project migration and v2 apply.
+- Targeted Go tests pass for `internal/domain/models/settings`,
+  `internal/application/settings`, `contracts`, and
+  `internal/presentation/restservice`; `go vet ./...`,
+  `go run ./cmd/contracts --check`, and `git diff --check` pass.
+- The actual `Server Echo Studio/services/server/settings.json` values pass the
+  current Server v2 JSON Schema after changing only the candidate root
+  `schemaVersion` in memory; no Project bytes were modified by this check.
+- Full Vitest was attempted with default and single-worker modes. Both stopped
+  at linker failures (`no space left on device`); full `go test ./...`, full
+  `go build ./...`, and the Linux/arm64 artifact build remain unverified. The
+  shared volume has 205 MiB free. No caches or unrelated temporary files were
+  removed. The exact artifact digest and live migration are still pending.
+
 ## Exact-source current runtime candidate — 2026-10-18
 
 - Built Linux/arm64 Server from published source HEAD

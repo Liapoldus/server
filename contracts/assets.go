@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"liapoldus.local/server-service/contracts/definitions"
+	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -26,6 +27,42 @@ func SettingsSchema() ([]byte, error) {
 }
 
 func ValidateSettings(contents []byte) error {
+	return validateSettingsAgainstCurrentSchema(contents)
+}
+
+// ValidateSettingsForBootstrap accepts the immediately previous envelope
+// only when the caller has proven that this runtime has not applied any
+// generation yet. The previous config payload is validated against the
+// current schema after changing only the temporary validation envelope; the
+// caller must retain and apply the original bytes unchanged.
+func ValidateSettingsForBootstrap(contents []byte, allowPreviousVersion bool) error {
+	if !allowPreviousVersion {
+		return validateSettingsAgainstCurrentSchema(contents)
+	}
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(contents, &envelope); err != nil || envelope == nil {
+		return ErrInvalidAssets
+	}
+	var version int
+	if err := json.Unmarshal(envelope[settingsmodel.SettingsVersionField], &version); err != nil {
+		return ErrInvalidAssets
+	}
+	if version != settingsmodel.BootstrapSettingsVersion {
+		return validateSettingsAgainstCurrentSchema(contents)
+	}
+	currentVersion, err := json.Marshal(settingsmodel.SettingsSchemaVersion)
+	if err != nil {
+		return ErrInvalidAssets
+	}
+	envelope[settingsmodel.SettingsVersionField] = currentVersion
+	candidate, err := json.Marshal(envelope)
+	if err != nil {
+		return ErrInvalidAssets
+	}
+	return validateSettingsAgainstCurrentSchema(candidate)
+}
+
+func validateSettingsAgainstCurrentSchema(contents []byte) error {
 	schema, err := compiledSettingsSchema()
 	if err != nil {
 		return ErrInvalidAssets

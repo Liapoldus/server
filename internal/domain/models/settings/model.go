@@ -49,6 +49,19 @@ func (settings Settings) UpstreamCAReferences() ([]string, error) {
 }
 
 func DecodeSettings(contents []byte) (Settings, error) {
+	return decodeSettings(contents, false)
+}
+
+// DecodeSettingsForBootstrap permits the immediately previous settings
+// envelope only while a newly upgraded runtime has not yet applied a
+// generation. The Project is migrated to the current schemaVersion by Studio;
+// this decoder preserves the exact active runtime-config bytes during that
+// one-time handoff.
+func DecodeSettingsForBootstrap(contents []byte, allowPreviousVersion bool) (Settings, error) {
+	return decodeSettings(contents, allowPreviousVersion)
+}
+
+func decodeSettings(contents []byte, allowPreviousVersion bool) (Settings, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(contents, &raw); err != nil || raw == nil {
 		return Settings{}, ErrInvalidSettings
@@ -58,7 +71,8 @@ func DecodeSettings(contents []byte) (Settings, error) {
 	}
 	var version int
 	var runtimeConfig json.RawMessage
-	if err := json.Unmarshal(raw[SettingsVersionField], &version); err != nil || version != SettingsSchemaVersion {
+	if err := json.Unmarshal(raw[SettingsVersionField], &version); err != nil ||
+		(version != SettingsSchemaVersion && (!allowPreviousVersion || version != BootstrapSettingsVersion)) {
 		return Settings{}, ErrInvalidSettings
 	}
 	if err := json.Unmarshal(raw[SettingsRuntimeConfigField], &runtimeConfig); err != nil || len(bytes.TrimSpace(runtimeConfig)) == 0 || bytes.TrimSpace(runtimeConfig)[0] != '{' {

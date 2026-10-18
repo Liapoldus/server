@@ -55,6 +55,16 @@ Admin API не публикуется и не является интерфей�
 credentials определены типом `SettingsSecretPurpose` в REST adapter. Значения
 секретов не входят в Project settings: там хранится только opaque reference.
 
+При обновлении уже работающего Server с активной конфигурацией envelope v1
+новая версия может загрузить эту точную конфигурацию только для первого
+runtime-поколения. Это позволяет сервису стать готовым и отдать live schema v2
+в Studio. Временный bootstrap проверяет содержимое по текущей v2-схеме, не
+перезаписывает исходные байты и не принимает новые поколения v1. Studio
+показывает migration preview, сохраняет recovery-копию и переводит Project на
+v2; после первого применённого поколения новые изменения обязаны использовать
+v2. Это ограниченный переход существующего Project, а не второй поддерживаемый
+settings lifecycle.
+
 Server service принимает только собственный versioned JSON contract, не raw Caddy
 JSON и не Caddyfile. Настройки задают public HTTP/HTTPS listeners и ordered
 routes. Для reverse-proxy routes `match` поддерживает hostname и ровно один

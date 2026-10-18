@@ -33,10 +33,12 @@ type SecretAwareRuntime interface {
 }
 
 type Configuration struct {
-	runtime  Runtime
-	revision string
-	mu       sync.Mutex
-	digest   [sha256.Size]byte
+	runtime                   Runtime
+	revision                  string
+	mu                        sync.Mutex
+	digest                    [sha256.Size]byte
+	activeSettingsVersion     int
+	activeRuntimeConfigDigest [sha256.Size]byte
 }
 
 func NewConfiguration(runtime Runtime) (*Configuration, error) {
@@ -57,6 +59,9 @@ func (configuration *Configuration) Validate(settings settingsmodel.Settings) er
 	}
 	configuration.mu.Lock()
 	defer configuration.mu.Unlock()
+	if settings.SchemaVersion != settingsmodel.SettingsSchemaVersion && !configuration.canValidatePreviousSettingsLocked(settings) {
+		return ErrCandidateRejected
+	}
 	if err := configuration.runtime.Validate(settings.RuntimeConfig); err != nil {
 		return ErrCandidateRejected
 	}
@@ -75,6 +80,9 @@ func (configuration *Configuration) ApplyWithSecrets(settings settingsmodel.Sett
 			return ErrRevisionConflict
 		}
 		return nil
+	}
+	if !validSettingsVersionForGeneration(settings.SchemaVersion, configuration.revision) {
+		return ErrCandidateRejected
 	}
 	secretRuntime, supportsSecrets := configuration.runtime.(SecretAwareRuntime)
 	if len(secrets) != 0 && !supportsSecrets {
@@ -96,7 +104,50 @@ func (configuration *Configuration) ApplyWithSecrets(settings settingsmodel.Sett
 	}
 	configuration.revision = revision
 	configuration.digest = digest
+	configuration.activeSettingsVersion = settings.SchemaVersion
+	configuration.activeRuntimeConfigDigest = sha256.Sum256(settings.RuntimeConfig)
 	return nil
+}
+
+// CanApplyLegacyBootstrap reports whether the previous settings envelope may
+// be validated for initial activation or an idempotent replay of the exact
+// active generation. A new previous-version generation is never accepted.
+func (configuration *Configuration) CanApplyLegacyBootstrap(generation string) bool {
+	if configuration == nil {
+		return false
+	}
+	configuration.mu.Lock()
+	defer configuration.mu.Unlock()
+	return configuration.revision == "" || generation != "" && generation == configuration.revision && configuration.activeSettingsVersion == settingsmodel.BootstrapSettingsVersion
+}
+
+// CanValidateLegacyBootstrap allows the old active generation to be rechecked
+// by SDK metadata reads while rejecting any different previous-version value.
+func (configuration *Configuration) CanValidateLegacyBootstrap(settings settingsmodel.Settings) bool {
+	if configuration == nil {
+		return false
+	}
+	configuration.mu.Lock()
+	defer configuration.mu.Unlock()
+	return configuration.canValidatePreviousSettingsLocked(settings)
+}
+
+func (configuration *Configuration) canValidatePreviousSettingsLocked(settings settingsmodel.Settings) bool {
+	if settings.SchemaVersion != settingsmodel.BootstrapSettingsVersion {
+		return false
+	}
+	if configuration.revision == "" {
+		return true
+	}
+	return configuration.activeSettingsVersion == settingsmodel.BootstrapSettingsVersion &&
+		sha256.Sum256(settings.RuntimeConfig) == configuration.activeRuntimeConfigDigest
+}
+
+func validSettingsVersionForGeneration(version int, activeRevision string) bool {
+	if version == settingsmodel.SettingsSchemaVersion {
+		return true
+	}
+	return version == settingsmodel.BootstrapSettingsVersion && activeRevision == ""
 }
 
 func digestSettings(configuration []byte, secrets map[string][]byte) [sha256.Size]byte {

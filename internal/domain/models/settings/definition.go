@@ -5,6 +5,7 @@ package settings
 // runtime decoding does not discover field names or versions from files.
 const (
 	SettingsSchemaVersion      int    = 2
+	BootstrapSettingsVersion   int    = 1
 	SettingsVersionField       string = "schemaVersion"
 	SettingsRuntimeConfigField string = "config"
 )

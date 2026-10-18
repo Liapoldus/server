@@ -20,7 +20,7 @@ import (
 	settingsmodel "liapoldus.local/server-service/internal/domain/models/settings"
 )
 
-const ServiceVersion = "1.1.10"
+const ServiceVersion = "1.1.11"
 
 var ErrSecretReferencesRequireCoreGrantAPI = errors.New("Server configuration contains secret references but Core grant delivery is unavailable")
 
@@ -195,10 +195,7 @@ func (adapter *Adapter) ValidateConfiguration(ctx context.Context, contents []by
 	if adapter == nil || adapter.configuration == nil || ctx.Err() != nil {
 		return settingsmodel.ErrInvalidSettings
 	}
-	if err := contracts.ValidateSettings(contents); err != nil {
-		return settingsmodel.ErrInvalidSettings
-	}
-	settings, err := settingsmodel.DecodeSettings(contents)
+	settings, err := adapter.decodeSettings(contents, "")
 	if err != nil {
 		return settingsmodel.ErrInvalidSettings
 	}
@@ -213,10 +210,7 @@ func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configurat
 		return settingsmodel.ErrInvalidSettings
 	}
 	contents := incoming.Bytes()
-	if err := contracts.ValidateSettings(contents); err != nil {
-		return settingsmodel.ErrInvalidSettings
-	}
-	settings, err := settingsmodel.DecodeSettings(contents)
+	settings, err := adapter.decodeSettings(contents, incoming.Generation)
 	if err != nil {
 		return settingsmodel.ErrInvalidSettings
 	}
@@ -231,6 +225,28 @@ func (adapter *Adapter) Apply(ctx context.Context, incoming sdkmodels.Configurat
 		return adapter.applyWithSecrets(ctx, settings, incoming.Generation)
 	}
 	return adapter.configuration.Apply(settings, incoming.Generation)
+}
+
+func (adapter *Adapter) decodeSettings(contents []byte, generation string) (settingsmodel.Settings, error) {
+	settings, err := settingsmodel.DecodeSettingsForBootstrap(contents, true)
+	if err != nil {
+		return settingsmodel.Settings{}, settingsmodel.ErrInvalidSettings
+	}
+	allowPreviousVersion := false
+	if settings.SchemaVersion == settingsmodel.BootstrapSettingsVersion {
+		if generation != "" {
+			allowPreviousVersion = adapter.configuration.CanApplyLegacyBootstrap(generation)
+		} else {
+			allowPreviousVersion = adapter.configuration.CanValidateLegacyBootstrap(settings)
+		}
+		if !allowPreviousVersion {
+			return settingsmodel.Settings{}, settingsmodel.ErrInvalidSettings
+		}
+	}
+	if err := contracts.ValidateSettingsForBootstrap(contents, allowPreviousVersion); err != nil {
+		return settingsmodel.Settings{}, settingsmodel.ErrInvalidSettings
+	}
+	return settings, nil
 }
 
 func (adapter *Adapter) validateStaticRouteReleases(ctx context.Context, runtimeConfig []byte) error {

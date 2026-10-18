@@ -58,6 +58,40 @@ func TestSettingsSchemaValidatesSharedFeatureDefaultsAndSavedOverrides(t *testin
 	assertValid(t, invalidAge, false)
 }
 
+func TestPreviousSettingsEnvelopeIsAcceptedOnlyForBootstrapValidation(t *testing.T) {
+	document := map[string]any{
+		"schemaVersion": 1,
+		"config": map[string]any{
+			"listeners": []any{map[string]any{
+				"id": "public-http", "kind": "http", "address": ":9080", "hostnames": []any{}, "protocols": []any{"http1"}, "tls": map[string]any{"mode": "disabled"},
+			}},
+			"routes": []any{},
+		},
+	}
+	contents, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSettings(contents); err == nil {
+		t.Fatal("normal validation accepted a previous settings envelope")
+	}
+	if err := ValidateSettingsForBootstrap(contents, false); err == nil {
+		t.Fatal("bootstrap validation accepted the previous envelope without authorization")
+	}
+	if err := ValidateSettingsForBootstrap(contents, true); err != nil {
+		t.Fatalf("first-start bootstrap should validate an otherwise current-shaped payload: %v", err)
+	}
+
+	document["extra"] = true
+	invalid, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSettingsForBootstrap(invalid, true); err == nil {
+		t.Fatal("bootstrap validation accepted an unknown top-level setting")
+	}
+}
+
 func cloneSettingsTestMap(t *testing.T, value map[string]any) map[string]any {
 	t.Helper()
 	encoded, err := json.Marshal(value)

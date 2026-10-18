@@ -45,3 +45,21 @@ func TestDecodeSettingsPreservation(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodePreviousSettingsOnlyForExplicitBootstrap(t *testing.T) {
+	contents := []byte(`{"config": {"routes": [], "listeners": []}, "schemaVersion": 1}`)
+	if _, err := DecodeSettings(contents); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatal("normal settings decoder accepted the previous schema version")
+	}
+	if _, err := DecodeSettingsForBootstrap(contents, false); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatal("bootstrap decoder accepted the previous version without explicit allowance")
+	}
+	decoded, err := DecodeSettingsForBootstrap(contents, true)
+	if err != nil || decoded.SchemaVersion != BootstrapSettingsVersion || string(decoded.RuntimeConfig) != `{"routes": [], "listeners": []}` {
+		t.Fatalf("bootstrap decode changed the previous envelope or config bytes: %#v err=%v", decoded, err)
+	}
+	unsupported := []byte(`{"schemaVersion":3,"config":{}}`)
+	if _, err := DecodeSettingsForBootstrap(unsupported, true); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatal("bootstrap decoder accepted an unsupported future schema version")
+	}
+}
