@@ -1,5 +1,21 @@
 # TODO — Server service v1
 
+## Current local runtime and uninstalled 1.1.11 candidate — 2026-10-18
+
+- Read-only typed CLI status for `Server Echo Studio` / `local` reports active
+  Server 1.1.8, artifact digest
+  `sha256:5a8e02a65624441b4654eda80103e7e91ea9406f069236f12ce2e128ae6807b2`,
+  generation 92 and ready. The Project still pins Server 1.1.10; do not treat
+  that desired pin as the active artifact.
+- Source 1.1.11 declares the Admin Surface `queryResource` required by the
+  installed editor and the HTTP-auth, TLS certificate, private-key and upstream
+  CA secret purposes. Its Linux/arm64 candidate SHA-256 is
+  `3f3f66e4d8b852b337d07f39276aa949ca1df5095fa411b88ca976286d4075a1`; it has
+  not been trusted or installed. Live migration, Admin Surface and scoped-grant
+  acceptance remain open pending the exact-digest Studio flow.
+- This status check was read-only and changed no Project, Core, Server or secret
+  state.
+
 ## One-time settings v1 bootstrap for the Studio v2 migration — 2026-10-18
 
 - Server 1.1.10 could not start against the already-active Project envelope
