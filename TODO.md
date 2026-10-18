@@ -13,10 +13,12 @@
 - Verified by an actual Caddy HTTP integration test: a 503 `/ready` upstream is
   probed and excluded while the healthy origin serves the route. Go Caddy tests,
   settings schema tests, and deterministic contract export check pass.
-- Server runtime version is now `1.1.9`; it is a local source candidate only.
-  A fresh Linux/arm64 artifact still needs to be built, its digest recorded, and
-  the normal Studio trust step completed before installation. No live runtime
-  has been changed.
+- Server runtime version is now `1.1.9`. Linux/arm64 artifact
+  `/tmp/liapoldus-server-1.1.9-linux-arm64` was built from this commit, verified
+  as ELF aarch64 and Go revision `f32e85438a3c06f92efc179faf3bf854441d1cc7`,
+  SHA-256 `a76ca53025f810dc75dc44c2a75e5b698bcdb4d205c2a58f2b5f6a0e5902e3a4`.
+  It is a local candidate only; the normal Studio trust step is still required
+  before installation, and no live runtime has been changed.
 - The canonical settings guide now describes the schema v2 feature defaults,
   auth references, rate limiting, rewrites, redirects, active probes and current
   limits. A full Vitest run was attempted but 12 tests failed while the host had
