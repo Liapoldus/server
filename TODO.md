@@ -998,3 +998,19 @@ replicas. Delivery/provider API не является задачей Server/Core
 
 - Server settings now expose a pure service-owned candidate validator; invalid route configurations are rejected before activation. Service release candidate is 1.1.8 Linux/arm64, SHA-256 `befcb98b28424b04682ff730f6d0da9b7bf7f2d8222fdb42e9dfc294407d28b1`; full Go tests, vet and build passed.
 - The current local Project still pins 1.1.7. Installing/trusting/running 1.1.8 and publishing this owner change await the exact local digest approval and commit/push.
+
+## Local auth rotation diagnostic smoke — 2026-10-19
+
+- Temporarily ran the explicitly approved Server 1.1.13 Linux/arm64 artifact
+  (`sha256:e69ff4af77a30841c2ef1f770506f91afa07d82045ab8dc73ad8912c6ce45ce7`)
+  in `Server Echo Studio` / `local` to verify the Server-owned auth contract
+  against the live Core/SDK path. The security-sensitive candidate applied as
+  generation 98, the replica acknowledged it, a valid Bearer request returned
+  200, and missing/invalid credentials returned 401.
+- The temporary route was removed and generation 99 was acknowledged. No auth
+  configuration or secret reference remains in Project settings. The Server
+  Project pin/runtime was restored to 1.1.12 (`sha256:0847f0cb…`); the temporary
+  1.1.13 entry was removed from the local CLI artifact registry. All synthetic
+  secret references are revoked. This diagnostic does not establish acceptance
+  of the newer 1.1.14 build; that exact local artifact remains behind its own
+  approval gate and no Server v1 scope was added.
