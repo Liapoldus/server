@@ -1,6 +1,28 @@
 # TODO — Server service v1
 
-## Candidate secret validation before activation — current checkpoint — 2026-10-19
+## Local Admin Surface acceptance — current checkpoint — 2026-10-19
+
+- Server 1.1.14 Linux/arm64 (`sha256:c94d2104b766228b683313b533fdc52ffa9bec1b3b8c3edca0e1bd7ae48e5ba4`)
+  was registered, trusted and run temporarily in `Server Echo Studio` / target
+  `local` with the existing approved Core. It became ready and acknowledged
+  generation 105; `GET /echo?text=server-1.1.14-smoke` returned HTTP 200.
+- The typed Admin Surface descriptor loaded. Queries for sites, releases,
+  operations and certificates each returned a valid empty `items` list, and
+  Studio rendered each table as “Нет записей.” The separate generic typed
+  `service resource list` command still reports an invalid or unavailable
+  catalog; this diagnostic did not exercise publish, rollback, or non-empty
+  catalog rows.
+- The working Project's prior Server 1.1.12 pin was backed up and restored
+  byte-for-byte. Server 1.1.12 is ready and acknowledged at generation 105;
+  `/echo?text=restored-1.1.12` returns HTTP 200. The temporary 1.1.14 CLI
+  artifact registration was removed. Project settings remain `/echo` only;
+  no secret catalog or value changed.
+- This live acceptance verifies Admin Surface empty-catalog serialization on
+  one replica. It does not verify Server 1.1.14 candidate-scoped secret
+  validation, non-empty Admin Surface operations, multi-replica behavior or
+  the newer Core candidate. Production was not accessed.
+
+## Candidate secret validation before activation — previous checkpoint — 2026-10-19 (superseded)
 
 - Server source commit `80ffb234263aba13fe69722b5d8423650d78b026` adds
   candidate-generation-scoped secret validation through the Service SDK grant
