@@ -1014,3 +1014,6 @@ replicas. Delivery/provider API не является задачей Server/Core
   secret references are revoked. This diagnostic does not establish acceptance
   of the newer 1.1.14 build; that exact local artifact remains behind its own
   approval gate and no Server v1 scope was added.
+- Повторные targeted Go проверки прошли: `GOWORK=off GOFLAGS=-p=1 go test
+  ./internal/presentation/restservice ./internal/application/settings -run
+  'Secret|Candidate' -count=1`.
