@@ -2,48 +2,24 @@
 
 ## Candidate secret validation before activation — current checkpoint — 2026-10-19
 
-- Server's `ValidateConfiguration` now resolves each declared secret reference
-  through the scoped SDK provider and runs full Caddy candidate validation
-  during Core preflight. Missing/denied grants fail before activation; values
-  are cleared after validation. Core exposes only the exact staged generation
-  for this request. Apply still validates the candidate as part of activation.
-- Regression coverage verifies the preflight grant and full validator call,
-  plus safe rejection on grant failure without reaching runtime activation.
-  Full Server Go tests/build/vet and all 34 Vitest files / 88 tests pass.
-- Local runtime remains Server 1.1.12 at generation 96. The Project contains
-  `/echo` and a temporary `/__codex_auth_smoke_20261019` route that references
-  one of two active synthetic local secrets. The candidate is not applied; the
-  existing config remains active. This updated source has not been installed
-  into Core/Server, and live grant/auth/rotation ACK checks remain open.
-- A repeated typed local apply returned generic Core HTTP 409
-  `bundle_apply_failed: service configuration revision conflict`. The response
-  does not expose the validator outcome. A filter that emitted only whitelisted
-  safe tokens found the latest Server-log `grantDenied` event at
-  `2026-10-18T23:17:52.423698534Z`, consistent with this apply attempt. The
-  candidate reached scoped secret access, which was denied. A fresh HTTP check
-  still returns 404 for the temporary route and 200 for `/echo`; do not claim
-  that the saved auth candidate is active. No raw log line or secret value was
-  emitted.
-- Server 1.1.13 digest `e69ff4af…` was approved for local earlier, but it was
-  built from the superseded deferred-validation implementation. It is not used
-  to claim acceptance for the current source. New candidate digests will be
-  checked before any local install or run. Production is out of scope.
-
-- Fixed the Admin Surface inventory responses used by Studio: empty query
-  results are JSON arrays, not `null`; release inventory can aggregate across
-  sites when the generic table sends no `siteId`, with pagination and a
-  10,000-entry bound. Added focused coverage for empty site/release and
-  certificate inventories and for all-site release pagination. These source
-  fixes are not installed in the local runtime yet.
-- The next local candidate is version 1.1.14 so it does not reuse the
-  superseded 1.1.13 artifact identity. Rebuild and verify its exact Linux/arm64
-  digest from the pushed source before requesting the local action gate.
-- Server commit `80ffb234263aba13fe69722b5d8423650d78b026` is pushed. The
-  Linux/arm64 binary SHA-256 is
-  `be991dab5b250461963ef46ad713fdbb3b1f2322915376c0ec0519623998a74e`;
-  build metadata confirms `vcs.modified=false`. Full Go tests (88), build,
-  vet, generated-contract check, and Vitest (34 files / 88 tests) pass. This
-  1.1.14 candidate is not installed in local; approval must name this digest.
+- Server source commit `80ffb234263aba13fe69722b5d8423650d78b026` adds
+  candidate-generation-scoped secret validation through the Service SDK grant
+  provider and full Caddy candidate validation. Focused failure tests prove
+  grant refusal cannot reach runtime activation. Full Go tests/build/vet,
+  generated-contract checks and all 34 Vitest files / 88 tests pass.
+- The clean Linux/arm64 Server 1.1.14 candidate has digest
+  `be991dab5b250461963ef46ad713fdbb3b1f2322915376c0ec0519623998a74e` and
+  remains uninstalled pending exact local action approval.
+- Current Project/runtime is restored to Server 1.1.12, ready at generation
+  99, with only `/echo`. On the existing Core and a temporary diagnostic
+  Server 1.1.13, a saved auth configuration applied and was acknowledged at
+  generation 98; valid Bearer returned 200, missing/invalid Bearer 401. The
+  route was removed and generation 99 acknowledged; all synthetic refs are
+  revoked. The 1.1.13 artifact entry was removed from the local registry.
+- The diagnostic does not accept candidate 1.1.14 or prove its new
+  candidate-validation behavior. Exact action-time approval for the current
+  Core 43b7acc / Server 1.1.14 digests remains pending. Production is out of
+  scope.
 
 ## Candidate-scoped secret grant — superseded implementation — 2026-10-19
 
@@ -69,15 +45,17 @@
   scoped to the applying candidate generation. A missing grant still rejects
   Apply before activation; the prior runtime remains active. Focused Go tests,
   all Server Go tests/build/vet, and all 88 Vitest tests pass.
-- Server 1.1.13 source commit `3ea5c6deb7761e0176a06b873c0688eb3b9c1a65` is
-  pushed. Its clean Linux/arm64 candidate is
-  `/tmp/liapoldus-server-1.1.13-3ea5c6d/server`, SHA-256
-  `e69ff4af77a30841c2ef1f770506f91afa07d82045ab8dc73ad8912c6ce45ce7`.
-  Focused and full Server Go tests, build, vet, and all 88 Vitest tests pass.
-  This new digest has not been registered, trusted, or run; exact-digest
-  action-time approval is required. The Project retains the temporary route
-  and two synthetic references; live grant, auth request, rotation ACK and
-  cleanup are pending. Production is out of scope.
+- Server 1.1.13 was approved and used only as a local diagnostic runtime. Its
+  candidate-scoped validation accepted the temporary auth config; Core applied
+  generation 98 and the replica ACKed it. Valid Bearer returned 200;
+  missing/invalid credentials returned 401. The route was removed, generation
+  99 was acknowledged, and all synthetic references were revoked. The
+  1.1.13 artifact entry was then removed; current Project/runtime is restored
+  to the 1.1.12 pin and contains only `/echo`.
+- This smoke does not accept the uninstalled 1.1.14 candidate or prove
+  multi-replica timeout/restart recovery. Exact action-time approval for the
+  current Core 43b7acc / Server 1.1.14 digests remains pending. Production is
+  out of scope.
 
 ## Local runtime recovery — previous checkpoint — 2026-10-19
 
