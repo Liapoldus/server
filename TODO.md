@@ -7,9 +7,13 @@
   provider and full Caddy candidate validation. Focused failure tests prove
   grant refusal cannot reach runtime activation. Full Go tests/build/vet,
   generated-contract checks and all 34 Vitest files / 88 tests pass.
-- The clean Linux/arm64 Server 1.1.14 candidate has digest
-  `be991dab5b250461963ef46ad713fdbb3b1f2322915376c0ec0519623998a74e` and
-  remains uninstalled pending exact local action approval.
+- The clean Linux/arm64 Server 1.1.14 candidate was rebuilt from published
+  commit `2102cf99811ce89d7334f0c54e4a8106a0b52140` at
+  `/tmp/liapoldus-server-1.1.14-2102cf9`, SHA-256
+  `c94d2104b766228b683313b533fdc52ffa9bec1b3b8c3edca0e1bd7ae48e5ba4`.
+  Build metadata confirms `vcs.modified=false`; its code includes candidate
+  validation from `80ffb23`. It remains uninstalled pending exact local
+  action approval.
 - Current Project/runtime is restored to Server 1.1.12, ready at generation
   99, with only `/echo`. On the existing Core and a temporary diagnostic
   Server 1.1.13, a saved auth configuration applied and was acknowledged at
